@@ -1,9 +1,16 @@
 
 // TODO Better separate header definions from implementations
+// TODO Count the longest probe
+// TODO Add option to store hash values
+// TODO Implement robin hood hashing
+//
+// TODO consider using push_macro instead of undefing everything at the end
 
 #ifndef _HASH_SET_H_
 #define _HASH_SET_H_
 
+// TODO pull these out into a separate file that can be shared with hash_table
+// (along with any other general hashing-related functions).
 static inline uint32_t get_hash_value(uint32_t value, uint32_t max_count) {
   return value % max_count;
 }
@@ -104,6 +111,7 @@ struct HashSet_Internal {
   Key *set; // NOTE : Key must be user-defined.
   uint32_t count;
   uint32_t max_count;
+  uint32_t max_probe_len;
 };
 
 
@@ -120,6 +128,7 @@ namespace hash_set_internal {
 
     Key *first_remove = NULL;
     uint32_t upper_limit = s->count + 1;
+    // TODO take into account max_probe_len
 
     for (uint32_t i = 1; i <= upper_limit && i <= s->max_count; i++) {
       // TODO Check how large i usually gets under different conditions. It needs to stay 
@@ -299,6 +308,8 @@ static inline Key *get_next(HashSetIterator_Internal *iter) {
   return NULL;
 }
 
+// TODO double check that this file is polluting the preprocessor namespace with symbols
+// TODO rename Key to something longer and unlikely to be user defined
 #undef Key
 
 #undef HashSet_Internal
