@@ -531,17 +531,85 @@ static void test_hash_set_s32(int size) {
 static void test_hash_table() {
   printf("HashTable test begin.\n");
 
-  /*
-  int const size = 7;
-  uint32_t memory[size];
 
-  HashTable my_table_ = hash_table(memory, size);
+  int const count = 16;
+  int const set_length = 29;
+  PushAllocator allocator_ = new_push_allocator(1024);
+  PushAllocator *allocator = &allocator_;
+  assert(is_initialized(allocator));
+
+  HashTable my_table_;
   HashTable *my_table = &my_table_;
-  insert(my_table, 
-  */
+  bool success = init_hash_table(my_table, allocator, count, set_length);
+  assert(success);
+  assert(my_table->count == 0);
+  hash_table_internal::assert_initialized(my_table);
 
+  auto value = get(my_table, Point{1, 3});
+  assert(!value);
+  hash_table_internal::assert_initialized(my_table); 
 
-  printf("HashTable test successful.\n");
+  value = insert(my_table, Point{1,3});
+  auto first = value;
+  assert(value);
+  assert(my_table->count == 1);
+  assert(value->name == NULL && value->x == 0 && value->y == 0);
+  *value = {"First one", 1, 3};
+  hash_table_internal::assert_initialized(my_table); 
+
+  value = get(my_table, Point{1, 3});
+  assert(value);
+  assert(value == first);
+  assert(my_table->count == 1);
+  assert(value->x == 1 && value->y == 3);
+
+  value = get(my_table, Point{1, 1});
+  assert(!value);
+
+  value = insert(my_table, Point{2,4});
+  auto second = value;
+  assert(value);
+  assert(value != first);
+  assert(my_table->count == 2);
+  assert(value->name == NULL && value->x == 0 && value->y == 0);
+  *value = {"Second", 2, 4};
+
+  value = get(my_table, Point{1, 3});
+  assert(value);
+  assert(value == first);
+  assert(my_table->count == 2);
+  assert(value->x == 1 && value->y == 3);
+
+  value = get(my_table, Point{2, 4});
+  assert(value);
+  assert(value == second);
+  assert(my_table->count == 2);
+  assert(value->x == 2 && value->y == 4);
+
+  value = get(my_table, Point{1, 1});
+  assert(!value);
+
+  success = remove(my_table, Point{1, 3});
+  assert(success);
+  assert(my_table->count == 1);
+
+  value = get(my_table, Point{1, 3});
+  assert(!value);
+
+  success = remove(my_table, Point{1, 1});
+  assert(!success);
+
+  success = remove(my_table, Point{1, 3});
+  assert(!success);
+
+  value = get(my_table, Point{2, 4});
+  assert(value);
+  assert(value == second);
+
+  // TODO test filling up the table
+  // TODO test iteration
+
+  printf("HashTable test successful.\n\n");
 }
 
 int main() {
@@ -556,6 +624,8 @@ int main() {
   test_hash_set_string(7);
   test_hash_set_string(13);
   test_hash_set_string(199);
+
+  test_hash_table();
 
   printf("All tests successful.\n");
   return 0;

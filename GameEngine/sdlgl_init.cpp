@@ -126,16 +126,26 @@ static RenderInfo init_screen(int width, int height) {
   buffer->max_vertices = 4096;
   buffer->vertex_count = 0;
   int vertex_buffer_size = buffer->max_vertices * sizeof(Vertex);
+  int total_buffer_size = vertex_buffer_size + 4096 * 64;
 
+  printf("Total buffer size : %d\n", total_buffer_size);
+  auto temp = new_push_allocator(total_buffer_size);
+  buffer->vertices = alloc_array(&temp, Vertex, buffer->max_vertices);
+  assert(buffer->vertices);
+  buffer->allocator = new_push_allocator(&temp, remaining_size(&temp));
+  assert(is_initialized(&buffer->allocator));
+
+#if 0
   buffer->allocator.max_size = 4096 * 64;
   int total_buffer_size = vertex_buffer_size + buffer->allocator.max_size;
 
   printf("Total buffer size : %d\n", total_buffer_size);
   buffer->allocator.memory = (uint8_t *) calloc(total_buffer_size, 1);
-  // TODO consider using subdivide() here
   buffer->vertices = (Vertex *) (buffer->allocator.memory + buffer->allocator.max_size);
    
   assert(buffer->allocator.memory);
+#endif
+
   //result.width = width;
   //result.height = height;
 

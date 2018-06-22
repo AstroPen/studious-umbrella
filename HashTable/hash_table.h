@@ -64,6 +64,16 @@ struct HashTable_Internal {
 
 namespace hash_table_internal {
 
+  inline void assert_initialized(HashTable_Internal *table) {
+    assert(table);
+    assert(table->key_set);
+    assert(table->value_set);
+    assert(table->allocated_data);
+    assert(table->max_count);
+    assert(table->set_length);
+    assert(table->max_count == table->count || table->free_list);
+  }
+
   inline bool is_initialized(HashTable_Internal *table) {
     if (!table) return false;
     if (!table->key_set) return false;
@@ -132,6 +142,8 @@ static inline void clear(HashTable_Internal *table) {
     node->next_free = prev;
     prev = node;
   }
+  table->free_list = prev;
+  assert(prev == &table->allocated_data->node);
 
   for (uint32_t i = 0; i < table->set_length; i++) {
     table->key_set[i] = EMPTY;
@@ -154,18 +166,9 @@ bool init_hash_table(HashTable_Internal *table, PushAllocator *allocator, uint32
   uint32_t data_size = count * node_size;
   uint32_t total_size = key_set_size + + value_set_size + data_size;
 
-  uint32_t alignment = 8;
-
-  // TODO there should be a helper in push_allocator.h for this...
-  void *memory = alloc_size(allocator, total_size, alignment);
-  if (!memory) {
-    return false;
-  }
-
   // NOTE : Do NOT use allocator after this point.
-  PushAllocator temp = {};
-  temp.memory = (uint8_t *) memory;
-  temp.max_size = total_size;
+  PushAllocator temp = new_push_allocator(allocator, total_size);
+  if (!is_initialized(&temp)) return false;
 
   table->allocated_data = alloc_array(&temp, HashValue_Internal, count);
   assert(table->allocated_data);
@@ -230,6 +233,7 @@ static HASH_TABLE_VALUE_TYPE *get(HashTable_Internal *table, Key key) {
   if (index == UINT_MAX) return NULL;
 
   Key *key_location = table->key_set + index;
+  if (*key_location == EMPTY) return NULL;
   HashValue_Internal **value_location = table->value_set + index;
 
   assert(*key_location == key);
@@ -246,6 +250,8 @@ static bool remove(HashTable_Internal *table, Key key) {
   if (index == UINT_MAX) return false;
 
   Key *key_location = table->key_set + index;
+  if (*key_location == EMPTY) return false;
+
   HashValue_Internal **value_location = table->value_set + index;
 
   assert(*key_location == key);

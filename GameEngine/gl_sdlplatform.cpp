@@ -156,7 +156,7 @@ int main(int argc, char ** argv){
 
 
   //
-  // Initialization :
+  // Initialization ---
   //
 
   init_debug_global_memory();
@@ -182,6 +182,7 @@ int main(int argc, char ** argv){
   bool size_changed = false;
   uint8_t ticks = 0;
 
+  // TODO just use PushAllocators and new_push_allocator?
   GameMemory game_memory = {};
   game_memory.permanent_size = 4096 * 2048;
   game_memory.permanent_store = calloc(game_memory.permanent_size, 1);
@@ -189,6 +190,10 @@ int main(int argc, char ** argv){
   game_memory.temporary_store = calloc(game_memory.temporary_size, 1);
   ControllerState old_controller_state = {};
   uint32_t previous_time = SDL_GetTicks();
+
+  //
+  // Main Loop ---
+  //
 
   while (window_open) {
 

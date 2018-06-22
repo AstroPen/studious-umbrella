@@ -17,6 +17,13 @@ struct PushAllocator {
   uint32_t max_size;
 };
 
+static inline bool is_initialized(PushAllocator *a) {
+  if (!a) return false;
+  if (!a->memory) return false;
+  if (!a->max_size) return false;
+  return true;
+}
+
 static inline uint32_t remaining_size(PushAllocator *allocator) {
   return allocator->max_size - allocator->bytes_allocated;
 }
@@ -31,6 +38,7 @@ static inline uint64_t get_alignment_offset(uint8_t *memory, uint32_t bytes_allo
   return alignment_offset;
 }
 
+// TODO Why is alignment a uint64_t? I have no idea why I decided that. It should probably be a uint32_t.
 #ifdef PUSH_ALLOCATOR_MULTITHREADED
 static inline void *alloc_size(PushAllocator *allocator, uint32_t size, uint64_t alignment = 1) {
   TIMED_FUNCTION();
@@ -70,6 +78,32 @@ static inline void *alloc_size(PushAllocator *allocator, uint32_t size, uint64_t
   return result;
 }
 #endif
+
+static inline PushAllocator new_push_allocator(uint32_t size) {
+  uint8_t *memory = (uint8_t *) calloc(size, 1);
+  if (!memory) {
+    return {};
+  }
+
+  PushAllocator result = {};
+  result.memory = memory;
+  result.max_size = size;
+
+  return result;
+}
+
+static inline PushAllocator new_push_allocator(PushAllocator *old, uint32_t size, uint32_t alignment = 8) {
+  uint8_t *memory = (uint8_t *) alloc_size(old, size, alignment);
+  if (!memory) {
+    return {};
+  }
+
+  PushAllocator result = {};
+  result.memory = memory;
+  result.max_size = size;
+
+  return result;
+}
 
 static inline void free(PushAllocator *allocator) {
   allocator->bytes_allocated = 0;
