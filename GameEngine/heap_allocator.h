@@ -1,9 +1,11 @@
 
-// TODO factor this out into an h file and a cpp file
 
 #ifndef _HEAP_ALLOCATOR_H_
 #define _HEAP_ALLOCATOR_H_
 
+#include "push_allocator.h"
+
+// TODO move this definition to some sort of shared "data structures" file?
 struct FreeListNode {
   FreeListNode *next_free;
 };

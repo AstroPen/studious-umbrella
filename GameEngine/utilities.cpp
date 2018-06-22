@@ -130,8 +130,7 @@ struct PixelBuffer {
 };
 
 #define PUSH_ALLOCATOR_MULTITHREADED
-
-#include "push_allocator.cpp"
+#include "push_allocator.h"
 
 
 static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height, int pixel_bytes = 4) {
@@ -146,5 +145,5 @@ static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height
   return result;
 }
 
-#include "heap_allocator.cpp"
+#include "heap_allocator.h"
 

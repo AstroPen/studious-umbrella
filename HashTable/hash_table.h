@@ -1,6 +1,10 @@
 // TODO Write tests and actually get this code running.
 // Probably will finish this when I actually need a hash table for something.
 
+#ifndef _HASH_TABLE_H_
+#define _HASH_TABLE_H_
+// TODO change this when I move push_allocator.h
+#include "../GameEngine/push_allocator.h"
 
 namespace hash_table_internal {
 
@@ -10,7 +14,7 @@ namespace hash_table_internal {
 
   static inline bool is_prime(uint32_t count) {
     if (count <= 1) return false;
-    // TODO more through checking for prime
+    // TODO more thorough checking for prime
     if (count > 2 && count % 2 == 0) return false;
     if (count > 3 && count % 3 == 0) return false;
     return true;
@@ -48,8 +52,10 @@ union HashValue_Internal {
 struct HashTable_Internal {
   Key *key_set;
   HashValue_Internal **value_set;
+
   HashValue_Internal *allocated_data;
   hash_table_internal::FreeListNode *free_list;
+
   uint32_t count;
   uint32_t max_count;
   uint32_t set_length;
@@ -58,18 +64,25 @@ struct HashTable_Internal {
 
 namespace hash_table_internal {
 
+  inline bool is_initialized(HashTable_Internal *table) {
+    if (!table) return false;
+    if (!table->key_set) return false;
+    if (!table->value_set) return false;
+    if (!table->allocated_data) return false;
+    if (!table->max_count) return false;
+    if (!table->set_length) return false;
+    if (table->max_count != table->count && !table->free_list) return false;
+    return true;
+  }
+
   inline uint32_t probe(HashTable_Internal *table, Key key, bool insert_mode = false) {
-    assert(table);
-    assert(table->key_set);
-    assert(table->value_set);
-    assert(table->allocated_data);
     assert(key != EMPTY); // Illegal values
     assert(key != REMOVED);
 
-    uint32_t hash_value = get_hash_value(key, table->set_length);
-    Key stored = table->key_set[hash_value];
+    uint32_t hash_index = get_hash_value(key) % table->set_length;
+    Key stored = table->key_set[hash_index];
 
-    Key *first_remove = NULL;
+    uint32_t first_remove = UINT_MAX;
     uint32_t upper_limit = table->count + 1;
 
     for (uint32_t i = 1; i <= upper_limit && i <= table->max_count; i++) {
@@ -77,8 +90,8 @@ namespace hash_table_internal {
       // TODO Check how large i usually gets under different conditions. It needs to stay 
       // small for this to be performant.
 
-      if (stored == EMPTY || stored == value) {
-        return s->set + hash_value;
+      if (stored == EMPTY || stored == key) {
+        return hash_index;
       } 
 
       if (stored == REMOVED) {
@@ -89,26 +102,28 @@ namespace hash_table_internal {
         // find a removed value.
         upper_limit++;
 
-        if (insert_mode && !first_remove) {
-          first_remove = table->key_set + hash_value;
+        if (insert_mode && first_remove != UINT_MAX) {
+          first_remove = hash_index;
         }
       }
 
       // Linear probing :
       int skip = 1;
-      hash_value = (hash_value + skip) % table->set_length;
-      assert(hash_value >= 0 && hash_value < table->set_length);
-      stored = table->key_set[hash_value];
+      hash_index = (hash_index + skip) % table->set_length;
+      assert(hash_index >= 0 && hash_index < table->set_length);
+      stored = table->key_set[hash_index];
     }
 
     if (insert_mode) return first_remove;
-    return NULL;
+    return UINT_MAX;
   }
 }
 
 
 static inline void clear(HashTable_Internal *table) {
   using namespace hash_table_internal;
+
+  assert(is_initialized(table));
 
   HashValue_Internal *start_ptr = table->allocated_data + table->max_count - 1;
   FreeListNode *prev = NULL;
@@ -125,47 +140,61 @@ static inline void clear(HashTable_Internal *table) {
   table->count = 0;
 }
 
-// TODO
-bool init_hash_table_(HashTable_Internal *table, PushAllocator *allocator, uint32_t count) {
+// TODO Make a more elegant interface for this, finish this function
+bool init_hash_table(HashTable_Internal *table, PushAllocator *allocator, uint32_t count, uint32_t set_length) {
   using namespace hash_table_internal;
 
   *table = {};
-  assert(is_prime(count));
+  assert(set_length >= count);
+  assert(is_prime(set_length));
 
-  uint32_t node_size = elem_size + sizeof(NodeHeader);
-  uint32_t key_set_size = calc_hashset_memory_size(count, uint32_t);
+  uint32_t key_set_size = set_length * sizeof(Key);
+  uint32_t value_set_size = set_length * sizeof(HashValue_Internal*);
+  uint32_t node_size = sizeof(HashValue_Internal);
   uint32_t data_size = count * node_size;
-  uint32_t total_size = key_set_size + data_size;
+  uint32_t total_size = key_set_size + + value_set_size + data_size;
 
-  // TODO there should be a helper for this...
-  void *memory = alloc_size(allocator, total_size, 8);
+  uint32_t alignment = 8;
+
+  // TODO there should be a helper in push_allocator.h for this...
+  void *memory = alloc_size(allocator, total_size, alignment);
   if (!memory) {
     return false;
   }
 
   // NOTE : Do NOT use allocator after this point.
   PushAllocator temp = {};
-  temp.memory = memory;
+  temp.memory = (uint8_t *) memory;
   temp.max_size = total_size;
 
-  table->data = create_heap_(&temp, count, node_size, 8);
-  assert(table->data.count && table->data.free_list);
+  table->allocated_data = alloc_array(&temp, HashValue_Internal, count);
+  assert(table->allocated_data);
 
-  void *key_set_memory = alloc_size(&temp, key_set_size, 8);
-  assert(key_set_memory);
+  table->key_set = alloc_array(&temp, Key, set_length);
+  assert(table->key_set);
 
-  init_hash_set(&table->key_set, key_set_memory, count);
+  table->value_set = alloc_array(&temp, HashValue_Internal*, set_length);
+  assert(table->value_set);
+
+  table->max_count = count;
+  table->set_length = set_length;
+  table->count = count; // NOTE : this is for better error handling
+
+  clear(table);
+
+  return true;
 }
 
 static HASH_TABLE_VALUE_TYPE *insert(HashTable_Internal *table, Key key) {
   using namespace hash_table_internal;
 
-  if (table->max_count == table->count) return 0;
+  assert(is_initialized(table));
+  if (table->max_count == table->count) return NULL;
 
   uint32_t index = probe(table, key, true);
 
-  assert(index != EMPTY_U32); // Should never happen
-  if (index == EMPTY_U32) return NULL;
+  assert(index != UINT_MAX); // Should never happen
+  if (index == UINT_MAX) return NULL;
 
   Key *key_location = table->key_set + index;
   HashValue_Internal **value_location = table->value_set + index;
@@ -196,8 +225,9 @@ static HASH_TABLE_VALUE_TYPE *insert(HashTable_Internal *table, Key key) {
 static HASH_TABLE_VALUE_TYPE *get(HashTable_Internal *table, Key key) {
   using namespace hash_table_internal;
 
+  assert(is_initialized(table));
   uint32_t index = probe(table, key);
-  if (index == EMPTY_U32) return false;
+  if (index == UINT_MAX) return NULL;
 
   Key *key_location = table->key_set + index;
   HashValue_Internal **value_location = table->value_set + index;
@@ -205,14 +235,15 @@ static HASH_TABLE_VALUE_TYPE *get(HashTable_Internal *table, Key key) {
   assert(*key_location == key);
   assert(*value_location);
 
-  return *value_location;
+  return &(*value_location)->value;
 }
 
 static bool remove(HashTable_Internal *table, Key key) {
   using namespace hash_table_internal;
 
+  assert(is_initialized(table));
   uint32_t index = probe(table, key);
-  if (index == EMPTY_U32) return false;
+  if (index == UINT_MAX) return false;
 
   Key *key_location = table->key_set + index;
   HashValue_Internal **value_location = table->value_set + index;
@@ -220,7 +251,7 @@ static bool remove(HashTable_Internal *table, Key key) {
   assert(*key_location == key);
   assert(*value_location);
   HashValue_Internal *value_allocation = *value_location;
-  auto free_node = value_allocation->node;
+  auto free_node = &value_allocation->node;
   free_node->next_free = table->free_list;
   table->free_list = free_node;
 
@@ -230,4 +261,6 @@ static bool remove(HashTable_Internal *table, Key key) {
   table->count--;
   return true;
 }
+
+#endif
 

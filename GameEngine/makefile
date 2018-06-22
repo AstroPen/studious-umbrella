@@ -9,7 +9,7 @@ test_sdl: sdlplatform.cpp vmath.cpp game.cpp game.h makefile
 	-o test_sdl sdlplatform.cpp -I/usr/local/include/SDL2 -I/usr/local/include/GL -L/usr/local/lib -lSDL2 \
 	-F OpenGl -framework OpenGL
 
-test: gl_sdlplatform.cpp sdl_thread.cpp sdlgl_init.cpp glrenderer.cpp utilities.cpp push_allocator.cpp heap_allocator.cpp vmath.cpp game.cpp entity.cpp assets.cpp game.h custom_stb_image.h blinn_phong.frag blinn_phong.vert makefile debug_system.cpp
+test: gl_sdlplatform.cpp sdl_thread.cpp sdlgl_init.cpp glrenderer.cpp utilities.cpp push_allocator.h heap_allocator.h vmath.cpp game.cpp entity.cpp assets.cpp game.h custom_stb_image.h blinn_phong.frag blinn_phong.vert makefile debug_system.cpp
 	g++ -Wall -Wno-writable-strings -Wno-unused-function \
 	-Wno-missing-braces -std=c++11 -O2 \
 	-o test gl_sdlplatform.cpp -I/usr/local/include/SDL2 -I/usr/local/include/GL -L/usr/local/lib -lSDL2 \

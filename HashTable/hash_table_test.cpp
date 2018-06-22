@@ -21,6 +21,54 @@
 #define HASH_SET_TYPE_NAME StringSet
 #include "hash_set.h"
 
+//
+// TODO define this as some sort of general utility function:
+//
+
+inline bool memequal(void *a, void *b, uint32_t size) {
+  uint8_t *p = (uint8_t *)a;
+  uint8_t *q = (uint8_t *)b;
+  for (uint32_t i = 0; i < size; i++, p++, q++) {
+    if (*p != *q) return false;
+  }
+  return true;
+}
+
+#define DEFAULT_COMPARISON(Type) \
+inline bool operator==(Type a, Type b) { return memequal(&a, &b, sizeof(Type)); } \
+inline bool operator!=(Type a, Type b) { return !(a == b); } \
+
+//
+//
+//
+
+struct Point {
+  int x;
+  int y;
+};
+
+DEFAULT_COMPARISON(Point);
+
+// TODO maybe use something that wasn't copied off stackoverflow
+uint32_t get_hash_value(Point p) {
+  uint32_t seed = 2;
+  seed ^= p.x + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+  seed ^= p.y + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+  return seed;
+}
+
+struct PointEntity {
+  const char *name;
+  int x;
+  int y;
+};
+
+#define HASH_TABLE_KEY_TYPE Point
+#define HASH_TABLE_VALUE_TYPE PointEntity
+#define EMPTY Point{INT_MAX, INT_MAX}
+#define REMOVED Point{INT_MIN, INT_MIN}
+#include "hash_table.h"
+
 static bool array_contains(uint32_t *a, int len, uint32_t value) {
   for (int i = 0; i < len; i++) {
     if (a[i] == value) return true;

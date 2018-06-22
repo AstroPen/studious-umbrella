@@ -11,25 +11,17 @@
 
 // TODO pull these out into a separate file that can be shared with hash_table
 // (along with any other general hashing-related functions).
-static inline uint32_t get_hash_value(uint32_t value, uint32_t max_count) {
-  return value % max_count;
+static inline uint32_t get_hash_value(uint32_t value) {
+  return value;
 }
 
-static inline uint32_t get_hash_value(int32_t value, uint32_t max_count) {
-  return ((uint32_t)value) % max_count;
+static inline uint32_t get_hash_value(int32_t value) {
+  return (uint32_t)value;
 }
 
-static inline uint32_t get_hash_value(void *value_ptr, uint32_t max_count) {
+static inline uint32_t get_hash_value(void *value_ptr) {
   uint64_t value = (uint64_t) value_ptr;
-  return value % max_count;
-}
-
-static inline bool is_prime(uint32_t count) {
-  if (count <= 1) return false;
-  // TODO more through checking for prime
-  if (count > 2 && count % 2 == 0) return false;
-  if (count > 3 && count % 3 == 0) return false;
-  return true;
+  return (uint32_t)value;
 }
 
 namespace hash_set_internal {
@@ -42,6 +34,14 @@ namespace hash_set_internal {
 
   const void *EMPTY_PTR = NULL;
   const void *REMOVED_PTR = (void *) 0xffffffffffffffff;
+
+  static inline bool is_prime(uint32_t count) {
+    if (count <= 1) return false;
+    // TODO more through checking for prime
+    if (count > 2 && count % 2 == 0) return false;
+    if (count > 3 && count % 3 == 0) return false;
+    return true;
+  }
 }
 
 #define calc_hashset_memory_size(max_element_count, keytype) (max_element_count * sizeof(keytype))
@@ -123,7 +123,7 @@ namespace hash_set_internal {
     assert(value != EMPTY); // Illegal values
     assert(value != REMOVED);
 
-    uint32_t hash_value = get_hash_value(value, s->max_count);
+    uint32_t hash_value = get_hash_value(value) % s->max_count;
     Key stored = s->set[hash_value];
 
     Key *first_remove = NULL;
@@ -175,6 +175,8 @@ static inline void clear(HashSet_Internal *s) {
 // NOTE : It is on the user to pass in a prime value for count, but we
 // check a few small primes for some safety.
 static void init_hash_set(HashSet_Internal *result, void *memory, uint32_t count) {
+  using namespace hash_set_internal;
+
   assert(memory);
   assert(count > 0);
   assert(is_prime(count));

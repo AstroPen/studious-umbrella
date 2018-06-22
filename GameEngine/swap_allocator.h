@@ -1,5 +1,11 @@
 
+// TODO test this
 // TODO make this multithreaded
+
+#ifndef _SWAP_ALLOCATOR_H_
+#define _SWAP_ALLOCATOR_H_
+
+#include "push_allocator.h"
 
 struct SwapAllocatorReference {
   void *memory;
@@ -17,8 +23,20 @@ struct SwapAllocator {
   uint8_t *memory;
   SwapBufferHead buffers[SWAP_ALLOCATOR_BUFFER_COUNT];
   uint32_t active_buffer;
-  uint32_t buffer_size; // NOTE : This is per buffer
+  uint32_t buffer_size; // NOTE : Size of each individual buffer
 };
+
+static SwapAllocator init_swap_allocator(PushAllocator *allocator, uint32_t buffer_size) {
+  // TODO choose a good alignment here
+  uint8_t *mem = alloc_size(allocator, buffer_size * SWAP_ALLOCATOR_BUFFER_COUNT, 8);
+  if (!mem) return {};
+
+  SwapAllocator result = {};
+  result.memory = mem;
+  result.buffer_size = buffer_size;
+
+  return result;
+}
 
 static SwapAllocatorReference alloc_size(SwapAllocator *allocator, uint32_t size, uint64_t alignement = 1) {
 
@@ -59,8 +77,13 @@ static void free(SwapAllocator *allocator, SwapAllocatorReference ref) {
   }
 }
 
+static void free(SwapAllocator *allocator, void *ptr) {
+  uint32_t buffer_idx = ((uint8_t *)ptr - allocator->buffers) / allocator->buffer_size;
+  free(allocator, {ptr, buffer_idx});
+}
+
 void swap_allocator_test() {
 
 }
-
+#endif
 
