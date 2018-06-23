@@ -4,7 +4,7 @@
 #ifndef _HASH_TABLE_H_
 #define _HASH_TABLE_H_
 // TODO change this when I move push_allocator.h
-#include "../GameEngine/push_allocator.h"
+#include "push_allocator.h"
 
 namespace hash_table_internal {
 

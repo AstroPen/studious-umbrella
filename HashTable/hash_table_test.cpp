@@ -1,13 +1,7 @@
 
 // TODO generalize these tests and randomize the inputs
 
-#include <cstdio>
-#include <cstdlib>
-#include <cassert>
-#include <stdalign.h>
-#include <cstring>
-#include <cmath>
-#include <climits>
+#include "common.h"
 
 #define HASH_SET_KEYTYPE_U32
 //#define HASH_SET_TYPE_NAME HashSet
