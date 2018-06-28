@@ -1,11 +1,9 @@
 
-
 #include "common.h"
-#include "swap_allocator.h"
+#include "dynamic_array.h"
 
 int main() {
-  swap_allocator_test();
-
+  dynamic_array_test();
   return EXIT_SUCCESS;
 }
 

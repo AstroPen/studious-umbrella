@@ -18,6 +18,8 @@
 //
 // TODO move lighting to uniform so that I can turn it off
 
+#include "dynamic_array.h"
+
 enum DebugEventType : uint8_t {
   BLOCK_START,
   BLOCK_END,
@@ -34,91 +36,10 @@ struct DebugEvent {
 };
 
 // TODO move all the dyanamic array stuff to a new file
-// TODO test dynamic arrays
-
-struct darray_head {
-  uint32_t count;
-  uint32_t max_count;
-};
-
-template <typename T>
-struct darray {
-  T *p;
-  inline darray() { p = NULL; }
-  inline darray(T* ptr) { p = ptr; }
-  inline operator T*() { return p; }
-};
-
-template <typename T>
-inline darray_head *header(darray<T> arr) {
-  if (!arr.p) return NULL;
-  auto head = (darray_head *) arr.p;
-  return head - 1; 
-}
-
-template <typename T>
-inline uint32_t count(darray<T> arr) {
-  if (!arr.p) return 0;
-  return header(arr)->count;
-}
-
-template <typename T>
-inline uint32_t total_size(darray<T> arr, uint32_t count) {
-  return sizeof(T) * count + sizeof(darray_head);
-}
-
-template <typename T>
-inline bool initialize(darray<T> &arr, uint32_t max_count = 10) {
-  assert(!arr.p); // TODO possibly remove this?
-  if (!max_count) return true;
-  auto head = (darray_head *) malloc(total_size(arr, max_count));
-  if (!head) return false;
-  head->count = 0;
-  head->max_count = max_count;
-  arr = (T *)(head + 1);
-  return true;
-}
-
-template <typename T>
-inline bool expand(darray<T> &arr, uint32_t amount) {
-  if (!amount) return true;
-  auto head = header(arr);
-  if (!head) return initialize(arr, amount);
-
-  head = (darray_head *) realloc(head, total_size(arr, head->max_count + amount));
-  assert(head);
-  if (!head) return false;
-  head->max_count += amount;
-  arr = (T *)(head + 1);
-  return true;
-}
-
-template <typename T>
-inline bool expand(darray<T> &arr) {
-  auto head = header(arr);
-
-  if (!head) return initialize(arr);
-  return expand(arr, head->max_count);
-}
-
-template <typename T>
-inline bool push(darray<T> &arr, T &entry) {
-  if (!arr.p) arr = expand(arr);
-  auto head = header(arr);
-  if (!head) return false;
-
-  assert(head->count <= head->max_count);
-  // TODO consider expanding by 1 on failure?
-  if (head->count == head->max_count)
-    if (!expand(arr)) return false;
-
-  head->count++;
-  arr.p[head->count] = entry;
-  return true;
-}
 
 // TODO finish this after implementing dynamic arrays
 struct EventQueue {
+  darray<DebugEvent> events;
 };
 
 static inline uint32_t get_max_counter(); 
