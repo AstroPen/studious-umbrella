@@ -1,4 +1,15 @@
 
+// TODO Here is the planned rework for the debug system :
+// 1. Each TimedBlock will push an "event" that indicates the start of a block.
+// 2. The end of block will push an event indicating the end of the block.
+// 3. Each event contains a thread id that allows me to tell which thread the event came from.
+// 4. Later, when debug information is processed, I will create a hierarchy of calls that can 
+//    destinguish between internal time and total time for the block.
+// 5. I will also aggregate this information into a set of data about previous frames (max time,
+//    min time, average time, etc).
+// 6. This information will be displayed over the game in a gui that can be toggled.
+// 7. This display should happen outside the game in the platform layer at the end of the frame.
+
 // TODO make debug information thread safe
 // TODO move debug printing to platform layer
 // TODO record info over multiple frames
@@ -6,6 +17,109 @@
 // TODO make debug interface toggleable
 //
 // TODO move lighting to uniform so that I can turn it off
+
+enum DebugEventType : uint8_t {
+  BLOCK_START,
+  BLOCK_END,
+};
+
+#define NUM_THREADS 4
+#define EVENT_QUEUE_SIZE (4098 * 16)
+
+struct DebugEvent {
+  DebugEventType type;
+  uint16_t block_id;
+  uint32_t thread_id;
+  uint32_t cycle_count;
+};
+
+// TODO move all the dyanamic array stuff to a new file
+// TODO test dynamic arrays
+
+struct darray_head {
+  uint32_t count;
+  uint32_t max_count;
+};
+
+template <typename T>
+struct darray {
+  T *p;
+  inline darray() { p = NULL; }
+  inline darray(T* ptr) { p = ptr; }
+  inline operator T*() { return p; }
+};
+
+template <typename T>
+inline darray_head *header(darray<T> arr) {
+  if (!arr.p) return NULL;
+  auto head = (darray_head *) arr.p;
+  return head - 1; 
+}
+
+template <typename T>
+inline uint32_t count(darray<T> arr) {
+  if (!arr.p) return 0;
+  return header(arr)->count;
+}
+
+template <typename T>
+inline uint32_t total_size(darray<T> arr, uint32_t count) {
+  return sizeof(T) * count + sizeof(darray_head);
+}
+
+template <typename T>
+inline bool initialize(darray<T> &arr, uint32_t max_count = 10) {
+  assert(!arr.p); // TODO possibly remove this?
+  if (!max_count) return true;
+  auto head = (darray_head *) malloc(total_size(arr, max_count));
+  if (!head) return false;
+  head->count = 0;
+  head->max_count = max_count;
+  arr = (T *)(head + 1);
+  return true;
+}
+
+template <typename T>
+inline bool expand(darray<T> &arr, uint32_t amount) {
+  if (!amount) return true;
+  auto head = header(arr);
+  if (!head) return initialize(arr, amount);
+
+  head = (darray_head *) realloc(head, total_size(arr, head->max_count + amount));
+  assert(head);
+  if (!head) return false;
+  head->max_count += amount;
+  arr = (T *)(head + 1);
+  return true;
+}
+
+template <typename T>
+inline bool expand(darray<T> &arr) {
+  auto head = header(arr);
+
+  if (!head) return initialize(arr);
+  return expand(arr, head->max_count);
+}
+
+template <typename T>
+inline bool push(darray<T> &arr, T &entry) {
+  if (!arr.p) arr = expand(arr);
+  auto head = header(arr);
+  if (!head) return false;
+
+  assert(head->count <= head->max_count);
+  // TODO consider expanding by 1 on failure?
+  if (head->count == head->max_count)
+    if (!expand(arr)) return false;
+
+  head->count++;
+  arr.p[head->count] = entry;
+  return true;
+}
+
+// TODO finish this after implementing dynamic arrays
+struct EventQueue {
+};
 
 static inline uint32_t get_max_counter(); 
 
@@ -26,6 +140,7 @@ struct DebugGlobalMemory {
 } debug_global_memory;
 
 static void init_debug_global_memory() {
+  // TODO multiply by number of threads
   auto max_count = get_max_counter();
   assert(max_count < DEBUG_RECORD_MAX);
   debug_global_memory.record_count = max_count;
@@ -66,7 +181,6 @@ struct TimedBlock {
 // NOTE : all these declarations are necessary to mangle the variable name and
 // allow for multiple uses per function.
 
-// TODO make it so that we can name blocks instead of just using the function name
 #define TIMED_BLOCK(name) TimedBlock _timed_block_##name(__COUNTER__, __FILE__, __LINE__, #name)
 
 #define END_TIMED_BLOCK(name) _timed_block_##name.force_end()

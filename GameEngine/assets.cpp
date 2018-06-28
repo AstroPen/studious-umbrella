@@ -90,6 +90,9 @@ static inline stbtt_bakedchar *get_baked_char(FontInfo *font, char c) {
   return result;
 }
 
+// TODO Baking text should happen offline, or before the first frame during developement.
+// Additionally, the temporary storeage needed on the cpu should use a SwapAllocator 
+// to handle all asset loading concurrently.
 static FontInfo load_font_file(const char* filename, uint32_t text_height, 
                                PushAllocator *perm_allocator, PushAllocator *temp_allocator) {
 
