@@ -22,6 +22,7 @@
 #include <cstring>
 #include <cmath>
 
+#define NUM_THREADS 4
 #include "debug_system.cpp"
 
 #include "vmath.cpp"
@@ -159,15 +160,20 @@ int main(int argc, char ** argv){
   // Initialization ---
   //
 
-  init_debug_global_memory();
-
   // TODO move this to after gl creation and create new context in each thread so that
-  //      we can asynchronously download textures to the gpu
+  //      we can asynchronously download textures to the gpu.
+  //      
+  //      edit : Or maybe not, since apparently that doesn't work very well? OpenGL sucks.
   WorkQueue work_queue;
   auto queue = &work_queue;
-  int num_threads_total = 4;
-  int count = init_worker_threads(queue, num_threads_total - 1);
+  int num_threads_total = NUM_THREADS;
+  uint32_t thread_ids[4];
+  int count = init_worker_threads(queue, num_threads_total - 1, thread_ids + 1);
   assert(count == num_threads_total - 1);
+  thread_ids[0] = SDL_ThreadID();
+
+  init_debug_global_memory(thread_ids);
+  SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH);
 
   // TODO automatically scale to different resolutions
   int width = 800;

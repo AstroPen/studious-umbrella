@@ -68,20 +68,36 @@ inline bool expand(darray<T> &arr) {
 }
 
 template <typename T>
-inline bool push(darray<T> &arr, T entry) {
+inline T *push(darray<T> &arr) {
   if (!arr) initialize(arr);
-  if (!arr) return false;
+  if (!arr) return NULL;
   auto head = header(arr);
 
   assert(head->count <= head->max_count);
   // TODO consider expanding by 1 on failure?
   if (head->count == head->max_count)
-    if (!expand(arr)) return false;
+    if (!expand(arr)) return NULL;
+
+  head = header(arr);
+  head->count++;
+  return arr + head->count - 1;
+}
+
+template <typename T>
+inline T *push(darray<T> &arr, T entry) {
+  if (!arr) initialize(arr);
+  if (!arr) return NULL;
+  auto head = header(arr);
+
+  assert(head->count <= head->max_count);
+  // TODO consider expanding by 1 on failure?
+  if (head->count == head->max_count)
+    if (!expand(arr)) return NULL;
 
   head = header(arr);
   arr.p[head->count] = entry;
   head->count++;
-  return true;
+  return arr + head->count;
 }
 
 template <typename T>
@@ -92,6 +108,22 @@ inline void dfree(darray<T> &arr) {
   auto head = header(arr);
   free((void *)head);
   arr = NULL;
+}
+
+template <typename T>
+inline void clear(darray<T> &arr) {
+  if (!arr) return;
+  auto head = header(arr);
+  head->count = 0;
+}
+
+template <typename T>
+inline T pop(darray<T> &arr) {
+  assert(arr);
+  auto head = header(arr);
+  assert(head->count);
+  head->count--;
+  return arr[head->count];
 }
 
 // TODO move this to the test file
@@ -136,6 +168,26 @@ static void dynamic_array_test() {
   assert(push(ints, 37));
   assert(ints[0] == 37);
   assert(count(ints) == 1);
+
+  clear(ints);
+  assert(!count(ints));
+  assert(push(ints, 4));
+  assert(count(ints) == 1);
+  assert(ints[0] == 4);
+  auto x = push(ints);
+  assert(x);
+  assert(count(ints) == 2);
+  *x = 1;
+  assert(ints[0] == 4);
+  assert(ints + 1 == x);
+  assert(ints[1] == (*x));
+  
+  int y = pop(ints);
+  assert(y == 1);
+  assert(count(ints) == 1);
+  assert(push(ints, 5));
+  assert(count(ints) == 2);
+  assert(ints[1] == 5);
 
   printf("Dynamic array test successful.\n\n");
 }

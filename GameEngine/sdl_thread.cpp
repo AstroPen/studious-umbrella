@@ -1,6 +1,8 @@
 #ifndef _NAR_SDL_THREAD_CPP_
 #define _NAR_SDL_THREAD_CPP_
 
+// NOTE : global_debug_memory is unitialized before init_worker_threads is called
+
 // TODO consider breaking this into atomics/queue separately
 #define _NAR_ATOMICS_H_
 
@@ -128,6 +130,8 @@ struct WorkQueue {
 
 struct ThreadInfo {
   WorkQueue *queue;
+  // TODO make this just a uint32_t?
+  SDL_threadID thread_id;
   int volatile received;
 };
 
@@ -190,6 +194,7 @@ static inline bool try_complete_next_entry(WorkQueue *queue) {
 int worker_thread_proc(ThreadInfo *info) {
   auto thread_id = SDL_ThreadID();
   auto queue = info->queue;
+  info->thread_id = thread_id;
   SDL_CompilerBarrier();
   info->received = true;
 
@@ -212,7 +217,7 @@ int worker_thread_proc(ThreadInfo *info) {
 //
 
 // NOTE : This also inits the queue and must be called before push_work. Returns the number created.
-static inline int init_worker_threads(WorkQueue *queue, int count) {
+static inline int init_worker_threads(WorkQueue *queue, int count, uint32_t *thread_ids = NULL) {
   printf("Main thread is : %lu\n", SDL_ThreadID());
   auto semaphore = SDL_CreateSemaphore(0);
   *queue = {};
@@ -232,6 +237,7 @@ static inline int init_worker_threads(WorkQueue *queue, int count) {
   // NOTE : this just makes sure that info doesn't leave scope before the threads are initialized.
   for (int i = 0; i < count; i++) {
     while (!info[i].received);
+    if (thread_ids) thread_ids[i] = info[i].thread_id;
   }
 
   return count;
