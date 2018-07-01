@@ -1,4 +1,5 @@
 
+// TODO this is coppied in common.h, so I should just include that instead
 union bit32 {
   int i;
   uint32_t u;
