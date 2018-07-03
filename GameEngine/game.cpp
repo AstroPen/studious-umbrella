@@ -1,5 +1,5 @@
-#ifndef _NAR_GAME_CPP_
-#define _NAR_GAME_CPP_
+#ifndef _GAME_CPP_
+#define _GAME_CPP_
 
 // TODO test circle collision somehow
 
@@ -209,6 +209,10 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
   float time_remaining_init = g->time_remaining;
   int iterations = 0;
 
+  //
+  // Physics Loop ---
+  //
+
   while (g->time_remaining > (PHYSICS_FRAME_TIME / 2.0)) {
     update_physics(g);
     g->time_remaining -= PHYSICS_FRAME_TIME;
@@ -262,4 +266,4 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
   return true;
 }
 
-#endif // _NAR_GAME_CPP_
+#endif // _GAME_CPP_
