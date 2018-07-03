@@ -24,7 +24,9 @@ union bit32 {
 // NOTE : this does not work if val is a rvalue
 #define bit_cast(type, val) (*((type *)(&(val))))
 #define count_of(array) (sizeof(array)/sizeof(*(array)))
+#define SWAP(a, b) { auto temp = *(a); *(a) = *(b); *(b) = temp; }
 
+#include "scalar_math.h"
 #include "push_allocator.h"
 #endif
 

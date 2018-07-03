@@ -2,19 +2,31 @@
 #ifndef _HEAP_SORT_H_
 #define _HEAP_SORT_H_
 
-// NOTE : This was copied from chess.cpp.
-inline int compare(int *a, int *b) {
-  if (*a < *b) return -1;
+// NOTE : This was initially copied from chess.cpp.
+
+// TODO INCOMPLETE : This sorts arrays backwards. I don't really care to fix it right now.
+
+// TODO Separate these out into header/cpp so that types don't need to be defined before this
+template <typename T> static void heapify(T *arr, uint32_t count, uint32_t start_idx);
+template <typename T> static void heap_sort(T *arr, uint32_t count);
+template <typename T> static bool is_heap(T* arr, uint32_t count, uint32_t start_idx);
+template <typename T> static bool is_sorted(T *arr, uint32_t count);
+
+// TODO I think compare might actually deserve to go in common.h...
+template <typename T> inline int compare(T *a, T *b) {
+  if (*a > *b) return 1;
   if (*a == *b) return 0;
-  return 1;
+  return -1;
 }
 
-// TODO move this into common.h or something
-#define SWAP(a, b) { auto temp = *(a); *(a) = *(b); *(b) = temp; }
+// TODO switch to using this :
+#define CMP_GT(a, b) (compare(a, b) > 0)
+#define CMP_EQ(a, b) (compare(a, b) == 0)
+#define CMP_LT(a, b) (compare(a, b) < 0)
 
 // TODO make an overlaod that doesn't take a start_idx that makes the whole thing a heap (without assumptions)?
 template <typename T> 
-void heapify(T *arr, uint32_t count, uint32_t start_idx = 0) {
+static void heapify(T *arr, uint32_t count, uint32_t start_idx) {
 
   uint32_t min_idx = start_idx;
   uint32_t l = 2*start_idx + 1;
@@ -47,7 +59,7 @@ void heapify(T *arr, uint32_t count, uint32_t start_idx = 0) {
 
 // TODO move this to a namespace
 template <typename T>
-bool is_heap(T *arr, uint32_t count, uint32_t start_idx = 0) {
+static bool is_heap(T *arr, uint32_t count, uint32_t start_idx) {
   int l = 2*start_idx + 1;
   int r = 2*start_idx + 2;
 
@@ -66,9 +78,9 @@ bool is_heap(T *arr, uint32_t count, uint32_t start_idx = 0) {
 
   return true; 
 }
- 
+
 template <typename T>
-void heap_sort(T *arr, uint32_t count) {
+static void heap_sort(T *arr, uint32_t count) {
   if (!count) return;
 
   for (int i = count / 2 - 1; i >= 0; i--) {
@@ -76,7 +88,7 @@ void heap_sort(T *arr, uint32_t count) {
   }
 
   // TODO comment this out, make a test instead
-  assert(is_heap(arr, count));
+  assert(is_heap(arr, count, 0));
 
   // One by one extract an element from heap
   for (uint32_t i = count - 1; i > 0; i--) {
@@ -86,24 +98,20 @@ void heap_sort(T *arr, uint32_t count) {
 }
 
 template <typename T>
-bool is_sorted(T *arr, uint32_t count) {
+static bool is_reverse_sorted(T *arr, uint32_t count) {
   for (uint32_t i = 0; i < count - 1; i++) {
     if (compare(arr + i, arr + i + 1) < 0) return false;
   }
   return true;
 }
 
-// TODO
-void test_heap_sort() {
-  int ints[] = { 3, 7, -1, 8, 4, 10, 1, 3, 100, -100};
-  uint32_t count = count_of(ints);
-  assert(!is_sorted(ints, count));
-  heap_sort(ints, count);
-  for (int i = 0; i < count; i++) {
-    printf("%d, ", ints[i]);
+template <typename T>
+static bool is_sorted(T *arr, uint32_t count) {
+  for (uint32_t i = 0; i < count - 1; i++) {
+    if (compare(arr + i, arr + i + 1) > 0) return false;
   }
-  printf("\n");
-  assert(is_sorted(ints, count));
+  return true;
 }
 
 #endif
+
