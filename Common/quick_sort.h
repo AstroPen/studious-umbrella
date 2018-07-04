@@ -5,7 +5,7 @@
 // TODO some of these might want to be in a namespace
 template <typename T> static T *get_pivot(T *arr, uint32_t count);
 template <typename T> static void insertion_sort(T *arr, uint32_t count);
-template <typename T> static uint32_t partition(T *arr, uint32_t count, T *pivot_ptr);
+template <typename T> static Array<uint32_t,2> partition(T *arr, uint32_t count, T *pivot_ptr);
 template <typename T> static void quick_sort(T *arr, uint32_t count);
 
 #endif
@@ -57,7 +57,7 @@ void insertion_sort(T *arr, uint32_t count) {
 }
 
 template <typename T>
-static uint32_t partition(T *arr, uint32_t count, T *pivot_ptr) {
+static Array<uint32_t, 2> partition(T *arr, uint32_t count, T *pivot_ptr) {
 
   uint32_t lt = 0, i = 0, gt = count - 1;
   T pivot = *pivot_ptr;
@@ -76,23 +76,7 @@ static uint32_t partition(T *arr, uint32_t count, T *pivot_ptr) {
     }
   }
 
-#if 0
-  print_ints(arr, count);
-
-  for (int it = 0; it < lt; it++) {
-    assert(arr[it] < pivot);
-  }
-
-  for (int it = lt; it < i; it++) {
-    assert(arr[it] == pivot);
-  }
-
-  for (int it = i; it < count; it++) {
-    assert(arr[it] > pivot);
-  }
-#endif
-
-  return gt;
+  return {lt, gt};
 }
 
 template <typename T>
@@ -104,10 +88,13 @@ static void quick_sort(T *arr, uint32_t count) {
 
   T *pivot = get_pivot(arr, count);
 
-  uint32_t idx = partition(arr, count, pivot);
+  //uint32_t idx = partition(arr, count, pivot);
+  Array<uint32_t, 2> idxs = partition(arr, count, pivot);
+  uint32_t lt = idxs[0];
+  uint32_t gt = idxs[1];
 
-  quick_sort(arr, idx);
-  quick_sort(arr + idx, count - idx);
+  quick_sort(arr, lt);
+  quick_sort(arr + gt, count - gt);
 }
 
 #endif

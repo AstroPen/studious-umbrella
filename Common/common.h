@@ -37,6 +37,12 @@ template <typename T> inline int compare(T *a, T *b) {
 #define CMP_EQ(a, b) (compare(a, b) == 0)
 #define CMP_LT(a, b) (compare(a, b) < 0)
 
+template <typename T, uint32_t N>
+struct Array {
+  T e[N];
+  inline operator T*() { return e; }
+};
+
 #include "scalar_math.h"
 #include "push_allocator.h"
 #endif
