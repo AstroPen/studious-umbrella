@@ -58,28 +58,41 @@ void insertion_sort(T *arr, uint32_t count) {
 
 template <typename T>
 static uint32_t partition(T *arr, uint32_t count, T *pivot_ptr) {
-  // TODO partition equal values separately in the middle
-  uint32_t i, j;
+
+  uint32_t lt = 0, i = 0, gt = count - 1;
   T pivot = *pivot_ptr;
-  for (i = 0, j = count - 1; i < j; i++) {
-    // TODO switch to using compare
-    if (arr[i] > pivot) {
 
-      for (; j > i; j--) {
-        if (arr[j] <= pivot) {
-          SWAP(arr + i, arr + j);
-          break;
-        }
-      }
-
+  //   ---------> ------->          <------------ 
+  // [......... lt ..... i ....... gt ............]
+  //  less than    equal   unknown    greater than
+  while (i <= gt) {
+    if (arr[i] == pivot) i++;
+    else if (arr[i] < pivot) {
+      if (lt != i) SWAP(arr + lt, arr + i);
+      lt++, i++;
+    } else {
+      if (gt != i) SWAP(arr + i, arr + gt);
+      gt--;
     }
-    if (i == j) break;
   }
 
-  assert(i != 0); // If i is 0 we chose the pivot wrong
-  assert(i == j);
+#if 0
+  print_ints(arr, count);
 
-  return i;
+  for (int it = 0; it < lt; it++) {
+    assert(arr[it] < pivot);
+  }
+
+  for (int it = lt; it < i; it++) {
+    assert(arr[it] == pivot);
+  }
+
+  for (int it = i; it < count; it++) {
+    assert(arr[it] > pivot);
+  }
+#endif
+
+  return gt;
 }
 
 template <typename T>

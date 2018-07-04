@@ -80,12 +80,22 @@ void test_quick_sort() {
   
 
   darray<int> ints4;
-  for (int i = 0; i < 2046; i++) {
+  for (int i = 0; i < 64000; i++) {
     push(ints4, rand());
   }
   assert(ints4);
   SORT_TEST_LARGE(quick_sort, ints4.p, count(ints4));
+  clear(ints4);
 
+  int rand_val = rand();
+  for (int i = 0; i < 64000; i++) {
+    push(ints4, rand_val);
+  }
+  assert(ints4);
+  SORT_TEST_LARGE(quick_sort, ints4.p, count(ints4));
+  clear(ints4);
+
+  dfree(ints4);
   printf("Quick sort test successful.\n\n");
 }
 
