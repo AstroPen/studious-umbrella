@@ -30,6 +30,8 @@ The remaining files are
 - sdlgl\_init.cpp which just handles some initialization for the platform layer
 - xplatform.cpp which was an old platform layer for X11 that is not being maintained.
 
+There are also various include from ../Common, in particular push\_allocator.h, scalar\_math.h, vector\_math.h and various others.
+
 ## Setup
 
 This project is not guaranteed to work on any other machine, but it might be possible if you are on Mac.
