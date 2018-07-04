@@ -26,6 +26,17 @@ union bit32 {
 #define count_of(array) (sizeof(array)/sizeof(*(array)))
 #define SWAP(a, b) { auto temp = *(a); *(a) = *(b); *(b) = temp; }
 
+// TODO consider static check that T is not a pointer (to reduce errors)
+template <typename T> inline int compare(T *a, T *b) {
+  if (*a > *b) return 1;
+  if (*a == *b) return 0;
+  return -1;
+}
+
+#define CMP_GT(a, b) (compare(a, b) > 0)
+#define CMP_EQ(a, b) (compare(a, b) == 0)
+#define CMP_LT(a, b) (compare(a, b) < 0)
+
 #include "scalar_math.h"
 #include "push_allocator.h"
 #endif

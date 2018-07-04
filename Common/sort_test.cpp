@@ -8,7 +8,9 @@ void print_ints(int *arr, uint32_t count) {
   printf("\n");
 }
 
+#define HEAP_SORT_IMPLEMENTATION
 #include "heap_sort.h"
+#define QUICK_SORT_IMPLEMENTATION
 #include "quick_sort.h"
 #include "dynamic_array.h"
 

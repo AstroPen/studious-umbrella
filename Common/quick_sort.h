@@ -1,4 +1,17 @@
 
+#ifndef _QUICK_SORT_H_
+#define _QUICK_SORT_H_
+
+// TODO some of these might want to be in a namespace
+template <typename T> static T *get_pivot(T *arr, uint32_t count);
+template <typename T> static void insertion_sort(T *arr, uint32_t count);
+template <typename T> static uint32_t partition(T *arr, uint32_t count, T *pivot_ptr);
+template <typename T> static void quick_sort(T *arr, uint32_t count);
+
+#endif
+
+#ifdef QUICK_SORT_IMPLEMENTATION
+
 // TODO simplify this
 template <typename T>
 static T *get_pivot(T *arr, uint32_t count) {
@@ -36,7 +49,7 @@ void insertion_sort(T *arr, uint32_t count) {
   for (uint32_t i = 1; i < count; i++) {
     T temp = arr[i];
     uint32_t j;
-    for (j = i; j > 0 && compare(arr + j - 1, &temp) > 0; j--) {
+    for (j = i; j > 0 && CMP_GT(arr + j - 1, &temp); j--) {
       arr[j] = arr[j-1];
     }
     arr[j] = temp;
@@ -84,4 +97,5 @@ static void quick_sort(T *arr, uint32_t count) {
   quick_sort(arr + idx, count - idx);
 }
 
+#endif
 

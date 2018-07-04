@@ -6,23 +6,16 @@
 
 // TODO INCOMPLETE : This sorts arrays backwards. I don't really care to fix it right now.
 
-// TODO Separate these out into header/cpp so that types don't need to be defined before this
 template <typename T> static void heapify(T *arr, uint32_t count, uint32_t start_idx);
 template <typename T> static void heap_sort(T *arr, uint32_t count);
 template <typename T> static bool is_heap(T* arr, uint32_t count, uint32_t start_idx);
 template <typename T> static bool is_sorted(T *arr, uint32_t count);
+template <typename T> static bool is_reverse_sorted(T *arr, uint32_t count);
 
-// TODO I think compare might actually deserve to go in common.h...
-template <typename T> inline int compare(T *a, T *b) {
-  if (*a > *b) return 1;
-  if (*a == *b) return 0;
-  return -1;
-}
+#endif
 
-// TODO switch to using this :
-#define CMP_GT(a, b) (compare(a, b) > 0)
-#define CMP_EQ(a, b) (compare(a, b) == 0)
-#define CMP_LT(a, b) (compare(a, b) < 0)
+#ifdef HEAP_SORT_IMPLEMENTATION
+
 
 // TODO make an overlaod that doesn't take a start_idx that makes the whole thing a heap (without assumptions)?
 template <typename T> 
@@ -34,12 +27,12 @@ static void heapify(T *arr, uint32_t count, uint32_t start_idx) {
 
   // If left child is larger than root
   if (l < count) {
-    if (compare(arr + l, arr + min_idx) < 0) min_idx = l;
+    if (CMP_LT(arr + l, arr + min_idx)) min_idx = l;
   }
 
   // If right child is larger than largest so far
   if (r < count) {
-    if (compare(arr + r, arr + min_idx) < 0) min_idx = r;
+    if (CMP_LT(arr + r, arr + min_idx)) min_idx = r;
   }
 
   // If largest is not root
@@ -66,13 +59,13 @@ static bool is_heap(T *arr, uint32_t count, uint32_t start_idx) {
   assert(start_idx < count);
 
   if (l < count) {
-    if (compare(arr + l, arr + start_idx) < 0) return false;
+    if (CMP_LT(arr + l, arr + start_idx)) return false;
     if (!is_heap(arr, count, l)) return false;
   }
 
   // If right child is larger than largest so far
   if (r < count) {
-    if (compare(arr + r, arr + start_idx) < 0) return false;
+    if (CMP_LT(arr + r, arr + start_idx)) return false;
     if (!is_heap(arr, count, r)) return false;
   }
 
@@ -100,7 +93,7 @@ static void heap_sort(T *arr, uint32_t count) {
 template <typename T>
 static bool is_reverse_sorted(T *arr, uint32_t count) {
   for (uint32_t i = 0; i < count - 1; i++) {
-    if (compare(arr + i, arr + i + 1) < 0) return false;
+    if (CMP_LT(arr + i, arr + i + 1)) return false;
   }
   return true;
 }
@@ -108,7 +101,7 @@ static bool is_reverse_sorted(T *arr, uint32_t count) {
 template <typename T>
 static bool is_sorted(T *arr, uint32_t count) {
   for (uint32_t i = 0; i < count - 1; i++) {
-    if (compare(arr + i, arr + i + 1) > 0) return false;
+    if (CMP_GT(arr + i, arr + i + 1)) return false;
   }
   return true;
 }
