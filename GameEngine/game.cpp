@@ -93,6 +93,7 @@ static void update_physics(GameState *g) {
   if (g->shooting) {
     auto player_p = center(g->entities->collision_box).xy;
     auto cursor_dir = normalize(g->pointer_position - player_p);
+    // FIXME add_particle seems to be getting called when I'm not shooting?
     add_particle(g, player_p, 25 * cursor_dir, 1, 0.2, 1, V4{0.3, 0.3, 0.2, 1});
     g->shooting--;
   }

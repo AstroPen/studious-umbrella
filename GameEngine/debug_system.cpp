@@ -18,6 +18,7 @@
 // TODO move lighting to uniform so that I can turn it off
 
 #include "dynamic_array.h"
+#include "quick_sort.h"
 
 enum DebugEventType : uint8_t {
   BLOCK_START,
@@ -225,6 +226,35 @@ static void aggregate_debug_events() {
   printf("\n");
 }
 
+inline int block_id_compare(uint32_t *a, uint32_t *b) {
+  uint32_t bid_a = *a;
+  uint32_t bid_b = *b;
+  FunctionInfo *info_a = debug_global_memory.function_infos + bid_a;
+  FunctionInfo *info_b = debug_global_memory.function_infos + bid_b;
+
+  if (!info_a->filename && !info_b->filename) return 0;
+  else if (!info_a->filename) return 1;
+  else if (!info_b->filename) return -1;
+
+  // NOTE : Both are initialized.
+  uint32_t current_frame = debug_global_memory.current_frame;
+  uint64_t internal_cycles_a = 0;
+  uint64_t internal_cycles_b = 0;
+
+  for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+    auto record_a = debug_global_memory.debug_logs[thread_idx].records + bid_a;
+    auto record_b = debug_global_memory.debug_logs[thread_idx].records + bid_b;
+
+    auto frame_a = &record_a->frames[current_frame];
+    auto frame_b = &record_b->frames[current_frame];
+
+    internal_cycles_a += frame_a->internal_cycles;
+    internal_cycles_b += frame_b->internal_cycles;
+  }
+
+  return compare(&internal_cycles_b, &internal_cycles_a);
+}
+
 static void print_debug_records() {
   static darray<uint32_t> block_ids;
 
@@ -232,10 +262,11 @@ static void print_debug_records() {
     push(block_ids, block_id);
   }
 
-  //quick_sort(block_ids
+  quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
 
   uint32_t current_frame = debug_global_memory.current_frame;
-  for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
+  for (uint32_t i = 0; i < count(block_ids); i++) {
+    uint32_t block_id = block_ids[i];
     FunctionInfo *info = debug_global_memory.function_infos + block_id;
     if (!info->filename) continue;
     DebugRecord *records[NUM_THREADS];
@@ -295,4 +326,7 @@ static void push_debug_records() {
   printf("\n");
 #endif
 }
+
+#define QUICK_SORT_IMPLEMENTATION
+#include "quick_sort.h"
 

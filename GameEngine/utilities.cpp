@@ -1,20 +1,4 @@
 
-// TODO this is coppied in common.h, so I should just include that instead
-union bit32 {
-  int i;
-  uint32_t u;
-
-  inline bit32(int _i) { i = _i; }
-  inline bit32(uint32_t _u) { u = _u; }
-  
-  inline operator int() { return i; }
-  inline operator uint32_t() { return u; }
-};
-
-// NOTE : this does not work if val is a rvalue
-#define bit_cast(type, val) (*((type *)(&(val))))
-
-#define count_of(array) (sizeof(array)/sizeof(*(array)))
 
 static inline uint32_t next_power_2(uint32_t v) {
   uint32_t r;

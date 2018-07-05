@@ -15,12 +15,7 @@
 //#include <OpenGL/glext.h>
 //#include <SDL_opengl.h>
 
-#include <cstdio>
-#include <cstdlib>
-#include <cassert>
-#include <stdalign.h>
-#include <cstring>
-#include <cmath>
+#include <common.h>
 
 #define NUM_THREADS 4
 #include "debug_system.cpp"
