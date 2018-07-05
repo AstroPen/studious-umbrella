@@ -87,13 +87,13 @@ static bool apply_input(GameState *g, ControllerState controller) {
 }
 
 static void update_physics(GameState *g) {
-  TIMED_FUNCTION();
+  //TIMED_FUNCTION();
+  PRIORITY_TIMED_FUNCTION(1);
 
   // TODO this is obviously a janky way to do shooting, figure out something better?
   if (g->shooting) {
     auto player_p = center(g->entities->collision_box).xy;
     auto cursor_dir = normalize(g->pointer_position - player_p);
-    // FIXME add_particle seems to be getting called when I'm not shooting?
     add_particle(g, player_p, 25 * cursor_dir, 1, 0.2, 1, V4{0.3, 0.3, 0.2, 1});
     g->shooting--;
   }
@@ -208,7 +208,6 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
 
   g->time_remaining += delta_t;
   float time_remaining_init = g->time_remaining;
-  int iterations = 0;
 
   //
   // Physics Loop ---
@@ -219,8 +218,6 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
     g->time_remaining -= PHYSICS_FRAME_TIME;
     g->game_ticks++;
     assert(g->time_remaining < time_remaining_init);
-    iterations++;
-    assert(iterations < 100);
   }
 
   //draw_gradient_background(*background_texture, g->game_ticks);

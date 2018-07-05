@@ -3,15 +3,14 @@
 // 1. Each TimedBlock will push an "event" that indicates the start of a block.
 // 2. The end of block will push an event indicating the end of the block.
 // 3. Each event contains a thread id that allows me to tell which thread the event came from.
-// 4. Later, when debug information is processed, I will create a hierarchy of calls that can 
-//    destinguish between internal time and total time for the block.
+// 4. Later, when debug information is processed, I will create a hierarchy of calls that can
+//    destinguish between internal time and total time for the block.                       ------ Done!
+//
 // 5. I will also aggregate this information into a set of data about previous frames (max time,
 //    min time, average time, etc).
 // 6. This information will be displayed over the game in a gui that can be toggled.
 // 7. This display should happen outside the game in the platform layer at the end of the frame.
 
-// TODO make debug information thread safe (sort of done?)
-// TODO record info over multiple frames
 // TODO draw to screen instead of printing
 // TODO make debug interface toggleable
 //
@@ -49,6 +48,7 @@ struct FunctionInfo {
   char const *filename;
   char const *function_name;
   uint32_t line_number;
+  uint32_t priority;
 };
 
 struct DebugRecord {
@@ -110,7 +110,7 @@ struct TimedBlock {
   // registered. If it hasn't, set the filename, function_name, and line_number.
   inline TimedBlock(uint32_t block_id_, char const *filename, 
                     uint32_t line_number, char const *function_name,
-                    bool *initialized) {
+                    bool *initialized, uint32_t priority) {
 
     block_id = block_id_;
 
@@ -120,6 +120,7 @@ struct TimedBlock {
       info->filename = filename;
       info->function_name = function_name;
       info->line_number = line_number;
+      info->priority = priority;
       *initialized = true;
     }
 
@@ -154,17 +155,19 @@ struct TimedBlock {
 // NOTE : all these declarations are necessary to mangle the variable name and
 // allow for multiple uses per function.
 
-#define TIMED_BLOCK(name) \
-  static bool _initialized_##name = false; \
-  TimedBlock _timed_block_##name(__COUNTER__, __FILE__, __LINE__, #name, &_initialized_##name)
+#define TIMED_BLOCK__(mangle, name, priority) \
+  static bool _initialized_##mangle = false; \
+  TimedBlock _timed_block_##mangle(__COUNTER__, __FILE__, __LINE__, name, &_initialized_##mangle, priority)
+
+#define TIMED_BLOCK(name) TIMED_BLOCK__(name, #name, 0)
 
 #define END_TIMED_BLOCK(name) _timed_block_##name.force_end()
 
-#define TIMED_FUNCTION__(number) \
-  static bool _initialized_##number = false; \
-  TimedBlock _timed_block_##number(__COUNTER__, __FILE__, __LINE__, __FUNCTION__, &_initialized_##number)
-#define TIMED_FUNCTION_(number) TIMED_FUNCTION__(number)
-#define TIMED_FUNCTION() TIMED_FUNCTION_(__LINE__)
+#define TIMED_FUNCTION_(number, priority) TIMED_BLOCK__(number, __FUNCTION__, priority)
+#define TIMED_FUNCTION() TIMED_FUNCTION_(__LINE__, 0)
+
+#define PRIORITY_TIMED_FUNCTION(priority) TIMED_FUNCTION_(__LINE__, priority)
+
 
 static void aggregate_debug_events() {
   static darray <DebugEvent *> event_stack; 
@@ -237,6 +240,10 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
   else if (!info_b->filename) return -1;
 
   // NOTE : Both are initialized.
+  
+  int priority_cmp = -compare(&info_a->priority, &info_b->priority);
+  if (priority_cmp) return priority_cmp;
+  
   uint32_t current_frame = debug_global_memory.current_frame;
   uint64_t internal_cycles_a = 0;
   uint64_t internal_cycles_b = 0;
@@ -255,7 +262,7 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
   return compare(&internal_cycles_b, &internal_cycles_a);
 }
 
-static void print_debug_records() {
+static void print_and_clear_frame_records() {
   static darray<uint32_t> block_ids;
 
   if (!block_ids) for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
@@ -264,8 +271,11 @@ static void print_debug_records() {
 
   quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
 
+  uint32_t lines = 0;
+  uint32_t const max_lines = 40;
+
   uint32_t current_frame = debug_global_memory.current_frame;
-  for (uint32_t i = 0; i < count(block_ids); i++) {
+  for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
     uint32_t block_id = block_ids[i];
     FunctionInfo *info = debug_global_memory.function_infos + block_id;
     if (!info->filename) continue;
@@ -281,8 +291,9 @@ static void print_debug_records() {
            info->function_name, 
            info->filename, 
            info->line_number);
+    lines++;
 
-    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS && lines < max_lines; thread_idx++) {
       auto frame = frames[thread_idx];
       auto record = records[thread_idx];
       if (!frame->hit_count) continue;
@@ -293,15 +304,19 @@ static void print_debug_records() {
              frame->internal_cycles,
              frame->hit_count,
              frame->total_cycles / frame->hit_count);
+      lines++;
+      *frame = {};
     }
-
+    lines++;
+    printf("\n");
   }
+  printf("\n");
 }
 
 static void push_debug_records() {
   // FIXME I'm in the process of switching over to the new system
   aggregate_debug_events();
-  print_debug_records();
+  print_and_clear_frame_records();
 
   // TODO Decide exactly where this should happen
   debug_global_memory.current_frame = (debug_global_memory.current_frame + 1) % NUM_FRAMES_RECORDED;
