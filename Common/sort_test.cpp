@@ -25,6 +25,16 @@ void print_ints(int *arr, uint32_t count) {
   printf("%d, %d, ... , %d, %d\n", array[0], array[1], array[count - 2], array[count - 1]); \
   assert(is_sorted(array, count));
 
+#define SORT_TEST_REVERSE(sort_name, array, count) \
+  sort_name<int, reverse_compare>(array, count); \
+  print_ints(array, count); \
+  assert(is_reverse_sorted(array, count));
+
+#define SORT_TEST_LARGE_REVERSE(sort_name, array, count) \
+  sort_name<int, reverse_compare>(array, count); \
+  printf("%d, %d, ... , %d, %d\n", array[0], array[1], array[count - 2], array[count - 1]); \
+  assert(is_reverse_sorted(array, count));
+
 #define PIVOT_TEST(array, count, pivot) \
   assert(*(get_pivot(array, count)) == pivot);
 
@@ -51,6 +61,10 @@ void test_insertion_sort() {
   int ints2[] = {1,1,1};
   SORT_TEST(insertion_sort, ints2, count_of(ints2));
   printf("Insertion sort test successful.\n\n");
+}
+
+inline int reverse_compare(int *a, int *b) {
+  return compare(a,b) * -1;
 }
 
 // TODO consider testing the partition separately
@@ -80,11 +94,19 @@ void test_quick_sort() {
   
 
   darray<int> ints4;
+  for (int i = 0; i < 8; i++) {
+    push(ints4, rand() % 300);
+  }
+  assert(ints4);
+  SORT_TEST_REVERSE(quick_sort, ints4.p, count(ints4));
+  clear(ints4);
+
   for (int i = 0; i < 64000; i++) {
     push(ints4, rand());
   }
   assert(ints4);
   SORT_TEST_LARGE(quick_sort, ints4.p, count(ints4));
+  SORT_TEST_LARGE_REVERSE(quick_sort, ints4.p, count(ints4));
   clear(ints4);
 
   int rand_val = rand();
@@ -93,6 +115,7 @@ void test_quick_sort() {
   }
   assert(ints4);
   SORT_TEST_LARGE(quick_sort, ints4.p, count(ints4));
+  SORT_TEST_LARGE_REVERSE(quick_sort, ints4.p, count(ints4));
   clear(ints4);
 
   dfree(ints4);

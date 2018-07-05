@@ -232,7 +232,6 @@ static void print_debug_records() {
     push(block_ids, block_id);
   }
 
-  // TODO
   //quick_sort(block_ids
 
   uint32_t current_frame = debug_global_memory.current_frame;
