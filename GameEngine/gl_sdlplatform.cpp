@@ -298,7 +298,7 @@ int main(int argc, char ** argv){
     game_memory.initialized = true;
 
     // TODO add debug mode toggle
-    push_debug_records();
+    push_debug_records(&render_info.render_buffer);
 
     display_buffer(render_info);
     free(&render_info.render_buffer);

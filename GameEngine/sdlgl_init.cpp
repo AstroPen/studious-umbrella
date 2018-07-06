@@ -123,7 +123,7 @@ static RenderInfo init_screen(int width, int height) {
   buffer->screen_height = height;
 
   // TODO maybe pass in the memory from outside?
-  buffer->max_vertices = 4096;
+  buffer->max_vertices = 4096 * 8;
   buffer->vertex_count = 0;
   int vertex_buffer_size = buffer->max_vertices * sizeof(Vertex);
   int total_buffer_size = vertex_buffer_size + 4096 * 64;

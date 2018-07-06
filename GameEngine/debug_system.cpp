@@ -53,7 +53,7 @@ struct FunctionInfo {
 
 struct DebugRecord {
 
-  uint64_t total_cumulative_cycles;
+  float64 average_internal_cycles;
   uint64_t total_cumulative_hits;
 
   uint32_t max_cycle_count;
@@ -74,10 +74,10 @@ FunctionInfo _debug_global_function_infos[DEBUG_RECORD_MAX];
 
 struct DebugGlobalMemory {
   FunctionInfo *function_infos;
+  uint64_t current_frame;
   DebugLog debug_logs[NUM_THREADS];
   uint32_t thread_ids[NUM_THREADS];
   uint32_t record_count;
-  uint32_t current_frame;
 } debug_global_memory;
 
 static void init_debug_global_memory(uint32_t *thread_ids) {
@@ -173,7 +173,8 @@ static void aggregate_debug_events() {
   static darray <DebugEvent *> event_stack; 
   static darray <uint64_t> cycle_stack;
 
-  printf("current_frame : %u, event counts : ", debug_global_memory.current_frame);
+  uint64_t total_frames = debug_global_memory.current_frame;
+  printf("Current Frame : %llu, event counts : ", total_frames);
 
   for (int thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
     auto log = debug_global_memory.debug_logs + thread_idx;
@@ -205,12 +206,13 @@ static void aggregate_debug_events() {
         //
 
         auto record = log->records + event->block_id;
-        auto frame = record->frames + debug_global_memory.current_frame;
+        auto frame = record->frames + (total_frames % NUM_FRAMES_RECORDED);
         frame->total_cycles += total_cycles;
         frame->internal_cycles += internal_cycles;
         frame->hit_count++;
 
-        record->total_cumulative_cycles += total_cycles;
+        // Per frame
+        record->average_internal_cycles = ((record->average_internal_cycles * total_frames) + internal_cycles) / (total_frames + 1);
         record->total_cumulative_hits++;
 
         if (record->max_cycle_count < frame->total_cycles) record->max_cycle_count = frame->total_cycles;
@@ -229,6 +231,8 @@ static void aggregate_debug_events() {
   printf("\n");
 }
 
+#define BLOCK_ID_COMPARE_AVERAGE 1
+
 inline int block_id_compare(uint32_t *a, uint32_t *b) {
   uint32_t bid_a = *a;
   uint32_t bid_b = *b;
@@ -243,8 +247,23 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
   
   int priority_cmp = -compare(&info_a->priority, &info_b->priority);
   if (priority_cmp) return priority_cmp;
-  
-  uint32_t current_frame = debug_global_memory.current_frame;
+ 
+#if BLOCK_ID_COMPARE_AVERAGE
+  float64 internal_cycles_a = 0;
+  float64 internal_cycles_b = 0;
+
+  for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+    auto record_a = debug_global_memory.debug_logs[thread_idx].records + bid_a;
+    auto record_b = debug_global_memory.debug_logs[thread_idx].records + bid_b;
+
+    internal_cycles_a += record_a->average_internal_cycles;
+    internal_cycles_b += record_b->average_internal_cycles;
+  }
+
+  return compare(&internal_cycles_b, &internal_cycles_a);
+#else
+  uint32_t current_frame = (debug_global_memory.current_frame % NUM_FRAMES_RECORDED);
+
   uint64_t internal_cycles_a = 0;
   uint64_t internal_cycles_b = 0;
 
@@ -260,6 +279,7 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
   }
 
   return compare(&internal_cycles_b, &internal_cycles_a);
+#endif
 }
 
 static void print_and_clear_frame_records() {
@@ -274,7 +294,9 @@ static void print_and_clear_frame_records() {
   uint32_t lines = 0;
   uint32_t const max_lines = 40;
 
-  uint32_t current_frame = debug_global_memory.current_frame;
+  uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
+  uint32_t next_frame = (debug_global_memory.current_frame + 1) % NUM_FRAMES_RECORDED;
+
   for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
     uint32_t block_id = block_ids[i];
     FunctionInfo *info = debug_global_memory.function_infos + block_id;
@@ -285,6 +307,12 @@ static void print_and_clear_frame_records() {
     for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
       records[thread_idx] = debug_global_memory.debug_logs[thread_idx].records + block_id;
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
+
+      //
+      // Clear next frame ---
+      //
+
+      records[thread_idx]->frames[next_frame] = {};
     }
 
     printf("%-30s in %-30s (line %4u) : \n",  
@@ -298,14 +326,14 @@ static void print_and_clear_frame_records() {
       auto record = records[thread_idx];
       if (!frame->hit_count) continue;
 
-      printf("\tThread %2u : %9u cycles (%9u internal), %4u hits, %8u cycles/hit\t \n",
+      printf("\tThread %2u : %9u cycles (%9u internal), %4u hits, %8u cycles/hit\t\t Average : %lf\n",
              thread_idx,
              frame->total_cycles, 
              frame->internal_cycles,
              frame->hit_count,
-             frame->total_cycles / frame->hit_count);
+             frame->total_cycles / frame->hit_count,
+             record->average_internal_cycles);
       lines++;
-      *frame = {};
     }
     lines++;
     printf("\n");
@@ -313,33 +341,17 @@ static void print_and_clear_frame_records() {
   printf("\n");
 }
 
-static void push_debug_records() {
-  // FIXME I'm in the process of switching over to the new system
+struct RenderBuffer;
+struct GameAssets;
+static void draw_and_clear_frame_records(RenderBuffer *buffer);
+
+static void push_debug_records(RenderBuffer *buffer) {
   aggregate_debug_events();
-  print_and_clear_frame_records();
+  //print_and_clear_frame_records();
+  draw_and_clear_frame_records(buffer);
 
   // TODO Decide exactly where this should happen
-  debug_global_memory.current_frame = (debug_global_memory.current_frame + 1) % NUM_FRAMES_RECORDED;
-#if 0
-  assert(debug_global_memory.record_count);
-  for (int i = 0; i < debug_global_memory.record_count; i++) {
-    //auto record = debug_global_memory.records + i;
-    auto record = debug_global_memory.debug_logs[0].records + i;
-    if (record->filename) {
-
-      printf("%-20s / %-30s (%4u) : %8u cycles, %4u hits, %8u cycles/hit\n", 
-             record->filename, 
-             record->function_name, 
-             record->line_number,
-             record->cycle_count, 
-             record->hit_count,
-             record->cycle_count / record->hit_count
-             );
-      *record = {};
-    }
-  }
-  printf("\n");
-#endif
+  debug_global_memory.current_frame++;
 }
 
 #define QUICK_SORT_IMPLEMENTATION

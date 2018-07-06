@@ -235,6 +235,7 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
 
 static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *render_buffer) {
   auto assets = &g->assets;
+  render_buffer->assets = assets;
   assets->work_queue = queue;
   assets->work_allocator = create_heap(&g->perm_allocator, 16, LoadBitmapWork);
   assert(assets->work_allocator.free_list);

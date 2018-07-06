@@ -161,6 +161,7 @@ struct Vertex {
 
 struct RenderBuffer {
   PushAllocator allocator;
+  GameAssets *assets;
   RenderElement *tail;
   Vertex *vertices;
   int element_count;
@@ -452,10 +453,11 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
 }
 
 
-// TODO pass in Assets through RenderBuffer maybe
-static void push_hud_text(RenderBuffer *buffer, GameAssets *assets, V2 text_p, const char *text, V4 color, uint32_t font_id) { 
-  TIMED_FUNCTION();
+static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, uint32_t font_id) { 
+  // TODO figure out a way to time this that doesn't interfere with drawing debug text
+  //TIMED_FUNCTION();
 
+  auto assets = buffer->assets;
   int num_quads = 0;
   V2 current_p = text_p; // Upper left corner
   V2 pixel_p = current_p * PIXELS_PER_METER;
@@ -502,6 +504,103 @@ static void push_hud_text(RenderBuffer *buffer, GameAssets *assets, V2 text_p, c
     text++;
   }
   append_quads(buffer, num_quads, font_info->bitmap.texture_id);
+}
+
+// TODO I would like this to work with multiple colors...
+static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *format...) {
+  char dest[1024 * 16];
+
+  va_list args;
+  va_start(args, format);
+  vsnprintf(dest, sizeof(dest), format, args);
+  va_end(args);
+
+  push_hud_text(buffer, cursor_p, dest, V4{1,1,1,1}, FONT_COURIER_NEW_BOLD);
+}
+
+// TODO This is WIP
+static void draw_and_clear_frame_records(RenderBuffer *buffer) {
+#define TAB "     "
+  V2 cursor_p = { 0, 10.5 };
+  float const newline_height = 0.7f;
+
+  static darray<uint32_t> block_ids;
+
+  if (!block_ids) for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
+    push(block_ids, block_id);
+  }
+
+  quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
+
+  uint32_t lines = 0;
+  uint32_t const max_lines = 14;
+
+  uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
+  uint32_t next_frame = (debug_global_memory.current_frame + 1) % NUM_FRAMES_RECORDED;
+
+  for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
+    uint32_t block_id = block_ids[i];
+    FunctionInfo *info = debug_global_memory.function_infos + block_id;
+    if (!info->filename) continue;
+    DebugRecord *records[NUM_THREADS];
+    FrameRecord *frames[NUM_THREADS];
+
+    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+      records[thread_idx] = debug_global_memory.debug_logs[thread_idx].records + block_id;
+      frames[thread_idx] = &records[thread_idx]->frames[current_frame];
+
+      //
+      // Clear next frame ---
+      //
+
+      records[thread_idx]->frames[next_frame] = {};
+    }
+
+    /*
+    printf("%-30s in %-30s (line %4u) : \n",  
+           info->function_name, 
+           info->filename, 
+           info->line_number);
+           */
+    push_debug_string(buffer, cursor_p, "%-30s in %-30s (line %4u) : ",
+                      info->function_name, 
+                      info->filename, 
+                      info->line_number);
+    cursor_p.y -= newline_height;
+    lines++;
+
+    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS && lines < max_lines; thread_idx++) {
+      auto frame = frames[thread_idx];
+      auto record = records[thread_idx];
+      if (!frame->hit_count) continue;
+
+      /*
+      printf("\tThread %2u : %9u cycles (%9u internal), %4u hits, %8u cycles/hit\t\t Average : %lf\n",
+             thread_idx,
+             frame->total_cycles, 
+             frame->internal_cycles,
+             frame->hit_count,
+             frame->total_cycles / frame->hit_count,
+             record->average_internal_cycles);
+             */
+      push_debug_string(buffer, cursor_p, 
+                        TAB "Thread %2u : %9u cycles (%9u internal), %4u hits, %8u cycles/hit" TAB TAB " Average : %lf",
+                        thread_idx,
+                        frame->total_cycles, 
+                        frame->internal_cycles,
+                        frame->hit_count,
+                        frame->total_cycles / frame->hit_count,
+                        record->average_internal_cycles);
+      cursor_p.y -= newline_height;
+      lines++;
+    }
+    lines++;
+    cursor_p.y -= newline_height;
+    //printf("\n");
+  }
+  cursor_p.y -= newline_height / 2;
+  //printf("\n");
+#undef TAB
 }
 
 static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float z_max, V4 color, uint32_t texture_id) {
@@ -723,5 +822,6 @@ static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParamete
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, param.t_clamp);
   gl_check_error();
 }
+
 
 #endif // _NAR_GL_RENDERER_CPP_

@@ -10,6 +10,8 @@
 #include <cmath>
 #include <climits>
 
+typedef double float64;
+
 union bit32 {
   int i;
   uint32_t u;
