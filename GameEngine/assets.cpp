@@ -261,12 +261,13 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   init_texture(assets, BITMAP_WHITE);
 
   int pixel_height = 30;
-  // TODO WARNING : subdivide is bugged, see comment in untilities.cpp, don't call anywhere else
-  auto temp_allocator = subdivide(&g->temp_allocator, remaining_size(&g->temp_allocator));
+
+  auto temp_allocator = push_temporary(&g->temp_allocator);
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_ARIAL, pixel_height);
-  free(&temp_allocator);
+  clear(&temp_allocator);
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_COURIER_NEW_BOLD, pixel_height);
-  free(&temp_allocator);
+  clear(&temp_allocator);
+  pop_temporary(&g->temp_allocator, &temp_allocator);
 
   complete_all_work(assets->work_queue);
 

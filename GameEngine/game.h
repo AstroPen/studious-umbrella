@@ -146,7 +146,6 @@ struct GameAssets {
   WorkQueue *work_queue;
   HeapAllocator work_allocator;
   PixelBuffer bitmaps[BITMAP_COUNT];
-  // TODO multiple fonts
   FontInfo fonts[FONT_COUNT];
   // TODO arrayed assets
   // TODO structured assets

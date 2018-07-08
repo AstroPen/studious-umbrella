@@ -191,7 +191,7 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
   if (!memory.initialized) {
     init_game_state(g, memory, queue, render_buffer);
   } else {
-    free(&g->temp_allocator);
+    clear(&g->temp_allocator);
   }
 
   if (!apply_input(g, controller)) return false;

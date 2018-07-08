@@ -78,7 +78,7 @@ static PixelBuffer load_image_file(const char* filename) {
 
   if (!data) {
     printf("ERROR : Failed to load image file %s : %s\n", filename, stbi_failure_reason());
-    assert(false);
+    //assert(false);
   }
 
   if (!data) return {};

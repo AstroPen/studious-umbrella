@@ -245,8 +245,8 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, uint3
   return elem;
 }
 
-static inline void free(RenderBuffer *buffer) {
-  free(&buffer->allocator);
+static inline void clear(RenderBuffer *buffer) {
+  clear(&buffer->allocator);
   buffer->tail = NULL;
   buffer->element_count = 0;
   buffer->vertex_count = 0;
@@ -797,6 +797,7 @@ struct TextureParameters {
 
 static void update_texture(GameAssets *assets, BitmapID bitmap_id, uint32_t pixel_format = BGRA) {
   auto texture = get_bitmap(assets, bitmap_id);
+  if (!texture) return;
   assert(texture->texture_id);
   //assert(texture->texture_id < BITMAP_COUNT);
   gl_check_error();
@@ -809,6 +810,7 @@ static void update_texture(GameAssets *assets, BitmapID bitmap_id, uint32_t pixe
 
 static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParameters param = DefalutTextureParameters) {
   auto texture = get_bitmap(assets, bitmap_id);
+  if (!texture) return;
   uint32_t texture_id;
   glGenTextures(1, &texture_id);
   assert(texture_id);

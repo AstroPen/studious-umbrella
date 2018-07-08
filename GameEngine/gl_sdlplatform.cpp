@@ -301,7 +301,7 @@ int main(int argc, char ** argv){
     push_debug_records(&render_info.render_buffer);
 
     display_buffer(render_info);
-    free(&render_info.render_buffer);
+    clear(&render_info.render_buffer);
 
     old_controller_state = controller_state;
     ticks++;

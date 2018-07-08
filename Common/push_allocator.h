@@ -105,7 +105,39 @@ static inline PushAllocator new_push_allocator(PushAllocator *old, uint32_t size
   return result;
 }
 
-static inline void free(PushAllocator *allocator) {
+struct TemporaryAllocator : PushAllocator {
+  TemporaryAllocator() {
+    memory = NULL;
+    bytes_allocated = 0;
+    max_size = 0;
+  }
+  TemporaryAllocator(PushAllocator alloc) {
+    memory = alloc.memory;
+    bytes_allocated = alloc.bytes_allocated;
+    max_size = alloc.max_size;
+  }
+  ~TemporaryAllocator() {
+    if (memory) assert(!"Temporary Allocator was not freed.");
+  }
+};
+
+static inline TemporaryAllocator push_temporary(PushAllocator *old) {
+  return new_push_allocator(old, remaining_size(old), 1);
+}
+
+static inline void pop_temporary(PushAllocator *old, TemporaryAllocator *temporary) {
+  // NOTE : To make sure the args were passed in the right order :
+  assert(old->max_size >= temporary->max_size);
+
+  // NOTE : This should hopefully catch cases where the wrong temporary is being freed, or
+  // someone is using the old one in another thread or something.
+  assert(old->memory + old->bytes_allocated == temporary->memory + temporary->max_size);
+
+  old->bytes_allocated -= temporary->max_size;
+  *temporary = {};
+}
+
+static inline void clear(PushAllocator *allocator) {
   allocator->bytes_allocated = 0;
 }
 
@@ -118,28 +150,6 @@ static inline void *pop_size(PushAllocator *allocator, uint32_t size) {
 
 #define alloc_struct(allocator, type) ((type *) alloc_size((allocator), sizeof(type), alignof(type)))
 #define alloc_array(allocator, type, count) ((type *) alloc_size((allocator), sizeof(type) * (count), alignof(type)))
-
-// TODO make this thread safe somehow?
-// TODO TODO TODO BUG FIX : 
-//    This is being used dangerously, allocator's max size is not modified so this can only be called once.
-//    It should either reduce allocator's size or act more like a regular allocation that gets cleared at
-//    end of frame with free. Right now the code expects both somehow.
-static inline PushAllocator subdivide(PushAllocator *allocator, uint32_t size) {
-  if (size > 0) {
-    if (size > allocator->max_size) return {};
-    if (size + allocator->bytes_allocated > allocator->max_size) return {};
-    auto end = allocator->memory + allocator->max_size;
-    
-    PushAllocator result = {};
-    result.memory = end - size;
-    result.max_size = size;
-    return result;
-
-  } else {
-    assert(!"ERROR : Invalid size.");
-    return {};
-  }
-}
 
 #ifdef PUSH_ALLOCATOR_NO_DEFINED_TIMER
 #undef TIMED_FUNCTION
