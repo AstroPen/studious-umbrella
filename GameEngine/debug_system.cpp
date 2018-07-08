@@ -78,6 +78,7 @@ struct DebugGlobalMemory {
   DebugLog debug_logs[NUM_THREADS];
   uint32_t thread_ids[NUM_THREADS];
   uint32_t record_count;
+  bool display_records;
 } debug_global_memory;
 
 static void init_debug_global_memory(uint32_t *thread_ids) {
@@ -174,11 +175,9 @@ static void aggregate_debug_events() {
   static darray <uint64_t> cycle_stack;
 
   uint64_t total_frames = debug_global_memory.current_frame;
-  printf("Current Frame : %llu, event counts : ", total_frames);
 
   for (int thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
     auto log = debug_global_memory.debug_logs + thread_idx;
-    printf("%u, ", count(log->events));
     uint32_t thread_id = debug_global_memory.thread_ids[thread_idx];
     uint64_t total_sibling_cycles = 0;
     uint64_t total_child_cycles = 0;
@@ -228,7 +227,6 @@ static void aggregate_debug_events() {
     clear(log->events);
   }
 
-  printf("\n");
 }
 
 #define BLOCK_ID_COMPARE_AVERAGE 1
@@ -282,7 +280,7 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
 #endif
 }
 
-static void print_and_clear_frame_records() {
+static void print_frame_records() {
   static darray<uint32_t> block_ids;
 
   if (!block_ids) for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
@@ -295,7 +293,7 @@ static void print_and_clear_frame_records() {
   uint32_t const max_lines = 40;
 
   uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
-  uint32_t next_frame = (debug_global_memory.current_frame + 1) % NUM_FRAMES_RECORDED;
+  printf("Total Frames : %llu\n", debug_global_memory.current_frame);
 
   for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
     uint32_t block_id = block_ids[i];
@@ -307,12 +305,6 @@ static void print_and_clear_frame_records() {
     for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
       records[thread_idx] = debug_global_memory.debug_logs[thread_idx].records + block_id;
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
-
-      //
-      // Clear next frame ---
-      //
-
-      records[thread_idx]->frames[next_frame] = {};
     }
 
     printf("%-30s in %-30s (line %4u) : \n",  
@@ -341,17 +333,32 @@ static void print_and_clear_frame_records() {
   printf("\n");
 }
 
+static void clear_frame_records() {
+  uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
+
+  for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
+    FunctionInfo *info = debug_global_memory.function_infos + block_id;
+    if (!info->filename) continue;
+
+    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+      auto record = debug_global_memory.debug_logs[thread_idx].records + block_id;
+      auto frame = record->frames + current_frame;
+      *frame = {};
+    }
+  }
+}
+
 struct RenderBuffer;
 struct GameAssets;
-static void draw_and_clear_frame_records(RenderBuffer *buffer);
+static void draw_frame_records(RenderBuffer *buffer);
 
 static void push_debug_records(RenderBuffer *buffer) {
   aggregate_debug_events();
-  //print_and_clear_frame_records();
-  draw_and_clear_frame_records(buffer);
+  //print_frame_records();
+  if (debug_global_memory.display_records) draw_frame_records(buffer);
 
-  // TODO Decide exactly where this should happen
   debug_global_memory.current_frame++;
+  clear_frame_records();
 }
 
 #define QUICK_SORT_IMPLEMENTATION

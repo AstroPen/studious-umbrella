@@ -515,14 +515,16 @@ static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *for
   vsnprintf(dest, sizeof(dest), format, args);
   va_end(args);
 
-  push_hud_text(buffer, cursor_p, dest, V4{1,1,1,1}, FONT_COURIER_NEW_BOLD);
+  float const shadow_depth = 0.02;
+  push_hud_text(buffer, cursor_p + V2{shadow_depth, -shadow_depth}, dest, V4{0,0,0,1}, FONT_DEBUG);
+  push_hud_text(buffer, cursor_p, dest, V4{1,1,1,1}, FONT_DEBUG);
 }
 
 // TODO This is WIP
-static void draw_and_clear_frame_records(RenderBuffer *buffer) {
+static void draw_frame_records(RenderBuffer *buffer) {
 #define TAB "     "
-  V2 cursor_p = { 0, 10.5 };
-  float const newline_height = 0.7f;
+  V2 cursor_p = { 0.1, 10.5 };
+  float const newline_height = 0.5f;
 
   static darray<uint32_t> block_ids;
 
@@ -533,10 +535,12 @@ static void draw_and_clear_frame_records(RenderBuffer *buffer) {
   quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
 
   uint32_t lines = 0;
-  uint32_t const max_lines = 14;
+  uint32_t const max_lines = 20;
 
   uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
-  uint32_t next_frame = (debug_global_memory.current_frame + 1) % NUM_FRAMES_RECORDED;
+  push_debug_string(buffer, cursor_p, "Total Frames : %llu", debug_global_memory.current_frame);
+  cursor_p.y -= newline_height;
+  lines++;
 
   for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
     uint32_t block_id = block_ids[i];
@@ -548,12 +552,6 @@ static void draw_and_clear_frame_records(RenderBuffer *buffer) {
     for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
       records[thread_idx] = debug_global_memory.debug_logs[thread_idx].records + block_id;
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
-
-      //
-      // Clear next frame ---
-      //
-
-      records[thread_idx]->frames[next_frame] = {};
     }
 
     /*

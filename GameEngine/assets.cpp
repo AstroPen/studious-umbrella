@@ -220,6 +220,9 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
     case FONT_COURIER_NEW_BOLD : {
       filename = "/Library/Fonts/Courier New Bold.ttf";
     } break;
+    case FONT_DEBUG : {
+      filename = "/Library/Fonts/Courier New Bold.ttf";
+    } break;
 
     default : {
       assert(!"Invalid FontID load.");
@@ -266,6 +269,8 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_ARIAL, pixel_height);
   clear(&temp_allocator);
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_COURIER_NEW_BOLD, pixel_height);
+  clear(&temp_allocator);
+  load_font(assets, &g->perm_allocator, &temp_allocator, FONT_DEBUG, 17);
   clear(&temp_allocator);
   pop_temporary(&g->temp_allocator, &temp_allocator);
 

@@ -88,6 +88,9 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
 
 static inline ButtonType keycode_to_button_type(SDL_Keycode keycode) {
   switch (keycode) {
+    case SDLK_1 :
+      return BUTTON_DEBUG_TOGGLE;
+
     case SDLK_a :
       return BUTTON_LEFT;
     case SDLK_s :

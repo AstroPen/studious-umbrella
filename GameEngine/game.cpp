@@ -17,6 +17,7 @@
 // TODO add different rooms/camera movement
 
 
+// TODO make some accessor functions for the controller. This stuff is a mess.
 static bool apply_input(GameState *g, ControllerState controller) {
   TIMED_FUNCTION();
 
@@ -80,6 +81,11 @@ static bool apply_input(GameState *g, ControllerState controller) {
   if (b->held || b->first_press == PRESS_EVENT) {
     g->cursor_color -= V4{0,1,0,0};
     g->shooting++;
+  } 
+
+  b = buttons + BUTTON_DEBUG_TOGGLE;
+  if (b->first_press == PRESS_EVENT) {
+    debug_global_memory.display_records = !debug_global_memory.display_records;
   } 
 
   g->player_color = player_color;
