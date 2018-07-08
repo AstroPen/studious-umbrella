@@ -507,6 +507,7 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
 }
 
 // TODO I would like this to work with multiple colors...
+// Idea : Choose a symbol that can't be drawn with push_hud_text use it to indicate a color change.
 static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *format...) {
   char dest[1024 * 16];
 
@@ -520,10 +521,11 @@ static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *for
   push_hud_text(buffer, cursor_p, dest, V4{1,1,1,1}, FONT_DEBUG);
 }
 
-// TODO This is WIP
+// TODO This is a weird place to put this, but right now it is inconvenient to put it anywhere else.
 static void draw_frame_records(RenderBuffer *buffer) {
-#define TAB "     "
-  V2 cursor_p = { 0.1, 10.5 };
+  // NOTE : This is basically copied from print_frame_records.
+#define TAB "   "
+  V2 cursor_p = { 0.4, 11 };
   float const newline_height = 0.5f;
 
   static darray<uint32_t> block_ids;
@@ -535,10 +537,14 @@ static void draw_frame_records(RenderBuffer *buffer) {
   quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
 
   uint32_t lines = 0;
-  uint32_t const max_lines = 20;
+  uint32_t const max_lines = 26;
 
   uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
-  push_debug_string(buffer, cursor_p, "Total Frames : %llu", debug_global_memory.current_frame);
+  push_debug_string(buffer, cursor_p + V2{8, 0} , "Total Frames : %llu", debug_global_memory.current_frame);
+  cursor_p.y -= newline_height;
+  lines++;
+
+  push_debug_string(buffer, cursor_p, TAB "Thread |    Cycles |  Internal | Hits | Cycles/Hit |     Average");
   cursor_p.y -= newline_height;
   lines++;
 
@@ -554,13 +560,7 @@ static void draw_frame_records(RenderBuffer *buffer) {
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
     }
 
-    /*
-    printf("%-30s in %-30s (line %4u) : \n",  
-           info->function_name, 
-           info->filename, 
-           info->line_number);
-           */
-    push_debug_string(buffer, cursor_p, "%-30s in %-30s (line %4u) : ",
+    push_debug_string(buffer, cursor_p, "%-24s in %-24s (line %4u) : ",
                       info->function_name, 
                       info->filename, 
                       info->line_number);
@@ -572,17 +572,8 @@ static void draw_frame_records(RenderBuffer *buffer) {
       auto record = records[thread_idx];
       if (!frame->hit_count) continue;
 
-      /*
-      printf("\tThread %2u : %9u cycles (%9u internal), %4u hits, %8u cycles/hit\t\t Average : %lf\n",
-             thread_idx,
-             frame->total_cycles, 
-             frame->internal_cycles,
-             frame->hit_count,
-             frame->total_cycles / frame->hit_count,
-             record->average_internal_cycles);
-             */
       push_debug_string(buffer, cursor_p, 
-                        TAB "Thread %2u : %9u cycles (%9u internal), %4u hits, %8u cycles/hit" TAB TAB " Average : %lf",
+                        TAB "%6u | %9u | %9u | %4u | %10u | %11.1lf",
                         thread_idx,
                         frame->total_cycles, 
                         frame->internal_cycles,
@@ -593,11 +584,8 @@ static void draw_frame_records(RenderBuffer *buffer) {
       lines++;
     }
     lines++;
-    cursor_p.y -= newline_height;
-    //printf("\n");
+    cursor_p.y -= newline_height / 2;
   }
-  cursor_p.y -= newline_height / 2;
-  //printf("\n");
 #undef TAB
 }
 

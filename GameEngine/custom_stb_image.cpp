@@ -54,21 +54,46 @@
 // to avoid compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
 // more user-friendly ones.
 
+//#include "pixel_buffer.cpp"
+
+#include <climits>
+
+struct PixelBuffer {
+  uint8_t *buffer;
+  int width;
+  int height;
+  uint32_t texture_id;
+};
+
+union Color {
+  uint32_t value;
+  struct {
+    uint8_t b;
+    uint8_t g;
+    uint8_t r;
+    uint8_t a;
+  };
+};
+
 static inline void pre_multiply_alpha(PixelBuffer image) {
   int num_pixels = image.width * image.height;
   auto pixels = (uint32_t *) image.buffer;
+
   for (int i = 0; i < num_pixels; i++) {
     uint32_t *pixel = pixels + i;
     // NOTE since a is still last, we don't have to reverse the bytes
-    Color c0 = *pixel;
-    auto c1 = to_vector4(c0);
-    c1.rgb *= c1.a;
-    c0 = c1;
-    *pixel = c0.value;
+    Color color;
+    color.value = *pixel;
+    float alpha = color.a / 255.0f;
+    color.b *= alpha;
+    color.g *= alpha;
+    color.b *= alpha;
+
+    *pixel = color.value;
   }
 }
 
-static PixelBuffer load_image_file(const char* filename) {
+PixelBuffer load_image_file(const char* filename) {
   assert(filename);
   int width;
   int height;

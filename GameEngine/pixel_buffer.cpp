@@ -1,5 +1,5 @@
 
-
+// TODO move this somewhere else
 static inline uint32_t next_power_2(uint32_t v) {
   uint32_t r;
 
@@ -104,19 +104,12 @@ static void draw_texture(PixelBuffer buf, V2 p, PixelBuffer texture) {
 }
 #endif
 
-// TODO consider handling this better by predeclaring struct atomic_int; struct atomic_uint;
-#include "sdl_thread.cpp"
-
 struct PixelBuffer {
   uint8_t *buffer;
   int width;
   int height;
   uint32_t texture_id;
 };
-
-#define PUSH_ALLOCATOR_MULTITHREADED
-#include "push_allocator.h"
-
 
 static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height, int pixel_bytes = 4) {
   PixelBuffer result = {};
@@ -129,6 +122,4 @@ static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height
 
   return result;
 }
-
-#include "heap_allocator.h"
 

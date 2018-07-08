@@ -270,7 +270,7 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   clear(&temp_allocator);
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_COURIER_NEW_BOLD, pixel_height);
   clear(&temp_allocator);
-  load_font(assets, &g->perm_allocator, &temp_allocator, FONT_DEBUG, 17);
+  load_font(assets, &g->perm_allocator, &temp_allocator, FONT_DEBUG, 19);
   clear(&temp_allocator);
   pop_temporary(&g->temp_allocator, &temp_allocator);
 

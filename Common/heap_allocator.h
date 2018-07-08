@@ -5,6 +5,8 @@
 
 #include "push_allocator.h"
 
+// TODO I should rename this to something like "ListAllocator" or something.
+
 // TODO move this definition to some sort of shared "data structures" file?
 struct FreeListNode {
   FreeListNode *next_free;

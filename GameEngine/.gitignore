@@ -3,3 +3,4 @@ test
 *.bmp
 *.png
 *.xbm
+*.o

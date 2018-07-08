@@ -21,14 +21,24 @@
 #include "debug_system.cpp"
 
 #include "vmath.cpp"
-#include "utilities.cpp"
+#include "sdl_thread.cpp"
+
+#define PUSH_ALLOCATOR_MULTITHREADED
+#include "push_allocator.h"
+
+#include "heap_allocator.h"
+
+#include "pixel_buffer.cpp"
 
 // Fonts are in /Library/Fonts/ on osx
 #define STB_TRUETYPE_IMPLEMENTATION 
 #include "stb_truetype.h"
 
 #include "game.h"
-#include "custom_stb_image.h"
+
+// NOTE : This is currently the only non-static function in this project.
+PixelBuffer load_image_file(const char* filename);
+//#include "custom_stb_image.h"
 
 
 // Needed for file io :
