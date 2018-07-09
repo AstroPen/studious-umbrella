@@ -69,5 +69,21 @@ static inline float lerp(float f1, float f2, float dt) {
   return result;
 }
 
+// TODO I apparently copied this from somewhere... Maybe double-check it?
+static inline uint32_t next_power_2(uint32_t v) {
+  uint32_t r;
+
+  if (v > 1) {
+    float f = (float)v;
+    uint32_t t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
+    r = t << (t < v);
+  }
+  else {
+    r = 1;
+  }
+
+  return r;
+}
+
 #endif
 

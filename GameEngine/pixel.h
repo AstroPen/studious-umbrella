@@ -1,19 +1,6 @@
 
-// TODO move this somewhere else
-static inline uint32_t next_power_2(uint32_t v) {
-  uint32_t r;
-
-  if (v > 1) {
-    float f = (float)v;
-    uint32_t t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
-    r = t << (t < v);
-  }
-  else {
-    r = 1;
-  }
-
-  return r;
-}
+#ifndef _PIXEL_H_
+#define _PIXEL_H_
 
 union Color {
   uint32_t value;
@@ -24,26 +11,51 @@ union Color {
     uint8_t a;
   };
 
-  inline Color() {}
-
-  inline Color(uint32_t val) {
-    value = val;
-  }
-
-  inline Color(V3 c) {
-    a = 0xff;
-    r = 255 * c.r;
-    g = 255 * c.g;
-    b = 255 * c.b;
-  }
-
-  inline Color(V4 c) {
-    a = 255 * c.a;
-    r = 255 * c.r;
-    g = 255 * c.g;
-    b = 255 * c.b;
-  }
+  inline Color() { value = 0; }
+  inline Color(uint32_t v) { value = v; }
+  inline operator uint32_t() { return value; }
 };
+
+struct PixelBuffer {
+  uint8_t *buffer;
+  int width;
+  int height;
+  uint32_t texture_id;
+};
+
+// TODO change this to work better with repeated includes
+#ifdef _PUSH_ALLOCATOR_H_
+static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height, int pixel_bytes = 4) {
+  PixelBuffer result = {};
+  result.width = width;
+  result.height = height;
+
+  int buffer_size = pixel_bytes * width * height;
+  // TODO test different alignments
+  result.buffer = (uint8_t *) alloc_size(allocator, buffer_size, 64);
+
+  return result;
+}
+#endif // _PUSH_ALLOCATOR_H_
+
+#ifdef _VECTOR_MATH_H_
+static inline Color to_color(V3 c) {
+  Color result;
+  result.a = 0xff;
+  result.r = 255 * c.r;
+  result.g = 255 * c.g;
+  result.b = 255 * c.b;
+  return result;
+}
+
+static inline Color to_color(V4 c) {
+  Color result;
+  result.a = 255 * c.a;
+  result.r = 255 * c.r;
+  result.g = 255 * c.g;
+  result.b = 255 * c.b;
+  return result;
+}
 
 static inline V3 to_vector3(Color c) {
   V3 r;
@@ -61,6 +73,7 @@ static inline V4 to_vector4(Color c) {
   r.a = c.a / 255.0f;
   return r;
 }
+#endif // _VECTOR_MATH_H_
 
 
 #if 0
@@ -104,22 +117,5 @@ static void draw_texture(PixelBuffer buf, V2 p, PixelBuffer texture) {
 }
 #endif
 
-struct PixelBuffer {
-  uint8_t *buffer;
-  int width;
-  int height;
-  uint32_t texture_id;
-};
-
-static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height, int pixel_bytes = 4) {
-  PixelBuffer result = {};
-  result.width = width;
-  result.height = height;
-
-  int buffer_size = pixel_bytes * width * height;
-  // TODO test different alignments
-  result.buffer = (uint8_t *) alloc_size(allocator, buffer_size, 64);
-
-  return result;
-}
+#endif // _PIXEL_H_
 

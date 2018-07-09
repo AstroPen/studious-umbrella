@@ -28,59 +28,14 @@
 
 #include "heap_allocator.h"
 
-#include "pixel_buffer.cpp"
-
-// Fonts are in /Library/Fonts/ on osx
-#define STB_TRUETYPE_IMPLEMENTATION 
-#include "stb_truetype.h"
+#include "pixel.h"
 
 #include "game.h"
 
-// NOTE : This is currently the only non-static function in this project.
-PixelBuffer load_image_file(const char* filename);
-//#include "custom_stb_image.h"
+// NOTE : This is currently the only shared header containing non-static functions in this project.
+#include "custom_stb.h"
 
-
-// Needed for file io :
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-// TODO move this out somewhere maybe? Or at least pre-define it so that it doesn't need to be inlined up here.
-static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator, int alignment = 8) {
-  int fd = open(filename, O_RDONLY);
-  if (fd < 0) {
-    assert(!"File not found.");
-    return NULL;
-  }
-
-  struct stat stat_buf;
-  int error = fstat(fd, &stat_buf);
-  if (error < 0) {
-    assert(!"File stat not found.");
-    return NULL;
-  }
-
-  auto size = stat_buf.st_size;
-  auto buffer = alloc_size(allocator, size, alignment);
-  if (!buffer) {
-    assert(!"Failed to allocate file.");
-    return NULL;
-  }
-
-  size_t bytes_read = 0;
-  while (bytes_read < size) {
-    bytes_read += read(fd, buffer, size - bytes_read);
-    if (bytes_read <= 0) {
-      assert(!"Error on read.");
-      // NOTE : The memory is lost here, so only use temporary allocators 
-      // to store file data from this function
-      return NULL;
-    }
-  }
-
-  return (uint8_t *) buffer;
-}
+#include "unix_file_io.h"
 
 #include "glrenderer.cpp"
 #include "assets.cpp"
@@ -92,7 +47,7 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
 
 // TODO fix resizing
 
-// TODO actually use these
+// TODO actually use these or something
 #define MAX_SCREEN_WIDTH 1800
 #define MAX_SCREEN_HEIGHT 800
 

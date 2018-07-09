@@ -81,8 +81,7 @@ static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id) 
   return font;
 }
 
-// TODO move these to custom_stb_truetype.h :
-static inline stbtt_bakedchar *get_baked_char(FontInfo *font, char c) {
+static inline BakedChar *get_baked_char(FontInfo *font, char c) {
   char first_char = ' ';
   int index = c - first_char;
   assert(font->baked_chars);
@@ -116,7 +115,7 @@ static FontInfo load_font_file(const char* filename, uint32_t text_height,
     return {};
   }
 
-  auto baked_chars = alloc_array(perm_allocator, stbtt_bakedchar, num_glyphs + 1);
+  auto baked_chars = alloc_array(perm_allocator, BakedChar, num_glyphs + 1);
   if (!baked_chars) {
     assert(!"Failed to allocate baked_chars.");
     return {};
@@ -125,7 +124,7 @@ static FontInfo load_font_file(const char* filename, uint32_t text_height,
   // if return is positive, the first unused row of the bitmap
   // if return is negative, returns the negative of the number of characters that fit
   // if return is 0, no characters fit and no rows were used
-  int result = stbtt_BakeFontBitmap(file_buffer, 0, text_height, bitmap.buffer, bitmap_dim, bitmap_dim, first_glyph, num_glyphs, baked_chars);
+  int result = bake_font_bitmap(file_buffer, 0, text_height, bitmap.buffer, bitmap_dim, bitmap_dim, first_glyph, num_glyphs, baked_chars);
   if (result <= 0) {
     assert(!"Failed to bake font bitmap.");
     return {};

@@ -1,6 +1,8 @@
 #ifndef _NAR_GAME_H_
 #define _NAR_GAME_H_
 
+// TODO I don't love the current organization of this file. It should act as a simple, minimal interface between the
+// various systems. This includes the renderer, asset manager, entity manager, debug system and platform layer.
 
 #define VEL_MAX 15
 // TODO this needs to be removed so that the screen can scale to different resolutions
@@ -44,6 +46,7 @@ struct ButtonState {
 };
 
 // TODO Switch to using a union with the buttons instead of just the ButtonType enum.
+// (though this would make it harder to add more buttons, so maybe do that after I've added them all?)
 struct ControllerState {
   ButtonState buttons[BUTTON_MAX];
   float pointer_x; // TODO switch to vector probably
@@ -139,9 +142,11 @@ enum FontID {
   FONT_COUNT,
 };
 
+struct BakedChar;
+
 struct FontInfo {
   PixelBuffer bitmap;
-  stbtt_bakedchar *baked_chars;
+  BakedChar *baked_chars;
 };
 
 struct GameAssets {
@@ -158,8 +163,7 @@ static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
 static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id);
 static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id);
 static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id);
-// TODO either typedef my own bakechar or move this to the custom_stbtt file
-static inline stbtt_bakedchar *get_baked_char(FontInfo *font, char c);
+static inline BakedChar *get_baked_char(FontInfo *font, char c);
 
 
 // TODO use this for temporary storage management

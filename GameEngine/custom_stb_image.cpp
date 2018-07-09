@@ -54,26 +54,9 @@
 // to avoid compiling these strings at all, and STBI_FAILURE_USERMSG to get slightly
 // more user-friendly ones.
 
-//#include "pixel_buffer.cpp"
-
 #include <climits>
+#include "pixel.h"
 
-struct PixelBuffer {
-  uint8_t *buffer;
-  int width;
-  int height;
-  uint32_t texture_id;
-};
-
-union Color {
-  uint32_t value;
-  struct {
-    uint8_t b;
-    uint8_t g;
-    uint8_t r;
-    uint8_t a;
-  };
-};
 
 static inline void pre_multiply_alpha(PixelBuffer image) {
   int num_pixels = image.width * image.height;

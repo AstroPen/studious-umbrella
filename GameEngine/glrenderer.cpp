@@ -72,7 +72,7 @@ static void draw_grad_bg_internal(PixelBuffer buf, uint32_t game_ticks, int y_st
         c2 = lerp(c2, V3{0.95,0.4,0.7}, 0.5);
         c2 = normalize(c2 * c2) * length(c2);
         c2 = clamp(c2, 0, 1);
-        color = c2;
+        color = to_color(c2);
 
         assert(color.value);
         *pixel = color.value;
