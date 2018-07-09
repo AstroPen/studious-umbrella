@@ -5,7 +5,8 @@ This is a game engine I am building using SDL and OpenGL.
 ## Structure
 
 The project main is in `gl_sdlplatorm.cpp`. 
-All other files are currently just includes to reduce the need for header files and keep everything in a single translation unit.
+All other files are currently just includes to reduce the need for header files and keep everything in a single translation unit, 
+with the exception of the stb libraries which are compiled separately.
 
 After some initialization to create the window, OpenGL context, and worker threads, 
 the main loop parses keyboard events through SDL and calls `update_and_render` with a large block of memory, 
