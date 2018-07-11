@@ -2,7 +2,7 @@
 #define _NAR_GL_RENDERER_CPP_
 
 
-#if 0
+#if 1
 #define gl_check_error() _gl_check_error(__FILE__, __LINE__)
 #else
 #define gl_check_error() 
@@ -162,6 +162,7 @@ struct Vertex {
 struct RenderBuffer {
   PushAllocator allocator;
   GameAssets *assets;
+  GameCamera *camera;
   RenderElement *tail;
   Vertex *vertices;
   int element_count;
@@ -351,6 +352,7 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
 
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id) {
   TIMED_FUNCTION();
+#define DEBUG_COLORS 0
 
   auto b = box;
   Quad faces[6] = {top_quad(b), front_quad(b), right_quad(b), 
@@ -362,9 +364,13 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   
   V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
+  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 
   for (int i = 0; i < 6; i++) {
 
+#if DEBUG_COLORS
+    c = debug_colors[i];
+#endif
     V4 c4[4] = {c,c,c,c};
     V3 n4[4] = {n[i],n[i],n[i],n[i]};
     //c.rgb *= 0.8;
@@ -372,14 +378,17 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   }
   
   append_quads(buffer, 6, texture_id);
+#undef DEBUG_COLORS
 }
 
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height) {
   TIMED_FUNCTION();
+#define DEBUG_COLORS 1
 
   assert(tex_width);
   assert(tex_height);
   auto b = box;
+
   Quad faces[6] = {top_quad(b), front_quad(b), right_quad(b), 
                    left_quad(b), back_quad(b), bot_quad(b)};
 
@@ -394,12 +403,17 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   float y_scale = 1;
 
   V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
+  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 
   for (int i = 0; i < 6; i++) {
     auto dim = rects[i].offset;
 
-    if (tex_width) x_scale = dim.x / tex_width;
-    if (tex_height) y_scale = dim.y / tex_height;
+    if (tex_width) x_scale = abs(dim.x / tex_width);
+    if (tex_height) y_scale = abs(dim.y / tex_height);
+
+#if DEBUG_COLORS
+    c = debug_colors[i];
+#endif
 
     V2 t[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
     V4 c4[4] = {c,c,c,c};
@@ -409,6 +423,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   }
   
   append_quads(buffer, 6, texture_id);
+#undef DEBUG_COLORS
 }
 
 static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id) {
@@ -445,7 +460,8 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
 
   V3 n = {0,0,1};
   V3 n4[4] = {n,n,n,n};
-  float z_bias = 4.5f;
+  float z_bias = buffer->camera->p.z - buffer->camera->near_dist - 0.01;
+  //float z_bias = 4.5;
   float bias[4] = {z_bias, z_bias, z_bias, z_bias};
   push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
 
@@ -492,7 +508,8 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
 
       V3 n = {0,0,1};
       V3 n4[4] = {n,n,n,n};
-      float z_bias = 4.5f;
+      //float z_bias = 4.5f;
+      float z_bias = buffer->camera->p.z - buffer->camera->near_dist - 0.01;
       float bias[4] = {z_bias, z_bias, z_bias, z_bias};
       push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
       num_quads++;
@@ -619,8 +636,10 @@ static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_co
 static void gl_draw_buffer(RenderBuffer *buffer) {
   TIMED_FUNCTION();
 
-  glViewport(0, 0, buffer->screen_width, buffer->screen_height);
+  glViewport(-4, -4, buffer->screen_width + 4, buffer->screen_height + 4);
   gl_check_error();
+
+#if 0
   assert(buffer->camera_width);
   assert(buffer->camera_height);
 
@@ -638,7 +657,6 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   float e = -(top_val + bottom_val)/(top_val - bottom_val);
   float f = -(far_val + near_val)/(far_val - near_val);
 
-
   float projection_mat[] = {
     1, 0, 0, 0,
     0, 1, 0, 0,
@@ -652,6 +670,98 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     0,  0,  c,  0,
     d,  e,  f,  1,
   };
+#endif
+
+  // NOTE : Do to the way arrays work in C, these matrices are
+  // flipped (right is down, down is right).
+
+  // Projection Matrix (flipped) :
+  //
+  // e   0   0   0
+  // 0   q   0   0
+  // 0   0   p  -1
+  // 0   0   r   0
+  //
+  // n = distance to near plane
+  // f = distance to far plane
+  // e = focal length = 1 / tan(FOV / 2) = 2 (distance to target) / (width of target)
+  // a = aspect ratio = height / width
+  //
+  // q = e/a
+  // p = (f + n) / (f - n)
+  // r = 2fn / (f - n)
+  //
+
+  auto camera = buffer->camera;
+  float far_d = camera->far_dist;
+  float near_d = camera->near_dist;
+  //glDepthRange(near_d, far_d);
+  gl_check_error();
+
+  float e = camera->focal_length; // * near_d;
+  float q = e / camera->aspect_ratio;
+  float p = -(far_d + near_d) / (far_d - near_d);
+  float r = -2 * far_d * near_d / (far_d - near_d);
+
+#define PROJECTION 2
+#define ORTHOGRAPHIC 1
+#define PERSPECTIVE 2
+#if PROJECTION == ORTHOGRAPHIC
+  float projection_mat[] = {
+    e, 0, 0,  0,
+    0, q, 0,  0,
+    0, 0, -2/(far_d-near_d),  p,
+    0, 0, 0,  1,
+  };
+#elif PROJECTION == PERSPECTIVE
+  float projection_mat[] = {
+    e, 0, 0,  0,
+    0, q, 0,  0,
+    0, 0, p, -1,
+    0, 0, r,  0,
+  };
+#else // Infinite far plane
+  float projection_mat[] = {
+    e, 0, 0,  0,
+    0, q, 0,  0,
+    0, 0, 0.001f-1, -1,
+    0, 0, (0.001f-2)*near_d,  0,
+  };
+#endif
+
+  // View Matrix (flipped) :
+  //
+  // Xx Xy Xz 0
+  // Yx Yy Yz 0
+  // Zx Zy Zz 0
+  // Tx Ty Tz 1
+  //
+
+  V3 eye = camera->p;
+  V3 up = camera->up;
+  V3 target = camera->target;
+
+  V3 Z = normalize(eye - target);
+  V3 X = normalize(cross(up, Z)); 
+  V3 Y = normalize(cross(Z,X)); //up;
+
+  V3 T = V3{-dot(X, eye), -dot(Y, eye), -dot(Z, eye)};
+
+#if 0
+  float view_mat[] = {
+    X.x, X.y, X.z, 0,
+    Y.x, Y.y, Y.z, 0,
+    Z.x, Z.y, Z.z, 0,
+    T.x, T.y, T.z, 1,
+  };
+#else
+  float view_mat[] = {
+    X.x, Y.x, Z.x, 0,
+    X.y, Y.y, Z.y, 0,
+    X.z, Y.z, Z.z, 0,
+    T.x, T.y, T.z, 1,
+  };
+#endif
 
 
   glClearColor(1,1,0,1);
@@ -663,11 +773,6 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
 
   glUseProgram(program_id);
   gl_check_error();
-
-  /*
-  glUniformMatrix4fv(transform_id, 1, GL_FALSE, projection_mat);
-  gl_check_error();
-  */
 
   glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, projection_mat);
   gl_check_error();

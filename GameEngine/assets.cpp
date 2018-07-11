@@ -200,8 +200,8 @@ static inline void load_font(GameAssets *assets, FontID id) {
   push_work(assets->work_queue, work, (work_queue_callback *) do_load_font_work);
 }
 
-// NOTE : single threaded version
 #else
+// NOTE : single threaded version
 static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, PushAllocator *temp_allocator, FontID id, int pixel_height = 20) {
   assert(id);
   assert(id < FONT_COUNT);

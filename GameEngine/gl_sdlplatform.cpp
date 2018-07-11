@@ -2,6 +2,9 @@
 // TODO rename this to just be "sdl_platform"
 // TODO modify includes to allow for different platforms/renderers
 
+#define DEBUG_BUILD 1
+
+
 // NOTE : These includes are OSX specific.
 // gl3.h is included instead of the alternatives because 
 // it includes only the core functionality and gives compiler
@@ -54,7 +57,14 @@
 static inline ButtonType keycode_to_button_type(SDL_Keycode keycode) {
   switch (keycode) {
     case SDLK_1 :
-      return BUTTON_DEBUG_TOGGLE;
+      return BUTTON_DEBUG_DISPLAY_TOGGLE;
+    case SDLK_2 :
+      return BUTTON_DEBUG_CAMERA_TOGGLE;
+    case SDLK_MINUS :
+      return BUTTON_DEBUG_CAMERA_OUT;
+    case SDLK_EQUALS :
+      return BUTTON_DEBUG_CAMERA_IN;
+    
 
     case SDLK_a :
       return BUTTON_LEFT;
@@ -64,6 +74,19 @@ static inline ButtonType keycode_to_button_type(SDL_Keycode keycode) {
       return BUTTON_RIGHT;
     case SDLK_w :
       return BUTTON_UP;
+
+    case SDLK_h :
+      return BUTTON_DEBUG_CAMERA_LEFT;
+    case SDLK_j :
+      return BUTTON_DEBUG_CAMERA_DOWN;
+    case SDLK_l :
+      return BUTTON_DEBUG_CAMERA_RIGHT;
+    case SDLK_k :
+      return BUTTON_DEBUG_CAMERA_UP;
+    case SDLK_i :
+      return BUTTON_DEBUG_CAMERA_TILT_UP;
+    case SDLK_u :
+      return BUTTON_DEBUG_CAMERA_TILT_DOWN;
 
     case SDLK_SPACE :
       return BUTTON_NONE;
@@ -159,6 +182,7 @@ int main(int argc, char ** argv){
   game_memory.temporary_store = calloc(game_memory.temporary_size, 1);
   ControllerState old_controller_state = {};
   uint32_t previous_time = SDL_GetTicks();
+  bool initialized = false;
 
   //
   // Main Loop ---
@@ -208,8 +232,8 @@ int main(int argc, char ** argv){
 
         case SDL_MOUSEMOTION : {
           // TODO take the motion of the mouse as well
-          controller_state.pointer_x = ev.motion.x;
-          controller_state.pointer_y = ev.motion.y;
+          controller_state.pointer.x = ev.motion.x;
+          controller_state.pointer.y = ev.motion.y;
           controller_state.pointer_moved = true;
         } break;
 
@@ -251,22 +275,27 @@ int main(int argc, char ** argv){
                                      */
     }
 
-    controller_state.delta_t = (double) SDL_GetTicks() - (double) previous_time;
-    controller_state.delta_t /= 1000.0f;
-    controller_state.ticks = ticks;
+    GameInput game_input = {};
+
+    game_input.delta_t = (double) SDL_GetTicks() - (double) previous_time;
+    game_input.delta_t /= 1000.0f;
+    game_input.ticks = ticks;
     uint32_t current_time = SDL_GetTicks();
     //uint32_t time_passed = current_time - previous_time;
     previous_time = current_time;
 
-    window_open = update_and_render(game_memory, 
-                                    &render_info.render_buffer, 
-                                    queue,
-                                    controller_state);
-    if (!window_open) break;
-    game_memory.initialized = true;
+    game_input.render_buffer = &render_info.render_buffer;
+    game_input.work_queue = queue;
+    game_input.controller = controller_state;
+    game_input.initialized = initialized;
 
-    // TODO add debug mode toggle
+    window_open = update_and_render(game_memory, game_input);
+    if (!window_open) break;
+    initialized = true;
+
+#if DEBUG_BUILD
     push_debug_records(&render_info.render_buffer);
+#endif
 
     display_buffer(render_info);
     clear(&render_info.render_buffer);

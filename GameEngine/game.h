@@ -17,17 +17,32 @@
 // TODO At some point I need to add sound!
 
 
+
 enum ButtonType : uint8_t {
-  BUTTON_LEFT  = 0,
-  BUTTON_RIGHT = 1,
-  BUTTON_UP    = 2,
-  BUTTON_DOWN  = 3,
-  BUTTON_QUIT  = 4,
-  BUTTON_MOUSE_LEFT = 5,
-  BUTTON_MOUSE_RIGHT = 6,
-  BUTTON_MOUSE_MIDDLE = 7,
-  BUTTON_DEBUG_TOGGLE = 8,
-  BUTTON_MAX   = 8,
+  BUTTON_LEFT,
+  BUTTON_RIGHT,
+  BUTTON_UP,
+  BUTTON_DOWN,
+  BUTTON_QUIT,
+  BUTTON_MOUSE_LEFT,
+  BUTTON_MOUSE_RIGHT,
+  BUTTON_MOUSE_MIDDLE,
+
+  BUTTON_DEBUG_DISPLAY_TOGGLE,
+
+  BUTTON_DEBUG_CAMERA_TOGGLE,
+  
+  BUTTON_DEBUG_CAMERA_UP,
+  BUTTON_DEBUG_CAMERA_DOWN,
+  BUTTON_DEBUG_CAMERA_LEFT,
+  BUTTON_DEBUG_CAMERA_RIGHT,
+
+  BUTTON_DEBUG_CAMERA_IN,
+  BUTTON_DEBUG_CAMERA_OUT,
+  BUTTON_DEBUG_CAMERA_TILT_UP,
+  BUTTON_DEBUG_CAMERA_TILT_DOWN,
+
+  BUTTON_MAX,
   BUTTON_NONE  = 0xff
 };
 
@@ -49,11 +64,8 @@ struct ButtonState {
 // (though this would make it harder to add more buttons, so maybe do that after I've added them all?)
 struct ControllerState {
   ButtonState buttons[BUTTON_MAX];
-  float pointer_x; // TODO switch to vector probably
-  float pointer_y;
-  float delta_t;
+  V2 pointer;
   bool pointer_moved;
-  uint8_t ticks;
 };
 
 struct GameMemory {
@@ -61,6 +73,16 @@ struct GameMemory {
   uint64_t permanent_size;
   void *temporary_store;
   uint64_t temporary_size;
+};
+
+struct RenderBuffer;
+
+struct GameInput {
+  ControllerState controller;
+  RenderBuffer *render_buffer;
+  WorkQueue *work_queue;
+  float delta_t;
+  uint8_t ticks;
   bool initialized;
 };
 
@@ -170,8 +192,18 @@ static inline BakedChar *get_baked_char(FontInfo *font, char c);
 struct TemporaryState {
 };
 
+struct GameCamera {
+  V3 p;
+  V3 target;
+  V3 up;
+  float aspect_ratio; // height/width
+  float focal_length;
+  float near_dist, far_dist;
+};
+
 struct GameState {
   GameAssets assets;
+  GameCamera camera;
   Entity *entities;
   ControllerState *controller;
   PushAllocator temp_allocator;

@@ -10,9 +10,13 @@ uniform sampler2D texture_sampler;
 
 void main() {
   vec4 textured_color = frag_color * texture(texture_sampler, frag_uv);
-  if (textured_color.a < 0.01) discard;
+  if (textured_color.a < 0.001) discard;
 
-  vec3 light_p = vec3(7,6,20);
+  #if 0
+  pixel_color = textured_color;
+  #else
+
+  vec3 light_p = vec3(7,6,15);
   float Shininess = 1;
 
   // Directional Light Vectors
@@ -72,6 +76,7 @@ void main() {
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
   //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
   pixel_color = vec4(ambient + f_atten * (diffuse + specular), textured_color.a);
+  #endif
 
 }
 

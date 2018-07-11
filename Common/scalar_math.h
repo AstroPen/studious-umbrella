@@ -30,6 +30,16 @@ static inline float squared(float f) {
   return f * f;
 }
 
+static inline float abs(float a) {
+  return (a >= 0) ? a : -a;
+}
+
+/* NOTE : Already defined in stdlib
+static inline int abs(int a) {
+  return (a >= 0) ? a : -a;
+}
+*/
+
 static inline bool is_earlier(float a, float b) {
   if (a < 0) return false;
   if (b < 0) return true;

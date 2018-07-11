@@ -62,7 +62,7 @@ static bool apply_input(GameState *g, ControllerState controller) {
   }
 
   if (controller.pointer_moved) {
-    V2 pointer_p = V2{controller.pointer_x, controller.pointer_y};
+    V2 pointer_p = controller.pointer;
     g->pointer_position = to_game_coordinate(pointer_p, g->height);
   }
 
@@ -83,10 +83,64 @@ static bool apply_input(GameState *g, ControllerState controller) {
     g->shooting++;
   } 
 
-  b = buttons + BUTTON_DEBUG_TOGGLE;
+  b = buttons + BUTTON_DEBUG_DISPLAY_TOGGLE;
   if (b->first_press == PRESS_EVENT) {
     debug_global_memory.display_records = !debug_global_memory.display_records;
   } 
+
+  b = buttons + BUTTON_DEBUG_CAMERA_TOGGLE;
+  if (b->first_press == PRESS_EVENT) {
+    debug_global_memory.camera_mode = !debug_global_memory.camera_mode;
+  } 
+
+  if (debug_global_memory.camera_mode) {
+    float camera_speed = 0.2;
+    float zoom_speed = 0.1;
+    b = buttons + BUTTON_DEBUG_CAMERA_LEFT;
+    if (b->held || b->first_press == PRESS_EVENT) {
+      g->camera.p.x -= camera_speed;
+      g->camera.target.x -= camera_speed;
+    }
+
+    b = buttons + BUTTON_DEBUG_CAMERA_RIGHT;
+    if (b->held || b->first_press == PRESS_EVENT) {
+      g->camera.p.x += camera_speed;
+      g->camera.target.x += camera_speed;
+    }
+    
+    b = buttons + BUTTON_DEBUG_CAMERA_UP;
+    if (b->held || b->first_press == PRESS_EVENT) {
+      g->camera.p.y += camera_speed;
+      g->camera.target.y += camera_speed;
+    }
+
+    b = buttons + BUTTON_DEBUG_CAMERA_DOWN;
+    if (b->held || b->first_press == PRESS_EVENT) {
+      g->camera.p.y -= camera_speed;
+      g->camera.target.y -= camera_speed;
+    }
+
+    b = buttons + BUTTON_DEBUG_CAMERA_IN;
+    if (b->held || b->first_press == PRESS_EVENT) {
+      g->camera.p.z -= zoom_speed;
+    }
+
+    b = buttons + BUTTON_DEBUG_CAMERA_OUT;
+    if (b->held || b->first_press == PRESS_EVENT) {
+      g->camera.p.z += zoom_speed;
+    }
+
+    float tilt_speed = 0.1;
+    b = buttons + BUTTON_DEBUG_CAMERA_TILT_UP;
+    if (b->first_press == PRESS_EVENT) {
+      g->camera.target.yz += V2{tilt_speed, tilt_speed};
+    }
+
+    b = buttons + BUTTON_DEBUG_CAMERA_TILT_DOWN;
+    if (b->first_press == PRESS_EVENT) {
+      g->camera.target.yz -= V2{tilt_speed, tilt_speed};
+    }
+  }
 
   g->player_color = player_color;
   return true;
@@ -129,9 +183,20 @@ static inline void init_game_state(GameState *g, GameMemory memory, WorkQueue *q
   g->max_entities = MAX_ENTITY_COUNT;
   g->entities = alloc_array(&g->perm_allocator, Entity, MAX_ENTITY_COUNT);
   
+  // TODO put width and height in camera
   g->width  = render_buffer->screen_width / float(PIXELS_PER_METER);
   g->height = render_buffer->screen_height / float(PIXELS_PER_METER);
 
+  g->camera.p = V3{g->width / 2, g->height / 2, 10};
+  g->camera.target = V3{g->width / 2, g->height / 2, 0.2};
+  g->camera.up = V3{0, 1, 0};
+  g->camera.aspect_ratio = g->height / g->width;
+  // focal length = 1 / tan(FOV / 2) = 2 (distance to target) / (width of target)
+  g->camera.focal_length = 2 * g->camera.p.z / g->width;
+  g->camera.near_dist = 1;
+  g->camera.far_dist = 15;
+
+  render_buffer->camera = &g->camera;
   render_buffer->camera_width = g->width;
   render_buffer->camera_height = g->height;
 
@@ -186,15 +251,18 @@ static inline void init_game_state(GameState *g, GameMemory memory, WorkQueue *q
 }
 
 // TODO make the main thread only handle opengl stuff and the other threads handle input, physics, filling the RenderBuffer, etc
-static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, WorkQueue *queue, ControllerState controller) {
+static bool update_and_render(GameMemory memory, GameInput game_input) {
   TIMED_FUNCTION();
 
   assert(memory.permanent_size >= sizeof(GameState) + sizeof(Entity) * MAX_ENTITY_COUNT);
+  auto queue = game_input.work_queue;
+  auto render_buffer = game_input.render_buffer;
+  auto controller = game_input.controller;
 
   GameState *g = (GameState *) memory.permanent_store;
 
   // TODO consider making this initialization a separate function to call from the platform code
-  if (!memory.initialized) {
+  if (!game_input.initialized) {
     init_game_state(g, memory, queue, render_buffer);
   } else {
     clear(&g->temp_allocator);
@@ -208,7 +276,7 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
 
   draw_gradient_background(g, queue);
 
-  float delta_t = controller.delta_t; // in seconds
+  float delta_t = game_input.delta_t; // in seconds
   if (delta_t == 0) delta_t = 1.0f / 60.0f;
   //printf("delta_t : %f\n", delta_t);
 
@@ -229,7 +297,10 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
   //draw_gradient_background(*background_texture, g->game_ticks);
 
   auto background_rect = rectangle(aligned_rect(0, 0, g->width, g->height));
+#define DRAW_GRADIENT_BACKGROUND 1
+#if DRAW_GRADIENT_BACKGROUND
   push_rectangle(render_buffer, background_rect, V4{1,1,1,1}, background_texture->texture_id);
+#endif
 
 
   auto center_pos = V2{g->width, g->height} / 2.0f;
@@ -257,7 +328,7 @@ static bool update_and_render(GameMemory memory, RenderBuffer *render_buffer, Wo
   push_hud(render_buffer, cursor_rect, g->cursor_color, white_texture->texture_id);
   V2 text_p = {0.5,11};
   char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
-  sprintf(frame_rate_text, "%d ms", (int)(controller.delta_t * 1000.0f));
+  sprintf(frame_rate_text, "%d ms", (int)(game_input.delta_t * 1000.0f));
   push_hud_text(render_buffer, text_p, frame_rate_text, V4{1,1,1,1}, FONT_COURIER_NEW_BOLD);
   //push_hud(render_buffer, rectangle(aligned_rect(text_p, 0.1, 0.1)), V4{0,0,1,1}, white_texture->texture_id);
 

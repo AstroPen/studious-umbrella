@@ -18,12 +18,12 @@ void main() {
   vec4 adjusted_vertex = vertex;
   adjusted_vertex.w = 1;
   vec4 projected_vertex = projection_matrix * view_matrix * adjusted_vertex;
-  adjusted_vertex.z += vertex.w;
-  vec4 transformed_bias = view_matrix * vec4(0, 0, adjusted_vertex.z, 1);
-  projected_vertex.z = transformed_bias.z;
+
+  projected_vertex.z -= vertex.w;
   gl_Position = projected_vertex;
-  frag_normal = vertex_normal;
   frag_p = adjusted_vertex.xyz;
+
+  frag_normal = vertex_normal;
   camera_p = vec3(inverse(view_matrix) * vec4(0,0,0,1));
   frag_uv = vertex_uv;
   // NOTE : Premultiplied alpha

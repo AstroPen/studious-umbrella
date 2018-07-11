@@ -280,7 +280,7 @@ static inline AlignedRect3 top_face(AlignedBox r) {
 
 // TODO replace flatten with this
 static inline AlignedRect top_rect(AlignedBox r) {
-  AlignedRect result;
+  AlignedRect result = {};
   result.center = r.center.xy;
   result.offset = r.offset.xy;
   return result;
@@ -290,7 +290,7 @@ static inline AlignedRect bot_rect(AlignedBox r) {
   AlignedRect result;
   result.center = r.center.xy;
   result.offset.x = -r.offset.x;
-  result.offset.y = r.offset.x;
+  result.offset.y = r.offset.y;
   return result;
 }
 

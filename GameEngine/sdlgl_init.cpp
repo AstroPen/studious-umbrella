@@ -49,6 +49,8 @@ static void init_opengl(RenderInfo *info) {
 
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   glDepthFunc(GL_LEQUAL);
+  //glDepthFunc(GL_ALWAYS);
+  //glDepthFunc(GL_LESS);
 
   while ((err = glGetError()) != GL_NO_ERROR) {
     printf("OpenGL error: 0x%x during initialization.\n", err);
@@ -162,7 +164,7 @@ static RenderInfo init_screen(int width, int height) {
   SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
 
-  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
   uint32_t window_flags = SDL_WINDOW_OPENGL;
   result.window = SDL_CreateWindow("Box World",

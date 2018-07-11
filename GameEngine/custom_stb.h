@@ -2,6 +2,7 @@
 #ifndef _CUSTOM_STB_H_
 #define _CUSTOM_STB_H_
 
+// NOTE : This is the only shared header between translations units in this project.
 struct BakedChar {
   uint16_t x0, y0, x1, y1;
   float xoff, yoff, xadvance;

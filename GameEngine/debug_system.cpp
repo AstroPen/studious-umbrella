@@ -1,19 +1,17 @@
 
-// TODO Here is the planned rework for the debug system :
-// 1. Each TimedBlock will push an "event" that indicates the start of a block.
-// 2. The end of block will push an event indicating the end of the block.
-// 3. Each event contains a thread id that allows me to tell which thread the event came from.
-// 4. Later, when debug information is processed, I will create a hierarchy of calls that can
-//    destinguish between internal time and total time for the block.                       ------ Done!
+// 
+// Currently, the debug system is laid out like this :
 //
-// 5. I will also aggregate this information into a set of data about previous frames (max time,
+// 1. Each TimedBlock pushes an "event" that indicates the start of a block.
+// 2. The end of block pushes an event indicating the end of the block.
+// 3. Each event contains a thread id that allows you to tell which thread the event came from.
+// 4. Later, when debug information is processed, aggregate_debug_events creates a hierarchy of 
+//    calls that can destinguish between internal time and total time for the block.
+// 5. It also aggregates this information into a set of data about previous frames (max time,
 //    min time, average time, etc).
-// 6. This information will be displayed over the game in a gui that can be toggled.
-// 7. This display should happen outside the game in the platform layer at the end of the frame.
+// 6. This information is displayed over the game in a gui that can be toggled with the 1 key.
+// 7. push_debug_records is called outside the game in the platform layer at the end of the frame.
 
-// TODO draw to screen instead of printing
-// TODO make debug interface toggleable
-//
 // TODO move lighting to uniform so that I can turn it off
 
 #include "dynamic_array.h"
@@ -79,6 +77,7 @@ struct DebugGlobalMemory {
   uint32_t thread_ids[NUM_THREADS];
   uint32_t record_count;
   bool display_records;
+  bool camera_mode;
 } debug_global_memory;
 
 static void init_debug_global_memory(uint32_t *thread_ids) {
@@ -106,15 +105,16 @@ struct TimedBlock {
   uint32_t thread_id;
   uint32_t block_id;
 
-  // TODO Idea : create a static local variable with the macro and pass a pointer to
-  // it into TimedBlock. The variable is a bool indicating whether the function has been
-  // registered. If it hasn't, set the filename, function_name, and line_number.
   inline TimedBlock(uint32_t block_id_, char const *filename, 
                     uint32_t line_number, char const *function_name,
                     bool *initialized, uint32_t priority) {
 
     block_id = block_id_;
 
+    // NOTE : create a static local bool with the macro and pass a pointer to
+    // it into TimedBlock. The bool indicates whether the function has been
+    // registered. If it hasn't, set the filename, function_name, line_number, and
+    // anything else in the FunctionInfo.
     if (!(*initialized)) {
       assert(debug_global_memory.record_count > block_id);
       auto info = debug_global_memory.function_infos + block_id;
