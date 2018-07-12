@@ -83,7 +83,6 @@ struct GameInput {
   WorkQueue *work_queue;
   float delta_t;
   uint8_t ticks;
-  bool initialized;
 };
 
 enum BitmapID : uint32_t {

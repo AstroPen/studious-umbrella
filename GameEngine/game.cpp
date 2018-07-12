@@ -1,6 +1,8 @@
 #ifndef _GAME_CPP_
 #define _GAME_CPP_
 
+// NOTE : All these todos are kind of old...
+
 // TODO test circle collision somehow
 
 // TODO Convert shape code to do the following :
@@ -171,7 +173,9 @@ static void update_physics(GameState *g) {
   }
 }
 
-static inline void init_game_state(GameState *g, GameMemory memory, WorkQueue *queue, RenderBuffer *render_buffer) {
+static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBuffer *render_buffer) {
+  GameState *g = (GameState *) memory.permanent_store;
+
   g->temp_allocator.max_size = memory.temporary_size;
   g->temp_allocator.memory = (uint8_t *) memory.temporary_store;
 
@@ -183,7 +187,6 @@ static inline void init_game_state(GameState *g, GameMemory memory, WorkQueue *q
   g->max_entities = MAX_ENTITY_COUNT;
   g->entities = alloc_array(&g->perm_allocator, Entity, MAX_ENTITY_COUNT);
   
-  // TODO put width and height in camera
   g->width  = render_buffer->screen_width / float(PIXELS_PER_METER);
   g->height = render_buffer->screen_height / float(PIXELS_PER_METER);
 
@@ -197,8 +200,6 @@ static inline void init_game_state(GameState *g, GameMemory memory, WorkQueue *q
   g->camera.far_dist = 15;
 
   render_buffer->camera = &g->camera;
-  render_buffer->camera_width = g->width;
-  render_buffer->camera_height = g->height;
 
   //
   // INIT TEXTURES
@@ -261,12 +262,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
 
   GameState *g = (GameState *) memory.permanent_store;
 
-  // TODO consider making this initialization a separate function to call from the platform code
-  if (!game_input.initialized) {
-    init_game_state(g, memory, queue, render_buffer);
-  } else {
-    clear(&g->temp_allocator);
-  }
+  clear(&g->temp_allocator);
 
   if (!apply_input(g, controller)) return false;
 

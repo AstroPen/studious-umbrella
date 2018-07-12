@@ -251,9 +251,12 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   load_bitmap(assets, BITMAP_WALL);
   
 
+  TextureParameters background_param = default_texture_parameters;
+  background_param.max_blend = LINEAR_BLEND;
+
   auto background_texture = get_bitmap_location(assets, BITMAP_BACKGROUND);
   *background_texture = alloc_texture(&g->perm_allocator, render_buffer->screen_width, render_buffer->screen_height);
-  init_texture(assets, BITMAP_BACKGROUND);
+  init_texture(assets, BITMAP_BACKGROUND, background_param);
 
 
   auto white_texture = get_bitmap_location(assets, BITMAP_WHITE);

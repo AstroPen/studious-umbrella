@@ -182,7 +182,8 @@ int main(int argc, char ** argv){
   game_memory.temporary_store = calloc(game_memory.temporary_size, 1);
   ControllerState old_controller_state = {};
   uint32_t previous_time = SDL_GetTicks();
-  bool initialized = false;
+
+  init_game_state(game_memory, queue, &render_info.render_buffer);
 
   //
   // Main Loop ---
@@ -287,11 +288,9 @@ int main(int argc, char ** argv){
     game_input.render_buffer = &render_info.render_buffer;
     game_input.work_queue = queue;
     game_input.controller = controller_state;
-    game_input.initialized = initialized;
 
     window_open = update_and_render(game_memory, game_input);
     if (!window_open) break;
-    initialized = true;
 
 #if DEBUG_BUILD
     push_debug_records(&render_info.render_buffer);

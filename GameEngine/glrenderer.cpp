@@ -170,9 +170,12 @@ struct RenderBuffer {
   int max_vertices;
   int screen_width;
   int screen_height;
-  float camera_width;
-  float camera_height;
+
+  float z_bias_accum;
 };
+
+#define Z_BIAS_EPSILON 0.000001f
+#define Z_BIAS_HUD_BASE 0.01
 
 #if 0
 static void print_render_buffer(RenderBuffer *buffer) {
@@ -251,6 +254,7 @@ static inline void clear(RenderBuffer *buffer) {
   buffer->tail = NULL;
   buffer->element_count = 0;
   buffer->vertex_count = 0;
+  buffer->z_bias_accum = Z_BIAS_HUD_BASE;
 }
 
 static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
@@ -353,6 +357,9 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
+#if DEBUG_COLORS
+  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
+#endif
 
   auto b = box;
   Quad faces[6] = {top_quad(b), front_quad(b), right_quad(b), 
@@ -364,7 +371,6 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   
   V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
-  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 
   for (int i = 0; i < 6; i++) {
 
@@ -383,7 +389,10 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
 
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height) {
   TIMED_FUNCTION();
-#define DEBUG_COLORS 1
+#define DEBUG_COLORS 0
+#if DEBUG_COLORS
+  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
+#endif
 
   assert(tex_width);
   assert(tex_height);
@@ -403,7 +412,6 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   float y_scale = 1;
 
   V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
-  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 
   for (int i = 0; i < 6; i++) {
     auto dim = rects[i].offset;
@@ -460,7 +468,8 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
 
   V3 n = {0,0,1};
   V3 n4[4] = {n,n,n,n};
-  float z_bias = buffer->camera->p.z - buffer->camera->near_dist - 0.01;
+  float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
+  buffer->z_bias_accum += Z_BIAS_EPSILON;
   //float z_bias = 4.5;
   float bias[4] = {z_bias, z_bias, z_bias, z_bias};
   push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
@@ -509,7 +518,8 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
       V3 n = {0,0,1};
       V3 n4[4] = {n,n,n,n};
       //float z_bias = 4.5f;
-      float z_bias = buffer->camera->p.z - buffer->camera->near_dist - 0.01;
+      float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
+      buffer->z_bias_accum += Z_BIAS_EPSILON;
       float bias[4] = {z_bias, z_bias, z_bias, z_bias};
       push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
       num_quads++;
@@ -639,73 +649,26 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glViewport(-4, -4, buffer->screen_width + 4, buffer->screen_height + 4);
   gl_check_error();
 
-#if 0
-  assert(buffer->camera_width);
-  assert(buffer->camera_height);
-
-  float left_val = 0;
-  float right_val = buffer->camera_width;
-  float bottom_val = 0;
-  float top_val = buffer->camera_height;
-  float far_val = -10;
-  float near_val = 10;
-
-  float a = 2.0f / (right_val - left_val);
-  float b = 2.0f / (top_val - bottom_val);
-  float c = 2.0f / (far_val - near_val);
-  float d = -(right_val + left_val)/(right_val - left_val);
-  float e = -(top_val + bottom_val)/(top_val - bottom_val);
-  float f = -(far_val + near_val)/(far_val - near_val);
-
-  float projection_mat[] = {
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 1,
-    0, 0, 0, 1 - f,
-  };
-
-  float view_mat[] = {
-    a,  0,  0,  0,
-    0,  b,  0,  0,
-    0,  0,  c,  0,
-    d,  e,  f,  1,
-  };
-#endif
-
   // NOTE : Do to the way arrays work in C, these matrices are
-  // flipped (right is down, down is right).
-
-  // Projection Matrix (flipped) :
-  //
-  // e   0   0   0
-  // 0   q   0   0
-  // 0   0   p  -1
-  // 0   0   r   0
-  //
-  // n = distance to near plane
-  // f = distance to far plane
-  // e = focal length = 1 / tan(FOV / 2) = 2 (distance to target) / (width of target)
-  // a = aspect ratio = height / width
-  //
-  // q = e/a
-  // p = (f + n) / (f - n)
-  // r = 2fn / (f - n)
-  //
+  // transposed (right is down, down is right).
 
   auto camera = buffer->camera;
   float far_d = camera->far_dist;
   float near_d = camera->near_dist;
-  //glDepthRange(near_d, far_d);
-  gl_check_error();
 
-  float e = camera->focal_length; // * near_d;
-  float q = e / camera->aspect_ratio;
+  // WARNING : Do not enable this, it caused all sorts of bugs.
+  //glDepthRange(near_d, far_d);
+  
+  float e = camera->focal_length;     // Typically 2/width
+  float q = e / camera->aspect_ratio; // Typically 2/height
   float p = -(far_d + near_d) / (far_d - near_d);
   float r = -2 * far_d * near_d / (far_d - near_d);
 
-#define PROJECTION 2
 #define ORTHOGRAPHIC 1
 #define PERSPECTIVE 2
+
+#define PROJECTION 2
+
 #if PROJECTION == ORTHOGRAPHIC
   float projection_mat[] = {
     e, 0, 0,  0,
@@ -730,38 +693,27 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
 #endif
 
   // View Matrix (flipped) :
-  //
-  // Xx Xy Xz 0
-  // Yx Yy Yz 0
-  // Zx Zy Zz 0
-  // Tx Ty Tz 1
-  //
 
   V3 eye = camera->p;
   V3 up = camera->up;
   V3 target = camera->target;
 
+  // "Forward"
   V3 Z = normalize(eye - target);
+  // "Left"
   V3 X = normalize(cross(up, Z)); 
-  V3 Y = normalize(cross(Z,X)); //up;
+  // "Up" (recalculated so that the camera can tilt up and down)
+  V3 Y = normalize(cross(Z,X));
 
+  // "Translation" (dotted because view = translation * rotation)
   V3 T = V3{-dot(X, eye), -dot(Y, eye), -dot(Z, eye)};
 
-#if 0
-  float view_mat[] = {
-    X.x, X.y, X.z, 0,
-    Y.x, Y.y, Y.z, 0,
-    Z.x, Z.y, Z.z, 0,
-    T.x, T.y, T.z, 1,
-  };
-#else
   float view_mat[] = {
     X.x, Y.x, Z.x, 0,
     X.y, Y.y, Z.y, 0,
     X.z, Y.z, Z.z, 0,
     T.x, T.y, T.z, 1,
   };
-#endif
 
 
   glClearColor(1,1,0,1);
@@ -884,7 +836,7 @@ struct TextureParameters {
   uint32_t s_clamp = CLAMP_TO_EDGE;
   uint32_t t_clamp = CLAMP_TO_EDGE;
   uint32_t pixel_format = BGRA;
-} DefalutTextureParameters;
+} default_texture_parameters;
 
 static void update_texture(GameAssets *assets, BitmapID bitmap_id, uint32_t pixel_format = BGRA) {
   auto texture = get_bitmap(assets, bitmap_id);
@@ -899,7 +851,7 @@ static void update_texture(GameAssets *assets, BitmapID bitmap_id, uint32_t pixe
                pixel_format, GL_UNSIGNED_BYTE, texture->buffer);
 }
 
-static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParameters param = DefalutTextureParameters) {
+static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParameters param = default_texture_parameters) {
   auto texture = get_bitmap(assets, bitmap_id);
   if (!texture) return;
   uint32_t texture_id;

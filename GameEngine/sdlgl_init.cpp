@@ -49,8 +49,6 @@ static void init_opengl(RenderInfo *info) {
 
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   glDepthFunc(GL_LEQUAL);
-  //glDepthFunc(GL_ALWAYS);
-  //glDepthFunc(GL_LESS);
 
   while ((err = glGetError()) != GL_NO_ERROR) {
     printf("OpenGL error: 0x%x during initialization.\n", err);
@@ -137,23 +135,12 @@ static RenderInfo init_screen(int width, int height) {
   buffer->allocator = new_push_allocator(&temp, remaining_size(&temp));
   assert(is_initialized(&buffer->allocator));
 
-#if 0
-  buffer->allocator.max_size = 4096 * 64;
-  int total_buffer_size = vertex_buffer_size + buffer->allocator.max_size;
+  clear(buffer);
 
-  printf("Total buffer size : %d\n", total_buffer_size);
-  buffer->allocator.memory = (uint8_t *) calloc(total_buffer_size, 1);
-  buffer->vertices = (Vertex *) (buffer->allocator.memory + buffer->allocator.max_size);
-   
-  assert(buffer->allocator.memory);
-#endif
 
-  //result.width = width;
-  //result.height = height;
 
   SDL_Init(SDL_INIT_VIDEO);
 
-  //SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
