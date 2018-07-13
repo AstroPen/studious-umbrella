@@ -141,6 +141,7 @@ struct RenderElement {
 struct RenderElementTextureQuads {
   RenderElement head;
   uint32_t texture_id;
+  uint32_t normal_map_id;
   int vertex_index;
   int quad_count;
 };
@@ -286,15 +287,24 @@ static inline void push_quad_vertices(RenderBuffer *buffer, V3 *p, V2 *t, V4 *c,
   }
 }
 
-static void draw_vertices(int vertex_idx, int count, uint32_t texture_id) {
+static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32_t normal_map_id) {
   TIMED_FUNCTION();
 
   assert(texture_id);
   //assert(texture_id < BITMAP_COUNT);
   //glUniform1i(texture_sampler_id, texture_id);
   gl_check_error();
+  glActiveTexture(GL_TEXTURE0 + 0);
   glBindTexture(GL_TEXTURE_2D, texture_id);
   gl_check_error();
+
+  bool has_normal_map = normal_map_id ? true : false;
+  glUniform1i(glGetUniformLocation(program_id, "has_normal_map"), has_normal_map);
+
+  if (has_normal_map) {
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_2D, normal_map_id);
+  }
   
   glEnableVertexAttribArray(VERTEX_POSITION);
   gl_check_error();
@@ -336,12 +346,12 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id) {
   gl_check_error();
 }
 
-static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id) {
+static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
   auto prev = buffer->tail;
   if (prev && prev->type == RenderType_RenderElementTextureQuads) {
     auto old_quads = (RenderElementTextureQuads *) prev;
-    if (old_quads->texture_id == texture_id) {
+    if (old_quads->texture_id == texture_id && old_quads->normal_map_id == normal_map_id) {
       old_quads->quad_count += count;
       return;
     }
@@ -350,11 +360,13 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
   auto elem = push_element(buffer, RenderElementTextureQuads);
 
   elem->texture_id = texture_id;
+  elem->normal_map_id = normal_map_id;
   elem->quad_count = count;
   elem->vertex_index = buffer->vertex_count - count * 6;
 }
 
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id) {
+// TODO maybe combine this with the other function
+static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
 #if DEBUG_COLORS
@@ -387,7 +399,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
 #undef DEBUG_COLORS
 }
 
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height) {
+static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
 #if DEBUG_COLORS
@@ -430,11 +442,11 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
     push_quad_vertices(buffer, faces[i].verts, t, c4, n4);
   }
   
-  append_quads(buffer, 6, texture_id);
+  append_quads(buffer, 6, texture_id, normal_map_id);
 #undef DEBUG_COLORS
 }
 
-static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id) {
+static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 
   auto quad = to_quad(rect);
@@ -451,7 +463,7 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   V3 n4[4] = {n,n,n,n};
   push_quad_vertices(buffer, quad.verts, t, c4, n4);
 
-  append_quads(buffer, 1, texture_id);
+  append_quads(buffer, 1, texture_id, normal_map_id);
 }
 
 static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id) {
@@ -649,7 +661,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glViewport(-4, -4, buffer->screen_width + 4, buffer->screen_height + 4);
   gl_check_error();
 
-  // NOTE : Do to the way arrays work in C, these matrices are
+  // NOTE : Due to the way arrays work in C, these matrices are
   // transposed (right is down, down is right).
 
   auto camera = buffer->camera;
@@ -731,6 +743,11 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, view_mat);
   gl_check_error();
 
+  auto normal_sampler_id = glGetUniformLocation(program_id, "normal_sampler");
+
+  glUniform1i(texture_sampler_id, 0); // Texture unit 0 is for the texture
+  glUniform1i(normal_sampler_id, 1); // Texture unit 1 is for normal maps.
+
   // DEBUG
   //print_render_buffer(buffer);
 
@@ -745,7 +762,8 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       case RenderType_RenderElementTextureQuads : {
         auto e = (RenderElementTextureQuads *) elem;
         set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
-        draw_vertices(0, e->quad_count * 6, e->texture_id);
+
+        draw_vertices(0, e->quad_count * 6, e->texture_id, e->normal_map_id);
       } break;
 
       default : {

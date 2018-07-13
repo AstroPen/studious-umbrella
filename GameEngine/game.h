@@ -93,6 +93,7 @@ enum BitmapID : uint32_t {
   BITMAP_BACKGROUND,
   BITMAP_WALL,
   BITMAP_WHITE,
+  BITMAP_CIRCLE,
 
   BITMAP_COUNT
 };
@@ -117,7 +118,8 @@ enum EntityFlag {
   ENTITY_TEMPORARY = (1 << 7),
   ENTITY_CUBOID = (1 << 8),
   ENTITY_SPRITE = (1 << 9),
-  ENTITY_TEXTURE_REPEAT = (1 << 10)
+  ENTITY_TEXTURE_REPEAT = (1 << 10),
+  ENTITY_NORMAL_MAP = (1 << 11),
 };
 
 // TODO massively rework this

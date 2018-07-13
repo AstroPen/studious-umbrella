@@ -234,6 +234,35 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
 }
 #endif
 
+// TODO move this somewhere reasonable
+static void draw_circle_asset(uint8_t *buffer, uint32_t diameter) {
+  uint8_t *buf = buffer;
+  float radius = diameter / 2.0f;
+  V2 center = V2{radius, radius};
+  float radius_sq = radius * radius;
+
+  uint32_t pixel_bytes = 4;
+  uint32_t pitch = pixel_bytes * diameter;
+
+  for (uint32_t y = 0; y < diameter; y++) {
+    uint8_t *row = buf + pitch * y;
+    for (uint32_t x = 0; x < diameter; x++) {
+      Color color = 0;
+
+      V2 p = V2{(float)x,(float)y};
+      p += V2{0.5f, 0.5f};
+
+      V2 diff = p - center;
+      float len_sq = length_sq(diff);
+      if (len_sq <= radius_sq) {
+        color = 0xffffffff;
+      }
+
+      uint32_t *pixel = (uint32_t *) (row + x * pixel_bytes);
+      *pixel = color;
+    }
+  }
+}
 
 static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *render_buffer) {
   auto assets = &g->assets;
@@ -264,6 +293,12 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   auto white_pixel = (uint32_t *) white_texture->buffer;
   *white_pixel = 0xffffffff;
   init_texture(assets, BITMAP_WHITE);
+
+  uint32_t circle_diameter = 64;
+  auto circle_texture = get_bitmap_location(assets, BITMAP_CIRCLE);
+  *circle_texture = alloc_texture(&g->perm_allocator, circle_diameter, circle_diameter);
+  draw_circle_asset(circle_texture->buffer, circle_diameter);
+  init_texture(assets, BITMAP_CIRCLE);
 
   int pixel_height = 30;
 

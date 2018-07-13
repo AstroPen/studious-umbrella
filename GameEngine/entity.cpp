@@ -19,12 +19,13 @@ static inline void free_entity(GameState *g, Entity *e) {
   g->num_entities--;
 }
 
+// TODO rename these to "projectile" or "bullet" or something
 static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float mass, float radius, float lifetime, V4 color) {
   TIMED_FUNCTION();
 
   auto e = alloc_entity(g);
   if (!e) return NULL;
-  e->flags = ENTITY_COLLIDES | ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_TEMPORARY;
+  e->flags = ENTITY_COLLIDES | ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_TEXTURE | ENTITY_TEMPORARY;
   //e->collision_box = aligned_rect(position, 2*radius, 2*radius);
   e->collision_box = aligned_box(aligned_rect(position, 2*radius, 2*radius), 0.5 - radius, radius * 2);
   e->vel.xy = velocity;
@@ -32,7 +33,7 @@ static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float
   e->mass = mass;
   e->lifetime = lifetime;
   e->visual.color = color;
-  //e->visual.texture_id = BITMAP_WALL;
+  e->visual.texture_id = BITMAP_CIRCLE;
   e->friction_multiplier = 1.0;
   e->bounce_factor = 1.0;
   //e->slip_factor = 1.0;

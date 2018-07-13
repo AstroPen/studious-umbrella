@@ -309,7 +309,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
 
   // Collision normal :
   auto collision_indicator = rectangle(aligned_rect(g->collision_normal + center_pos, 2.0f * METERS_PER_PIXEL, 2.0f * METERS_PER_PIXEL), 1.1);
-  auto white_texture = get_bitmap(&g->assets, BITMAP_WHITE);
+  auto white_texture = get_bitmap(&g->assets, BITMAP_WHITE); // TODO TODO I should really change it so that this is done in the renderer
   assert(white_texture);
   push_rectangle(render_buffer, collision_indicator, V4{0,1,0,1}, white_texture->texture_id);
 
@@ -317,11 +317,11 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   //auto circ = Circle{g->pointer_position, cursor_size / 2.0f};
   //draw_circle(pixel_buffer, circ, cursor_color);
 
-  // TODO make this a circle
+  auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
   float cursor_size = 30.f / PIXELS_PER_METER;
   auto cursor_a_rect = aligned_rect(g->pointer_position, cursor_size, cursor_size);
   auto cursor_rect = rectangle(cursor_a_rect, 0);
-  push_hud(render_buffer, cursor_rect, g->cursor_color, white_texture->texture_id);
+  push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id);
   V2 text_p = {0.5,11};
   char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
   sprintf(frame_rate_text, "%d ms", (int)(game_input.delta_t * 1000.0f));

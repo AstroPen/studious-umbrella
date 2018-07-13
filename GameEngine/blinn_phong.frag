@@ -8,19 +8,33 @@ out vec4 pixel_color;
 
 uniform sampler2D texture_sampler;
 
+uniform bool has_normal_map;
+uniform sampler2D normal_sampler;
+
 void main() {
   vec4 textured_color = frag_color * texture(texture_sampler, frag_uv);
-  if (textured_color.a < 0.001) discard;
+  if (textured_color.a < 0.01) discard;
 
   #if 0
   pixel_color = textured_color;
   #else
 
+  // Directional Light Vectors
+
+  vec3 N;
+  if (has_normal_map) {
+    vec3 offset_normal = texture(normal_sampler, frag_uv).xyz;
+    offset_normal = normalize(offset_normal * 2 - 1);
+    // TODO pass in this info for real 
+    mat3 TBN = mat3(vec3(1,0,0), vec3(0,1,0), vec3(0,0,1));
+    N = normalize(TBN * offset_normal);
+  } else {
+    N = normalize(frag_normal);
+  }
+
   vec3 light_p = vec3(7,6,15);
   float Shininess = 1;
 
-  // Directional Light Vectors
-  vec3 N = normalize(frag_normal);
   // View direction:
   vec3 V = normalize(camera_p - frag_p);
   // vector from frag_p to light source:
@@ -70,8 +84,6 @@ void main() {
   float a = 0.1;
   float b = 0.3;
   float c = 0.2;
-
-
 
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
   //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
