@@ -94,6 +94,7 @@ enum BitmapID : uint32_t {
   BITMAP_WALL,
   BITMAP_WHITE,
   BITMAP_CIRCLE,
+  BITMAP_SPHERE_NORMAL_MAP,
 
   BITMAP_COUNT
 };
@@ -105,6 +106,7 @@ struct VisualInfo {
   float sprite_height;
   float scale;
   BitmapID texture_id;
+  BitmapID normal_map_id;
 };
 
 enum EntityFlag {

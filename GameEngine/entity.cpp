@@ -25,7 +25,7 @@ static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float
 
   auto e = alloc_entity(g);
   if (!e) return NULL;
-  e->flags = ENTITY_COLLIDES | ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_TEXTURE | ENTITY_TEMPORARY;
+  e->flags = ENTITY_COLLIDES | ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_TEXTURE | ENTITY_TEMPORARY | ENTITY_NORMAL_MAP;
   //e->collision_box = aligned_rect(position, 2*radius, 2*radius);
   e->collision_box = aligned_box(aligned_rect(position, 2*radius, 2*radius), 0.5 - radius, radius * 2);
   e->vel.xy = velocity;
@@ -34,6 +34,7 @@ static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float
   e->lifetime = lifetime;
   e->visual.color = color;
   e->visual.texture_id = BITMAP_CIRCLE;
+  e->visual.normal_map_id = BITMAP_SPHERE_NORMAL_MAP;
   e->friction_multiplier = 1.0;
   e->bounce_factor = 1.0;
   //e->slip_factor = 1.0;
@@ -151,7 +152,10 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
 
       auto texture = get_bitmap(&g->assets, e->visual.texture_id);
       auto r = rectangle(flatten(e->collision_box), e->collision_box.center.z);
-      push_rectangle(render_buffer, r, e->visual.color, texture->texture_id);
+
+      auto normal_map_id = 0;
+      if (e->flags & ENTITY_NORMAL_MAP) normal_map_id = get_bitmap(&g->assets, e->visual.normal_map_id)->texture_id;
+      push_rectangle(render_buffer, r, e->visual.color, texture->texture_id, normal_map_id);
     }
 
   } else {

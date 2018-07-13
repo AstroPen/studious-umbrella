@@ -466,7 +466,7 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   append_quads(buffer, 1, texture_id, normal_map_id);
 }
 
-static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id) {
+static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 
   auto quad = to_quad(rect);
@@ -486,7 +486,7 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
   float bias[4] = {z_bias, z_bias, z_bias, z_bias};
   push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
 
-  append_quads(buffer, 1, texture_id);
+  append_quads(buffer, 1, texture_id, normal_map_id);
 }
 
 

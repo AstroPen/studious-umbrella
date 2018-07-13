@@ -318,10 +318,16 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   //draw_circle(pixel_buffer, circ, cursor_color);
 
   auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
+  auto circle_normal_map = get_bitmap(&g->assets, BITMAP_SPHERE_NORMAL_MAP);
   float cursor_size = 30.f / PIXELS_PER_METER;
   auto cursor_a_rect = aligned_rect(g->pointer_position, cursor_size, cursor_size);
   auto cursor_rect = rectangle(cursor_a_rect, 0);
-  push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id);
+  g->cursor_color.rgb /= 2;
+  push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id, circle_normal_map->texture_id);
+
+
+  //push_rectangle(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id, circle_normal_map->texture_id);
+
   V2 text_p = {0.5,11};
   char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
   sprintf(frame_rate_text, "%d ms", (int)(game_input.delta_t * 1000.0f));

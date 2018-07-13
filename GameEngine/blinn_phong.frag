@@ -13,7 +13,7 @@ uniform sampler2D normal_sampler;
 
 void main() {
   vec4 textured_color = frag_color * texture(texture_sampler, frag_uv);
-  if (textured_color.a < 0.01) discard;
+  if (textured_color.a < 0.001) discard;
 
   #if 0
   pixel_color = textured_color;
@@ -23,17 +23,20 @@ void main() {
 
   vec3 N;
   if (has_normal_map) {
+
     vec3 offset_normal = texture(normal_sampler, frag_uv).xyz;
     offset_normal = normalize(offset_normal * 2 - 1);
+    //offset_normal = normalize(offset_normal);
+    N = offset_normal;
     // TODO pass in this info for real 
-    mat3 TBN = mat3(vec3(1,0,0), vec3(0,1,0), vec3(0,0,1));
-    N = normalize(TBN * offset_normal);
+    //mat3 TBN = mat3(vec3(1,0,0), vec3(0,1,0), vec3(0,0,1));
+    //N = normalize(TBN * offset_normal);
   } else {
     N = normalize(frag_normal);
   }
 
-  vec3 light_p = vec3(7,6,15);
-  float Shininess = 1;
+  vec3 light_p = vec3(7,6,4);
+  float Shininess = 130;
 
   // View direction:
   vec3 V = normalize(camera_p - frag_p);
@@ -67,10 +70,10 @@ void main() {
   }
   */
 
-  float light_intensity = 21;
-  float ambient_intensity = 0.8;
+  float light_intensity = 20;
+  float ambient_intensity = 0.9;
   vec3 light_ambient = vec3(0.6,0.7,0.8) * ambient_intensity;
-  vec3 light_color = vec3(1.0,0.9,0.7) * light_intensity;
+  vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
   vec3 diffuse_color = textured_color.xyz;
   vec3 specular_color = textured_color.xyz;
 
@@ -83,7 +86,7 @@ void main() {
 
   float a = 0.1;
   float b = 0.3;
-  float c = 0.2;
+  float c = 0.6;
 
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
   //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
