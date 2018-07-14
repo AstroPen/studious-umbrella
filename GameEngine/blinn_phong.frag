@@ -1,18 +1,31 @@
 R"__(
-smooth in vec2 frag_uv;
-smooth in vec4 frag_color;
-smooth in vec3 frag_normal;
-smooth in vec3 frag_p;
-smooth in vec3 camera_p;
+
+in VertexData {
+  smooth in vec2 uv;
+  smooth in vec4 color;
+  smooth in vec3 normal;
+  smooth in vec3 tangent;
+  smooth in vec3 bitangent;
+  smooth in vec3 p;
+  smooth in vec3 camera_p;
+} v_in;
+
 out vec4 pixel_color;
 
-uniform sampler2D texture_sampler;
-
 uniform bool has_normal_map;
+uniform sampler2D texture_sampler;
 uniform sampler2D normal_sampler;
 
+const mediump vec3 perception = vec3(0.299, 0.587, 0.114);
+
+vec3 tone(vec3 v, float exposure) {
+  float lum = dot(v, perception) * exposure;
+  lum = sqrt(lum / (1 + lum));
+  return v * lum;
+}
+
 void main() {
-  vec4 textured_color = frag_color * texture(texture_sampler, frag_uv);
+  vec4 textured_color = v_in.color * texture(texture_sampler, v_in.uv);
   if (textured_color.a < 0.001) discard;
 
   #if 0
@@ -24,24 +37,22 @@ void main() {
   vec3 N;
   if (has_normal_map) {
 
-    vec3 offset_normal = texture(normal_sampler, frag_uv).xyz;
+    vec3 offset_normal = texture(normal_sampler, v_in.uv).xyz;
     offset_normal = normalize(offset_normal * 2 - 1);
-    //offset_normal = normalize(offset_normal);
-    N = offset_normal;
-    // TODO pass in this info for real 
-    //mat3 TBN = mat3(vec3(1,0,0), vec3(0,1,0), vec3(0,0,1));
-    //N = normalize(TBN * offset_normal);
+    //N = offset_normal;
+    mat3 TBN = mat3(v_in.tangent, v_in.bitangent, v_in.normal);
+    N = normalize(TBN * offset_normal);
   } else {
-    N = normalize(frag_normal);
+    N = normalize(v_in.normal);
   }
 
-  vec3 light_p = vec3(7,6,4);
+  vec3 light_p = vec3(7,6,2);
   float Shininess = 130;
 
   // View direction:
-  vec3 V = normalize(camera_p - frag_p);
-  // vector from frag_p to light source:
-  vec3 R = light_p - frag_p;
+  vec3 V = normalize(v_in.camera_p - v_in.p);
+  // vector from v_in.p to light source:
+  vec3 R = light_p - v_in.p;
   // negative light direction:
   vec3 L = normalize(R);
   // Halfway vector (for specular):
@@ -70,8 +81,8 @@ void main() {
   }
   */
 
-  float light_intensity = 20;
-  float ambient_intensity = 0.9;
+  float light_intensity = 12;
+  float ambient_intensity = 4;
   vec3 light_ambient = vec3(0.6,0.7,0.8) * ambient_intensity;
   vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
   vec3 diffuse_color = textured_color.xyz;
@@ -84,13 +95,14 @@ void main() {
   // k*I_L * B(N*H)^ns
   vec3 specular = specularShade * specular_color * light_color;
 
-  float a = 0.1;
-  float b = 0.3;
+  float a = 0.2;
+  float b = 0.4;
   float c = 0.6;
 
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
   //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
   pixel_color = vec4(ambient + f_atten * (diffuse + specular), textured_color.a);
+  pixel_color.rgb = tone(pixel_color.rgb, 0.04);
   #endif
 
 }

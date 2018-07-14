@@ -122,7 +122,9 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
       return;
     }
 
-    push_box(render_buffer, e->collision_box, e->visual.color, texture->texture_id);
+    // TODO TODO FIXME Turn this back on
+    //push_box(render_buffer, e->collision_box, e->visual.color, texture->texture_id);
+    assert(false);
     return;
   }
 

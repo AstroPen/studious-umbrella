@@ -26,7 +26,8 @@ enum ShaderAttribute {
   VERTEX_POSITION,
   VERTEX_UV,
   VERTEX_COLOR,
-  VERTEX_NORMAL
+  VERTEX_NORMAL,
+  VERTEX_TANGENT,
 };
 
 enum TextureFormatSpecifier : uint32_t {
@@ -157,7 +158,7 @@ struct Vertex {
   V4 color;
   V2 uv;
   V3 normal;
-  V3 _pad;
+  V3 tangent;
 };
 
 struct RenderBuffer {
@@ -268,22 +269,34 @@ static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
   buffer->vertex_count++;
 }
 
-static inline void push_quad_vertices(RenderBuffer *buffer, V3 *p, V2 *t, V4 *c, V3 *n, float *bias = NULL) {
+struct VertexSOA {
+  V4 *p, *c;
+  V2 *uv;
+  V3 *n, *t;
+};
+
+static inline Vertex get(VertexSOA verts, uint32_t index) {
+  Vertex vert;
+  vert.position = verts.p[index];
+  vert.color = verts.c[index];
+  vert.uv = verts.uv[index];
+  vert.normal = verts.n[index];
+  vert.tangent = verts.t[index];
+  return vert;
+}
+
+// static inline void push_quad_vertices(RenderBuffer *buffer, V3 *p, V2 *t, V4 *c, V3 *n, float *bias = NULL) {
+static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) { //, float *bias = NULL) {
   TIMED_FUNCTION();
 
   // NOTE Wraps counter clockwise around each triangle
   int idxs[6] = {0,1,2,0,2,3};
-  float default_bias[] = {0,0,0,0};
-  if (!bias) bias = default_bias;
+  //float default_bias[] = {0,0,0,0};
+  //if (!bias) bias = default_bias;
 
   for (int i = 0; i < 6; i++) {
     int idx = idxs[i];
-    Vertex vert;
-    vert.position = v4(p[idx], bias[idx]);
-    vert.color = c[idx];
-    vert.uv = t[idx];
-    vert.normal = n[idx];
-    push_vertex(buffer, vert);
+    push_vertex(buffer, get(verts, idx));
   }
 }
 
@@ -314,6 +327,8 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
   gl_check_error();
   glEnableVertexAttribArray(VERTEX_NORMAL);
   gl_check_error();
+  glEnableVertexAttribArray(VERTEX_TANGENT);
+  gl_check_error();
 
   // NOTE : the boolean is "normalized"
   glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
@@ -333,6 +348,10 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
       sizeof(Vertex), (void *)(offsetof(Vertex, normal) + vertex_idx));
   gl_check_error();
 
+  glVertexAttribPointer(VERTEX_TANGENT, 3, GL_FLOAT, false,
+      sizeof(Vertex), (void *)(offsetof(Vertex, tangent) + vertex_idx));
+  gl_check_error();
+
   glDrawArrays(GL_TRIANGLES, 0, count);
   gl_check_error();
 
@@ -343,6 +362,8 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
   glDisableVertexAttribArray(VERTEX_UV);
   gl_check_error();
   glDisableVertexAttribArray(VERTEX_NORMAL);
+  gl_check_error();
+  glDisableVertexAttribArray(VERTEX_TANGENT);
   gl_check_error();
 }
 
@@ -365,6 +386,7 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
   elem->vertex_index = buffer->vertex_count - count * 6;
 }
 
+#if 0
 // TODO maybe combine this with the other function
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
@@ -398,6 +420,25 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   append_quads(buffer, 6, texture_id);
 #undef DEBUG_COLORS
 }
+#endif
+
+// TODO move this somewhere reasonable
+static inline void to_vec4s(V3 *old, V4 *result, uint32_t count) {
+  for (uint32_t i = 0; i < count; i++) {
+    V4 v = {};
+    v.xyz = old[i];
+    result[i] = v;
+  }
+}
+
+static inline void get_faces_v4(AlignedBox box, V4 *result) {
+  to_vec4s(top_quad(box).verts, result + 0, 4);
+  to_vec4s(front_quad(box).verts, result + 4, 4);
+  to_vec4s(right_quad(box).verts, result + 8, 4);
+  to_vec4s(left_quad(box).verts, result + 12, 4);
+  to_vec4s(back_quad(box).verts, result + 16, 4);
+  to_vec4s(bot_quad(box).verts, result + 20, 4);
+}
 
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
@@ -410,8 +451,8 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   assert(tex_height);
   auto b = box;
 
-  Quad faces[6] = {top_quad(b), front_quad(b), right_quad(b), 
-                   left_quad(b), back_quad(b), bot_quad(b)};
+  V4 vertices[6][4];
+  get_faces_v4(box, vertices[0]);
 
   AlignedRect rects[6] = {top_rect(b), front_rect(b), right_rect(b), 
                           left_rect(b), back_rect(b), bot_rect(b)};
@@ -424,6 +465,9 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   float y_scale = 1;
 
   V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
+ 
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
 
   for (int i = 0; i < 6; i++) {
     auto dim = rects[i].offset;
@@ -435,11 +479,19 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
     c = debug_colors[i];
 #endif
 
-    V2 t[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
+    V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
     V4 c4[4] = {c,c,c,c};
     V3 n4[4] = {n[i],n[i],n[i],n[i]};
-    c.rgb *= 0.8;
-    push_quad_vertices(buffer, faces[i].verts, t, c4, n4);
+
+    VertexSOA verts;
+    verts.p = vertices[i];
+    verts.uv = uv;
+    verts.c = c4;
+    verts.n = n4;
+    verts.t = t4;
+
+    push_quad_vertices(buffer, verts);
+    //c.rgb *= 0.8;
   }
   
   append_quads(buffer, 6, texture_id, normal_map_id);
@@ -450,8 +502,10 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   TIMED_FUNCTION();
 
   auto quad = to_quad(rect);
+  V4 vertices[4];
+  to_vec4s(quad.verts, vertices, 4);
 
-  V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
@@ -461,7 +515,18 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   // TODO calculate this for non-axis-aligned rectangles
   V3 n = {0,0,1};
   V3 n4[4] = {n,n,n,n};
-  push_quad_vertices(buffer, quad.verts, t, c4, n4);
+
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = vertices;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
 
   append_quads(buffer, 1, texture_id, normal_map_id);
 }
@@ -470,8 +535,10 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
   TIMED_FUNCTION();
 
   auto quad = to_quad(rect);
+  V4 vertices[4];
+  to_vec4s(quad.verts, vertices, 4);
 
-  V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
@@ -483,8 +550,22 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
   float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
   buffer->z_bias_accum += Z_BIAS_EPSILON;
   //float z_bias = 4.5;
-  float bias[4] = {z_bias, z_bias, z_bias, z_bias};
-  push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
+  //float bias[4] = {z_bias, z_bias, z_bias, z_bias};
+  for (int i = 0; i < 4; i++) {
+    vertices[i].w = z_bias;
+  }
+
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = vertices;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
 
   append_quads(buffer, 1, texture_id, normal_map_id);
 }
@@ -513,8 +594,10 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
       float char_width  = (b->x1 - b->x0) * METERS_PER_PIXEL;
       float char_height = (b->y1 - b->y0) * METERS_PER_PIXEL;
       auto quad = to_quad(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y));
+      V4 vertices[4];
+      to_vec4s(quad.verts, vertices, 4);
 
-      V2 t[4] = {
+      V2 uv[4] = {
                  {b->x0 / font_width, b->y1 / font_height}, 
                  {b->x1 / font_width, b->y1 / font_height}, 
                  {b->x1 / font_width, b->y0 / font_height}, 
@@ -532,8 +615,22 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
       //float z_bias = 4.5f;
       float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
       buffer->z_bias_accum += Z_BIAS_EPSILON;
-      float bias[4] = {z_bias, z_bias, z_bias, z_bias};
-      push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
+      //float bias[4] = {z_bias, z_bias, z_bias, z_bias};
+      for (int i = 0; i < 4; i++) {
+        vertices[i].w = z_bias;
+      }
+
+      V3 t = {1,0,0};
+      V3 t4[4] = {t,t,t,t};
+
+      VertexSOA verts;
+      verts.p = vertices;
+      verts.uv = uv;
+      verts.c = c4;
+      verts.n = n4;
+      verts.t = t4;
+
+      push_quad_vertices(buffer, verts);
       num_quads++;
       pixel_p.x += b->xadvance; // * METERS_PER_PIXEL;
 
@@ -632,8 +729,10 @@ static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float
   TIMED_FUNCTION();
 
   auto quad = to_quad(rect);
+  V4 vertices[4];
+  to_vec4s(quad.verts, vertices, 4);
 
-  V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
@@ -643,7 +742,22 @@ static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float
   V3 n = {0,0,1};
   V3 n4[4] = {n,n,n,n};
   float bias[4] = {z_min, z_min, z_max, z_max};
-  push_quad_vertices(buffer, quad.verts, t, c4, n4, bias);
+  for (int i = 0; i < 4; i++) {
+    vertices[i].w = bias[i];
+  }
+
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = vertices;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+
+  push_quad_vertices(buffer, verts);
 
   append_quads(buffer, 1, texture_id);
 }
@@ -818,6 +932,7 @@ static GLuint create_shader_program(char* header,
   glBindAttribLocation(program_id, VERTEX_UV, "vertex_uv");
   glBindAttribLocation(program_id, VERTEX_COLOR, "vertex_color");
   glBindAttribLocation(program_id, VERTEX_NORMAL, "vertex_normal");
+  glBindAttribLocation(program_id, VERTEX_TANGENT, "vertex_tangent");
 
   glLinkProgram(program_id);
 
