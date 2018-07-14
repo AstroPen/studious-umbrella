@@ -222,12 +222,13 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   player->visual.offset  = V3{0,0.25,0.3};
   player->visual.sprite_height = 1.3;
   player->visual.texture_id = BITMAP_TEST_SPRITE;
+  player->visual.normal_map_id = BITMAP_TEST_SPRITE_NORMAL_MAP;
   player->visual.scale = 2.0f;
   player->flags = 
     ENTITY_COLLIDES | ENTITY_TEXTURE | 
     ENTITY_PLAYER_CONTROLLED | ENTITY_SLIDING | 
     ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_SOLID |
-    ENTITY_SPRITE;// | ENTITY_CUBOID;
+    ENTITY_SPRITE | ENTITY_NORMAL_MAP;// | ENTITY_CUBOID;
   player->mass = 1.0f;
   player->accel_max = 300.0f;
   player->time_to_max_accel = 0.2f;

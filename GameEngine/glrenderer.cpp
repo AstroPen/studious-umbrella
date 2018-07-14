@@ -465,9 +465,8 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   float y_scale = 1;
 
   V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
- 
-  V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
+
+  V3 t[6] = {{1,0,0},{1,0,0},{0,1,0},{0,-1,0},{-1,0,0},{-1,0,0}};
 
   for (int i = 0; i < 6; i++) {
     auto dim = rects[i].offset;
@@ -482,6 +481,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
     V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
     V4 c4[4] = {c,c,c,c};
     V3 n4[4] = {n[i],n[i],n[i],n[i]};
+    V3 t4[4] = {t[i],t[i],t[i],t[i]};
 
     VertexSOA verts;
     verts.p = vertices[i];
@@ -725,7 +725,7 @@ static void draw_frame_records(RenderBuffer *buffer) {
 #undef TAB
 }
 
-static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float z_max, V4 color, uint32_t texture_id) {
+static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float z_max, V4 color, uint32_t texture_id, uint32_t normal_map_id) {
   TIMED_FUNCTION();
 
   auto quad = to_quad(rect);
@@ -759,7 +759,7 @@ static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id);
+  append_quads(buffer, 1, texture_id, normal_map_id);
 }
 
 

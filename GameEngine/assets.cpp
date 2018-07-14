@@ -45,12 +45,18 @@ static inline void load_bitmap(GameAssets *assets, BitmapID id) {
     case BITMAP_TEST_SPRITE : {
       work->filename = "test_sprite.png";
     } break;
+    case BITMAP_TEST_SPRITE_NORMAL_MAP : {
+      work->filename = "test_sprite_normal_map.png";
+    } break;
     case BITMAP_BACKGROUND : {
       assert(!"Invalid BitmapID load.");
       return;
     } break;
     case BITMAP_WALL : {
       work->filename = "wall_texture.png";
+    } break;
+    case BITMAP_WALL_NORMAL_MAP : {
+      work->filename = "wall_normal_map.png";
     } break;
     case BITMAP_WHITE : {
       assert(!"Invalid BitmapID load.");
@@ -290,8 +296,9 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
 
   load_bitmap(assets, BITMAP_FACE);
   load_bitmap(assets, BITMAP_TEST_SPRITE);
+  load_bitmap(assets, BITMAP_TEST_SPRITE_NORMAL_MAP);
   load_bitmap(assets, BITMAP_WALL);
-  load_bitmap(assets, BITMAP_WALL);
+  load_bitmap(assets, BITMAP_WALL_NORMAL_MAP);
   
 
   TextureParameters background_param = default_texture_parameters;
@@ -338,10 +345,12 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   param.pixel_format = RGBA;
   init_texture(assets, BITMAP_FACE, param);
   init_texture(assets, BITMAP_TEST_SPRITE, param);
+  init_texture(assets, BITMAP_TEST_SPRITE_NORMAL_MAP, param);
 
   param.s_clamp = REPEAT_CLAMPING;
   param.t_clamp = REPEAT_CLAMPING;
   init_texture(assets, BITMAP_WALL, param);
+  init_texture(assets, BITMAP_WALL_NORMAL_MAP, param);
 }
 
 

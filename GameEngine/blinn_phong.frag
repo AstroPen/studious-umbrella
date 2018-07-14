@@ -46,7 +46,7 @@ void main() {
     N = normalize(v_in.normal);
   }
 
-  vec3 light_p = vec3(7,6,2);
+  vec3 light_p = vec3(7,9,2);
   float Shininess = 130;
 
   // View direction:

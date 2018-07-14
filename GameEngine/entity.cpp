@@ -47,10 +47,11 @@ static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float
 static Entity *add_wall(GameState *g, AlignedRect rect, V4 color) {
   Entity *wall = alloc_entity(g);
   if (!wall) return NULL;
-  wall->flags = ENTITY_COLLIDES | ENTITY_SOLID | ENTITY_CUBOID | ENTITY_TEXTURE | ENTITY_TEXTURE_REPEAT;
+  wall->flags = ENTITY_COLLIDES | ENTITY_SOLID | ENTITY_CUBOID | ENTITY_TEXTURE | ENTITY_TEXTURE_REPEAT | ENTITY_NORMAL_MAP;
   wall->mass = INFINITE_MASS;
   wall->visual.color = color;
   wall->visual.texture_id = BITMAP_WALL;
+  wall->visual.normal_map_id = BITMAP_WALL_NORMAL_MAP;
   wall->visual.scale = 2.0f;
   //wall->collision_box = rect;
   wall->collision_box = aligned_box(rect, 0, 1);
@@ -110,15 +111,19 @@ static inline void push_cuboid_entity(RenderBuffer *render_buffer, Entity *e) {
 }
 #endif
 
+// TODO make this less bad please
 static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity *e) {
   TIMED_FUNCTION();
+
+  uint32_t normal_map_id = 0;
+  if (e->flags & ENTITY_NORMAL_MAP) normal_map_id = get_bitmap(&g->assets, e->visual.normal_map_id)->texture_id;
 
   if (e->flags & ENTITY_CUBOID) {
     auto texture = get_bitmap(&g->assets, e->visual.texture_id);
     if (e->flags & ENTITY_TEXTURE_REPEAT) {
       float tex_width = texture->width * METERS_PER_PIXEL * e->visual.scale;
       float tex_height = texture->height * METERS_PER_PIXEL * e->visual.scale;
-      push_box(render_buffer, e->collision_box, e->visual.color, texture->texture_id, tex_width, tex_height);
+      push_box(render_buffer, e->collision_box, e->visual.color, texture->texture_id, tex_width, tex_height, normal_map_id);
       return;
     }
 
@@ -148,21 +153,19 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
       r.offsets[0].y = height / 2;
       r.offsets[1].y = height / 2;
       
-      push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture->texture_id);
+      push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture->texture_id, normal_map_id);
 
     } else {
 
       auto texture = get_bitmap(&g->assets, e->visual.texture_id);
       auto r = rectangle(flatten(e->collision_box), e->collision_box.center.z);
 
-      auto normal_map_id = 0;
-      if (e->flags & ENTITY_NORMAL_MAP) normal_map_id = get_bitmap(&g->assets, e->visual.normal_map_id)->texture_id;
       push_rectangle(render_buffer, r, e->visual.color, texture->texture_id, normal_map_id);
     }
 
   } else {
     auto r = rectangle(flatten(e->collision_box), e->collision_box.center.z);
-    push_rectangle(render_buffer, r, e->visual.color, get_bitmap(&g->assets, BITMAP_WHITE)->texture_id);
+    push_rectangle(render_buffer, r, e->visual.color, get_bitmap(&g->assets, BITMAP_WHITE)->texture_id, normal_map_id);
   }
 }
 
