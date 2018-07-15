@@ -19,9 +19,7 @@
 //#include <SDL_opengl.h>
 
 #include <common.h>
-
-#define NUM_THREADS 4
-#include "debug_system.cpp"
+#include <vector_math.h>
 
 #include "vmath.cpp"
 #include "sdl_thread.cpp"
@@ -34,6 +32,18 @@
 #include "pixel.h"
 
 #include "game.h"
+
+struct RenderInfo {
+  RenderBuffer *render_buffer;
+  SDL_Window *window;
+  SDL_GLContext glcontext;
+};
+
+
+#define NUM_THREADS 4
+#include "debug_system.cpp"
+
+
 
 // NOTE : This is currently the only shared header containing non-static functions in this project.
 #include "custom_stb.h"
@@ -158,7 +168,19 @@ int main(int argc, char ** argv){
   assert(count == num_threads_total - 1);
   thread_ids[0] = SDL_ThreadID();
 
-  init_debug_global_memory(thread_ids);
+  GameMemory game_memory = {};
+  RenderBuffer render_buffer;
+
+  // TODO just use PushAllocators and new_push_allocator?
+  game_memory.permanent_size = 4096 * 2048;
+  game_memory.permanent_store = calloc(game_memory.permanent_size, 1);
+  game_memory.temporary_size = 4096 * 256;
+  game_memory.temporary_store = calloc(game_memory.temporary_size, 1);
+
+  if (!game_memory.permanent_store) return 1;
+  if (!game_memory.temporary_store) return 1;
+
+  init_debug_global_memory(thread_ids, &game_memory, &render_buffer);
   SDL_SetThreadPriority(SDL_THREAD_PRIORITY_HIGH);
 
   // TODO automatically scale to different resolutions
@@ -167,23 +189,17 @@ int main(int argc, char ** argv){
   //int width = 1024;
   //int height = 768;
 
-  auto render_info = init_screen(width, height);
+  auto render_info = init_screen(&render_buffer, width, height);
   if (!render_info.window) return 1;
 
   bool window_open = true;
   bool size_changed = false;
   uint8_t ticks = 0;
 
-  // TODO just use PushAllocators and new_push_allocator?
-  GameMemory game_memory = {};
-  game_memory.permanent_size = 4096 * 2048;
-  game_memory.permanent_store = calloc(game_memory.permanent_size, 1);
-  game_memory.temporary_size = 4096 * 256;
-  game_memory.temporary_store = calloc(game_memory.temporary_size, 1);
   ControllerState old_controller_state = {};
   uint32_t previous_time = SDL_GetTicks();
 
-  init_game_state(game_memory, queue, &render_info.render_buffer);
+  init_game_state(game_memory, queue, &render_buffer);
 
   //
   // Main Loop ---
@@ -285,7 +301,7 @@ int main(int argc, char ** argv){
     //uint32_t time_passed = current_time - previous_time;
     previous_time = current_time;
 
-    game_input.render_buffer = &render_info.render_buffer;
+    game_input.render_buffer = &render_buffer;
     game_input.work_queue = queue;
     game_input.controller = controller_state;
 
@@ -293,11 +309,11 @@ int main(int argc, char ** argv){
     if (!window_open) break;
 
 #if DEBUG_BUILD
-    push_debug_records(&render_info.render_buffer);
+    push_debug_records();
 #endif
 
     display_buffer(render_info);
-    clear(&render_info.render_buffer);
+    clear(&render_buffer);
 
     old_controller_state = controller_state;
     ticks++;

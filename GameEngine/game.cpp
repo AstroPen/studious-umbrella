@@ -135,12 +135,12 @@ static bool apply_input(GameState *g, ControllerState controller) {
     float tilt_speed = 0.1;
     b = buttons + BUTTON_DEBUG_CAMERA_TILT_UP;
     if (b->first_press == PRESS_EVENT) {
-      g->camera.target.yz += V2{tilt_speed, tilt_speed};
+      g->camera.target.yz += vec2(tilt_speed);
     }
 
     b = buttons + BUTTON_DEBUG_CAMERA_TILT_DOWN;
     if (b->first_press == PRESS_EVENT) {
-      g->camera.target.yz -= V2{tilt_speed, tilt_speed};
+      g->camera.target.yz -= vec2(tilt_speed);
     }
   }
 
@@ -241,15 +241,15 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   // INIT WALLS
   //
 
-  auto center_square_pos = V3{g->width - player_size, g->height - player_size, 0} / 2.0f;
-  auto center_corner_pos = center_square_pos + V3{player_size, player_size, 0};
+  auto center_square_pos = vec3(g->width - player_size, g->height - player_size, 0) / 2.0f;
+  auto center_corner_pos = center_square_pos + vec3(player_size, player_size, 0);
   auto rect = aligned_rect(center_square_pos.xy, center_corner_pos.xy);
-  add_wall(g, rect, V4{0,0,0.9, 0.5});
-  auto rect2 = aligned_rect((center_square_pos + V3{0.1,0,0}).xy, 
-                           (center_corner_pos + V3{0.2,0.3,0}).xy);
-  add_wall(g, rect2, V4{0.5,0.1,0.1, 0.5});
+  add_wall(g, rect, vec4(0,0,0.9, 0.5));
+  auto rect2 = aligned_rect((center_square_pos + vec3(0.1,0,0)).xy, 
+                           (center_corner_pos + vec3(0.2,0.3,0)).xy);
+  add_wall(g, rect2, vec4(0.5,0.1,0.1, 0.5));
 
-  add_room(g, aligned_rect(V2{1,1},V2{15,11}));
+  add_room(g, aligned_rect(vec2(1,1), vec2(15,11)));
 }
 
 // TODO make the main thread only handle opengl stuff and the other threads handle input, physics, filling the RenderBuffer, etc
@@ -296,11 +296,11 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto background_rect = rectangle(aligned_rect(0, 0, g->width, g->height));
 #define DRAW_GRADIENT_BACKGROUND 1
 #if DRAW_GRADIENT_BACKGROUND
-  push_rectangle(render_buffer, background_rect, V4{1,1,1,1}, background_texture->texture_id);
+  push_rectangle(render_buffer, background_rect, vec4(1), background_texture->texture_id);
 #endif
 
 
-  auto center_pos = V2{g->width, g->height} / 2.0f;
+  auto center_pos = vec2(g->width, g->height) / 2.0f;
 
   //auto player_color = g->player_color;
   //float square_size = 60.0f * METERS_PER_PIXEL;
@@ -312,7 +312,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto collision_indicator = rectangle(aligned_rect(g->collision_normal + center_pos, 2.0f * METERS_PER_PIXEL, 2.0f * METERS_PER_PIXEL), 1.1);
   auto white_texture = get_bitmap(&g->assets, BITMAP_WHITE); // TODO TODO I should really change it so that this is done in the renderer
   assert(white_texture);
-  push_rectangle(render_buffer, collision_indicator, V4{0,1,0,1}, white_texture->texture_id);
+  push_rectangle(render_buffer, collision_indicator, vec4(0,1,0,1), white_texture->texture_id);
 
   // Cursor :
   //auto circ = Circle{g->pointer_position, cursor_size / 2.0f};
@@ -320,7 +320,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
 
   auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
   auto circle_normal_map = get_bitmap(&g->assets, BITMAP_SPHERE_NORMAL_MAP);
-  float cursor_size = 30.f / PIXELS_PER_METER;
+  float cursor_size = 15.f / PIXELS_PER_METER;
   auto cursor_a_rect = aligned_rect(g->pointer_position, cursor_size, cursor_size);
   auto cursor_rect = rectangle(cursor_a_rect, 0);
   g->cursor_color.rgb /= 2;

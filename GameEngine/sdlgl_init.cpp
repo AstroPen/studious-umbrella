@@ -1,10 +1,4 @@
 
-struct RenderInfo {
-  RenderBuffer render_buffer;
-  SDL_Window *window;
-  SDL_GLContext glcontext;
-};
-
 #if 0
 void MessageCallback( GLenum source,
                       GLenum type,
@@ -86,7 +80,7 @@ static void init_opengl(RenderInfo *info) {
   texture_sampler_id = glGetUniformLocation(program_id, "texture_sampler");
   gl_check_error();
 
-  auto buf = &info->render_buffer;
+  auto buf = info->render_buffer;
   assert(buf->vertices);
   glGenBuffers(1, &vertex_buffer_id);
   gl_check_error();
@@ -102,7 +96,7 @@ static void display_buffer(RenderInfo render_info) {
 
   //glViewport(0, 0, render_info.width, render_info.height);
 
-  gl_draw_buffer(&render_info.render_buffer);
+  gl_draw_buffer(render_info.render_buffer);
 
   static int frame_num = 0;
   GLenum err;
@@ -115,10 +109,10 @@ static void display_buffer(RenderInfo render_info) {
   SDL_GL_SwapWindow(render_info.window);
 }
 
-static RenderInfo init_screen(int width, int height) {
+static RenderInfo init_screen(RenderBuffer *buffer, int width, int height) {
 
   RenderInfo result = {};
-  auto buffer = &result.render_buffer;
+  result.render_buffer = buffer;
   buffer->screen_width = width;
   buffer->screen_height = height;
 

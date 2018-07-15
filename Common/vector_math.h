@@ -14,6 +14,14 @@ union V2 {
   float elements[2];
 };
 
+static inline V2 vec2(float x, float y) {
+  return V2{x,y};
+}
+
+static inline V2 vec2(float f) {
+  return V2{f,f};
+}
+
 union V3 {
   struct {
     float x;
@@ -40,10 +48,25 @@ union V3 {
   float elements[3];
 };
 
-static inline V3 v3(V2 xy, float z) {
+static inline V3 vec3(float f) {
+  return {f,f,f};
+}
+
+static inline V3 vec3(float x, float y, float z) {
+  return {x,y,z};
+}
+
+static inline V3 vec3(V2 xy, float z) {
   V3 result;
   result.xy = xy;
   result.z = z;
+  return result;
+}
+
+static inline V3 vec3(float x, V2 yz) {
+  V3 result;
+  result.x = x;
+  result.yz = yz;
   return result;
 }
 
@@ -79,6 +102,18 @@ union V4 {
 
   float elements[4];
 };
+
+static inline V4 vec4(float f) {
+  return {f,f,f,f};
+}
+
+static inline V4 vec4(float x, float y, float z, float w) {
+  return {x,y,z,w};
+}
+
+static inline V4 vec4(V2 xy, float z, float w) {
+  return {xy.x, xy.y, z, w};
+}
 
 static inline V4 vec4(V3 xyz, float w) {
   V4 result;

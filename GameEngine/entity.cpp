@@ -60,7 +60,7 @@ static Entity *add_wall(GameState *g, AlignedRect rect, V4 color) {
 
 static bool add_room(GameState *g, AlignedRect tile_bounds) {
   //auto tile_size = V2{1,1};
-  auto wall_color = V4{0.2, 0.2, 0.2, 1};
+  auto wall_color = vec4(0.2, 0.2, 0.2, 1);
 
   add_wall(g, aligned_rect(min_xy(tile_bounds), 
                            V2{max_x(tile_bounds), min_y(tile_bounds) + 1}), 
@@ -231,7 +231,7 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
     float acc_scale = length(e->acc);
     float jerk = e->accel_max / e->time_to_max_accel;
     float dejerk = e->accel_max / e->time_to_zero_accel;
-    if (g->player_direction != V2{0,0}) {
+    if (g->player_direction != vec2(0)) {
       if (length_sq(e->acc) < squared(e->accel_max)) {
         acc_scale += jerk * dt;
       }
@@ -311,7 +311,7 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
       dt -= collision.t;
       if (e->flags & ENTITY_PLAYER_CONTROLLED) g->collision_normal = collision.normal;
       auto dp = p - p_start;
-      translate(&e->collision_box, v3(dp,0));
+      translate(&e->collision_box, vec3(dp,0));
 
     } else {
       auto dp = e->vel * dt + 0.5f * e->acc * dt * dt;

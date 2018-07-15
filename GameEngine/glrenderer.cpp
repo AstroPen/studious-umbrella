@@ -829,6 +829,12 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glUniform1i(texture_sampler_id, 0); // Texture unit 0 is for the texture
   glUniform1i(normal_sampler_id, 1); // Texture unit 1 is for normal maps.
 
+  auto light_p_id = glGetUniformLocation(program_id, "light_p");
+  V3 light_p = vec3(debug_global_memory.game_state->pointer_position, 0.5);
+  
+  //V3 light_p = {7,9,2};
+  glUniform3fv(light_p_id, 1, light_p.elements);
+
   // DEBUG
   //print_render_buffer(buffer);
 

@@ -1,6 +1,8 @@
 #ifndef _NAR_GAME_H_
 #define _NAR_GAME_H_
 
+// NOTE : This file should be a true header and have no function definitions.
+
 // TODO I don't love the current organization of this file. It should act as a simple, minimal interface between the
 // various systems. This includes the renderer, asset manager, entity manager, debug system and platform layer.
 
@@ -238,7 +240,7 @@ static inline V2 to_pixel_coordinate(V2 p, int buffer_height) {
 }
 
 static inline V2 to_game_coordinate(V2 p, int game_height) {
-  p += V2{0.5,0.5};
+  p += vec2(0.5);
   p /= PIXELS_PER_METER;
   p.y = game_height - p.y;
   return p;

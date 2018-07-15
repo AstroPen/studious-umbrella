@@ -1,7 +1,6 @@
 
 // TODO rename this file to "collision.h" or something
 
-#include "vector_math.h"
 
 struct Circle {
   V2 center;
@@ -506,9 +505,9 @@ static inline Rectangle rectangle(V3 center, V3 offset_1, V3 offset_2) {
 static inline Rectangle rectangle(AlignedRect rect) {
   Rectangle result = {};
   result.center.xy = center(rect);
-  result.offsets[0] = v3(rect.offset, 0);
+  result.offsets[0] = vec3(rect.offset, 0);
   rect.offset.x *= -1;
-  result.offsets[1] = v3(rect.offset, 0);
+  result.offsets[1] = vec3(rect.offset, 0);
   return result;
 }
 
@@ -559,9 +558,16 @@ static inline Quad4 to_quad4(Rectangle r, float w = 0) {
   return q;
 }
 
-static inline Quad4 to_quad4(AlignedRect rect, float w = 0) {
-  // TODO inline this
-  return to_quad4(rectangle(rect), w);
+static inline Quad4 to_quad4(AlignedRect r, float w = 0) {
+  V2 p1 = r.center - r.offset;
+  V2 p2 = r.center + r.offset;
+
+  Quad4 q;
+  q.verts[0] = vec4(p1, 0, w);
+  q.verts[1] = vec4(p2.x, p1.y, 0, w);
+  q.verts[2] = vec4(p2, 0, w);
+  q.verts[3] = vec4(p1.x, p2.y, 0, w);
+  return q;
 }
 
 //
@@ -596,8 +602,8 @@ static inline HorizontalLine bottom_side(AlignedRect r) {
 
 static inline AlignedBox aligned_box(AlignedRect r, float z, float height) {
   AlignedBox result;
-  result.center = v3(center(r), z + height/2);
-  result.offset = v3(r.offset, height / 2);
+  result.center = vec3(center(r), z + height/2);
+  result.offset = vec3(r.offset, height / 2);
   return result;
 }
 

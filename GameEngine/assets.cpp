@@ -243,7 +243,7 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
 // TODO move this somewhere reasonable
 static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_t diameter) {
   float radius = diameter / 2.0f;
-  V2 center = V2{radius, radius};
+  V2 center = vec2(radius);
   float radius_sq = radius * radius;
 
   uint32_t pixel_bytes = 4;
@@ -255,8 +255,7 @@ static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_
       Color color = 0;
       Color ncolor = 0;
 
-      V2 p = V2{(float)x,(float)y};
-      p += V2{0.5f, 0.5f};
+      V2 p = vec2(x,y) + vec2(0.5);
 
       V2 diff = p - center;
       float len_sq = length_sq(diff);
@@ -269,7 +268,7 @@ static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_
         normal.x = diff.x;
         normal.y = -diff.y;
         normal.z = sqrt(depth_sq);
-        normal += V3{radius, radius, radius};
+        normal += vec3(radius);
         normal /= diameter;
         // TODO include depth information
         ncolor = to_color(vec4(normal, 1));

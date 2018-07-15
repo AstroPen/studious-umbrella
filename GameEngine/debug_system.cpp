@@ -70,7 +70,11 @@ struct DebugLog {
 DebugRecord _debug_global_records[NUM_THREADS][DEBUG_RECORD_MAX];
 FunctionInfo _debug_global_function_infos[DEBUG_RECORD_MAX];
 
-struct DebugGlobalMemory {
+struct RenderBuffer;
+
+struct DebugState {
+  GameState *game_state;
+  RenderBuffer *render_buffer;
   FunctionInfo *function_infos;
   uint64_t current_frame;
   DebugLog debug_logs[NUM_THREADS];
@@ -80,9 +84,11 @@ struct DebugGlobalMemory {
   bool camera_mode;
 } debug_global_memory;
 
-static void init_debug_global_memory(uint32_t *thread_ids) {
+static void init_debug_global_memory(uint32_t *thread_ids, GameMemory *game_memory, RenderBuffer *render_buffer) {
   auto max_count = get_max_counter();
   assert(max_count < DEBUG_RECORD_MAX);
+  debug_global_memory.game_state = (GameState *) game_memory->permanent_store;
+  debug_global_memory.render_buffer = render_buffer;
   debug_global_memory.record_count = max_count;
   for (int i = 0; i < NUM_THREADS; i++) {
     debug_global_memory.thread_ids[i] = thread_ids[i];
@@ -348,11 +354,10 @@ static void clear_frame_records() {
   }
 }
 
-struct RenderBuffer;
-struct GameAssets;
 static void draw_frame_records(RenderBuffer *buffer);
 
-static void push_debug_records(RenderBuffer *buffer) {
+static void push_debug_records() {
+  RenderBuffer *buffer = debug_global_memory.render_buffer;
   aggregate_debug_events();
   //print_frame_records();
   if (debug_global_memory.display_records) draw_frame_records(buffer);

@@ -15,6 +15,7 @@ out vec4 pixel_color;
 uniform bool has_normal_map;
 uniform sampler2D texture_sampler;
 uniform sampler2D normal_sampler;
+uniform vec3 light_p;
 
 const mediump vec3 perception = vec3(0.299, 0.587, 0.114);
 
@@ -46,7 +47,7 @@ void main() {
     N = normalize(v_in.normal);
   }
 
-  vec3 light_p = vec3(7,9,2);
+  //vec3 light_p = vec3(7,9,2);
   float Shininess = 130;
 
   // View direction:
@@ -81,7 +82,7 @@ void main() {
   }
   */
 
-  float light_intensity = 12;
+  float light_intensity = 9;
   float ambient_intensity = 4;
   vec3 light_ambient = vec3(0.6,0.7,0.8) * ambient_intensity;
   vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
@@ -97,7 +98,7 @@ void main() {
 
   float a = 0.2;
   float b = 0.4;
-  float c = 0.6;
+  float c = 0.3;
 
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
   //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
