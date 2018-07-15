@@ -23,6 +23,31 @@ struct PixelBuffer {
   uint32_t texture_id;
 };
 
+static inline uint32_t *get_pixel(PixelBuffer *buf, int x, int y) {
+  int pitch = buf->width;
+  int row = y * pitch;
+  int index = row + x;
+  return (uint32_t *)buf->buffer + index;
+}
+
+static inline bool is_initialized(PixelBuffer *buf) {
+  if (!buf) return false;
+  if (!buf->width) return false;
+  if (!buf->height) return false;
+  return true;
+}
+
+static PixelBuffer alloc_texture(int width, int height, int pixel_bytes = 4) {
+  PixelBuffer result = {};
+  result.width = width;
+  result.height = height;
+
+  int buffer_size = pixel_bytes * width * height;
+  result.buffer = (uint8_t *) malloc(buffer_size);
+
+  return result;
+}
+
 // TODO change this to work better with repeated includes
 #ifdef _PUSH_ALLOCATOR_H_
 static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height, int pixel_bytes = 4) {

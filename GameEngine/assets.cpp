@@ -45,6 +45,12 @@ static inline void load_bitmap(GameAssets *assets, BitmapID id) {
     case BITMAP_TEST_SPRITE : {
       work->filename = "test_sprite.png";
     } break;
+    case BITMAP_LINK : {
+      work->filename = "lttp_link.png";
+    } break;
+    case BITMAP_LINK_NORMAL_MAP : {
+      work->filename = "lttp_normal_map.png";
+    } break;
     case BITMAP_TEST_SPRITE_NORMAL_MAP : {
       work->filename = "test_sprite_normal_map.png";
     } break;
@@ -296,6 +302,8 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   load_bitmap(assets, BITMAP_FACE);
   load_bitmap(assets, BITMAP_TEST_SPRITE);
   load_bitmap(assets, BITMAP_TEST_SPRITE_NORMAL_MAP);
+  load_bitmap(assets, BITMAP_LINK);
+  load_bitmap(assets, BITMAP_LINK_NORMAL_MAP);
   load_bitmap(assets, BITMAP_WALL);
   load_bitmap(assets, BITMAP_WALL_NORMAL_MAP);
   
@@ -345,6 +353,8 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   init_texture(assets, BITMAP_FACE, param);
   init_texture(assets, BITMAP_TEST_SPRITE, param);
   init_texture(assets, BITMAP_TEST_SPRITE_NORMAL_MAP, param);
+  init_texture(assets, BITMAP_LINK, param);
+  init_texture(assets, BITMAP_LINK_NORMAL_MAP, param);
 
   param.s_clamp = REPEAT_CLAMPING;
   param.t_clamp = REPEAT_CLAMPING;

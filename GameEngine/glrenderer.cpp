@@ -849,8 +849,11 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       case RenderType_RenderElementTextureQuads : {
         auto e = (RenderElementTextureQuads *) elem;
         set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
+        uint32_t texture_id;
+        if (e->texture_id) texture_id = e->texture_id;
+        else texture_id = get_bitmap(buffer->assets, BITMAP_WHITE)->texture_id;
 
-        draw_vertices(0, e->quad_count * 6, e->texture_id, e->normal_map_id);
+        draw_vertices(0, e->quad_count * 6, texture_id, e->normal_map_id);
       } break;
 
       default : {
