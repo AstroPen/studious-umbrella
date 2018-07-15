@@ -116,14 +116,28 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
   TIMED_FUNCTION();
 
   uint32_t normal_map_id = 0;
-  if (e->flags & ENTITY_NORMAL_MAP) normal_map_id = get_bitmap(&g->assets, e->visual.normal_map_id)->texture_id;
+  if (e->flags & ENTITY_NORMAL_MAP) {
+    auto normal_map = get_bitmap(&g->assets, e->visual.normal_map_id);
+    if (normal_map) normal_map_id = normal_map->texture_id;
+  }
+  uint32_t texture_id;
+  PixelBuffer *texture = NULL;
+
+  if (e->flags & ENTITY_TEXTURE) {
+    texture = get_bitmap(&g->assets, e->visual.texture_id);
+    if (!texture) return;
+    texture_id = texture->texture_id;
+  } else {
+    texture = get_bitmap(&g->assets, BITMAP_WHITE);
+    assert(texture);
+    texture_id = texture->texture_id;
+  }
 
   if (e->flags & ENTITY_CUBOID) {
-    auto texture = get_bitmap(&g->assets, e->visual.texture_id);
     if (e->flags & ENTITY_TEXTURE_REPEAT) {
       float tex_width = texture->width * METERS_PER_PIXEL * e->visual.scale;
       float tex_height = texture->height * METERS_PER_PIXEL * e->visual.scale;
-      push_box(render_buffer, e->collision_box, e->visual.color, texture->texture_id, tex_width, tex_height, normal_map_id);
+      push_box(render_buffer, e->collision_box, e->visual.color, texture_id, tex_width, tex_height, normal_map_id);
       return;
     }
 
@@ -133,40 +147,32 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
     return;
   }
 
-  if (e->flags & ENTITY_TEXTURE) {
 
-    if (e->flags & ENTITY_SPRITE) {
-      auto texture = get_bitmap(&g->assets, e->visual.texture_id);
-      if (!texture) return;
+  if (e->flags & ENTITY_SPRITE) {
 
-      float width  = texture->width  * METERS_PER_PIXEL * e->visual.scale;
-      float height = texture->height * METERS_PER_PIXEL * e->visual.scale;
+    float width  = texture->width  * METERS_PER_PIXEL * e->visual.scale;
+    float height = texture->height * METERS_PER_PIXEL * e->visual.scale;
 
-      Rectangle r;
-      auto offset = e->visual.offset;
-      offset.z = 0;
-      r.center = center(e->collision_box) + e->visual.offset;
-      r.center.z -= e->collision_box.offset.z;
-      r.offsets[1].z = r.offsets[0].z = 0; //e->collision_box.offset.z; //e->visual.sprite_height;
-      r.offsets[0].x = width / 2;
-      r.offsets[1].x = -width / 2;
-      r.offsets[0].y = height / 2;
-      r.offsets[1].y = height / 2;
-      
-      push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture->texture_id, normal_map_id);
-
-    } else {
-
-      auto texture = get_bitmap(&g->assets, e->visual.texture_id);
-      auto r = rectangle(flatten(e->collision_box), e->collision_box.center.z);
-
-      push_rectangle(render_buffer, r, e->visual.color, texture->texture_id, normal_map_id);
-    }
+    Rectangle r;
+    auto offset = e->visual.offset;
+    offset.z = 0;
+    r.center = center(e->collision_box) + e->visual.offset;
+    r.center.z -= e->collision_box.offset.z;
+    r.offsets[1].z = r.offsets[0].z = 0; //e->collision_box.offset.z; //e->visual.sprite_height;
+    r.offsets[0].x = width / 2;
+    r.offsets[1].x = -width / 2;
+    r.offsets[0].y = height / 2;
+    r.offsets[1].y = height / 2;
+    
+    push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture_id, normal_map_id);
 
   } else {
+
     auto r = rectangle(flatten(e->collision_box), e->collision_box.center.z);
-    push_rectangle(render_buffer, r, e->visual.color, get_bitmap(&g->assets, BITMAP_WHITE)->texture_id, normal_map_id);
+
+    push_rectangle(render_buffer, r, e->visual.color, texture_id, normal_map_id);
   }
+
 }
 
 static void push_entities(RenderBuffer *render_buffer, GameState *g) {

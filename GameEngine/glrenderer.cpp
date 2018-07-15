@@ -285,14 +285,11 @@ static inline Vertex get(VertexSOA verts, uint32_t index) {
   return vert;
 }
 
-// static inline void push_quad_vertices(RenderBuffer *buffer, V3 *p, V2 *t, V4 *c, V3 *n, float *bias = NULL) {
-static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) { //, float *bias = NULL) {
+static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
   TIMED_FUNCTION();
 
   // NOTE Wraps counter clockwise around each triangle
   int idxs[6] = {0,1,2,0,2,3};
-  //float default_bias[] = {0,0,0,0};
-  //if (!bias) bias = default_bias;
 
   for (int i = 0; i < 6; i++) {
     int idx = idxs[i];
@@ -422,23 +419,6 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
 }
 #endif
 
-// TODO move this somewhere reasonable
-static inline void to_vec4s(V3 *old, V4 *result, uint32_t count) {
-  for (uint32_t i = 0; i < count; i++) {
-    V4 v = {};
-    v.xyz = old[i];
-    result[i] = v;
-  }
-}
-
-static inline void get_faces_v4(AlignedBox box, V4 *result) {
-  to_vec4s(top_quad(box).verts, result + 0, 4);
-  to_vec4s(front_quad(box).verts, result + 4, 4);
-  to_vec4s(right_quad(box).verts, result + 8, 4);
-  to_vec4s(left_quad(box).verts, result + 12, 4);
-  to_vec4s(back_quad(box).verts, result + 16, 4);
-  to_vec4s(bot_quad(box).verts, result + 20, 4);
-}
 
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
@@ -451,8 +431,8 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
   assert(tex_height);
   auto b = box;
 
-  V4 vertices[6][4];
-  get_faces_v4(box, vertices[0]);
+  Quad4 quads[6];
+  to_quad4s(box, quads);
 
   AlignedRect rects[6] = {top_rect(b), front_rect(b), right_rect(b), 
                           left_rect(b), back_rect(b), bot_rect(b)};
@@ -484,7 +464,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
     V3 t4[4] = {t[i],t[i],t[i],t[i]};
 
     VertexSOA verts;
-    verts.p = vertices[i];
+    verts.p = quads[i].verts;
     verts.uv = uv;
     verts.c = c4;
     verts.n = n4;
@@ -501,9 +481,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
 static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 
-  auto quad = to_quad(rect);
-  V4 vertices[4];
-  to_vec4s(quad.verts, vertices, 4);
+  auto quad = to_quad4(rect);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
@@ -520,7 +498,7 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   V3 t4[4] = {t,t,t,t};
 
   VertexSOA verts;
-  verts.p = vertices;
+  verts.p = quad.verts;
   verts.uv = uv;
   verts.c = c4;
   verts.n = n4;
@@ -534,9 +512,10 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
 static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 
-  auto quad = to_quad(rect);
-  V4 vertices[4];
-  to_vec4s(quad.verts, vertices, 4);
+  float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
+  buffer->z_bias_accum += Z_BIAS_EPSILON;
+
+  auto quad = to_quad4(rect, z_bias);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
@@ -547,19 +526,12 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
 
   V3 n = {0,0,1};
   V3 n4[4] = {n,n,n,n};
-  float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
-  buffer->z_bias_accum += Z_BIAS_EPSILON;
-  //float z_bias = 4.5;
-  //float bias[4] = {z_bias, z_bias, z_bias, z_bias};
-  for (int i = 0; i < 4; i++) {
-    vertices[i].w = z_bias;
-  }
 
   V3 t = {1,0,0};
   V3 t4[4] = {t,t,t,t};
 
   VertexSOA verts;
-  verts.p = vertices;
+  verts.p = quad.verts;
   verts.uv = uv;
   verts.c = c4;
   verts.n = n4;
@@ -593,9 +565,10 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
 
       float char_width  = (b->x1 - b->x0) * METERS_PER_PIXEL;
       float char_height = (b->y1 - b->y0) * METERS_PER_PIXEL;
-      auto quad = to_quad(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y));
-      V4 vertices[4];
-      to_vec4s(quad.verts, vertices, 4);
+
+      float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
+      buffer->z_bias_accum += Z_BIAS_EPSILON;
+      auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), z_bias);
 
       V2 uv[4] = {
                  {b->x0 / font_width, b->y1 / font_height}, 
@@ -612,19 +585,12 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
 
       V3 n = {0,0,1};
       V3 n4[4] = {n,n,n,n};
-      //float z_bias = 4.5f;
-      float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
-      buffer->z_bias_accum += Z_BIAS_EPSILON;
-      //float bias[4] = {z_bias, z_bias, z_bias, z_bias};
-      for (int i = 0; i < 4; i++) {
-        vertices[i].w = z_bias;
-      }
 
       V3 t = {1,0,0};
       V3 t4[4] = {t,t,t,t};
 
       VertexSOA verts;
-      verts.p = vertices;
+      verts.p = quad.verts;
       verts.uv = uv;
       verts.c = c4;
       verts.n = n4;
@@ -728,9 +694,7 @@ static void draw_frame_records(RenderBuffer *buffer) {
 static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float z_max, V4 color, uint32_t texture_id, uint32_t normal_map_id) {
   TIMED_FUNCTION();
 
-  auto quad = to_quad(rect);
-  V4 vertices[4];
-  to_vec4s(quad.verts, vertices, 4);
+  auto quad = to_quad4(rect);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
@@ -739,18 +703,21 @@ static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float
   
   V4 c4[4] = {c,c,c,c};
 
+  // NOTE : This is always correct if the sprite isn't skewed.
   V3 n = {0,0,1};
   V3 n4[4] = {n,n,n,n};
+
   float bias[4] = {z_min, z_min, z_max, z_max};
   for (int i = 0; i < 4; i++) {
-    vertices[i].w = bias[i];
+    quad.verts[i].w = bias[i];
   }
 
+  // NOTE : This is always correct if the sprite isn't skewed.
   V3 t = {1,0,0};
   V3 t4[4] = {t,t,t,t};
 
   VertexSOA verts;
-  verts.p = vertices;
+  verts.p = quad.verts;
   verts.uv = uv;
   verts.c = c4;
   verts.n = n4;

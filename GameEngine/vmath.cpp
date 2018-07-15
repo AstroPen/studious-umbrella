@@ -23,6 +23,35 @@ struct AlignedBox {
   V3 offset;
 };
 
+// NOTE This is actually a parallelagram
+struct Rectangle {
+  V3 center;
+  V3 offsets[2];
+};
+
+struct Quad3 {
+  V3 verts[4];
+};
+
+struct Quad4 {
+  V4 verts[4];
+};
+
+struct VerticalLine {
+  V2 bottom_pos;
+  float height;
+};
+
+struct HorizontalLine {
+  V2 left_pos;
+  float width;
+};
+
+
+//
+// AlignedRect accessors ---
+//
+
 static inline V2 min_xy(AlignedRect rect) {
   return rect.center - rect.offset;
 }
@@ -46,6 +75,50 @@ static inline float max_x(AlignedRect rect) {
 static inline float max_y(AlignedRect rect) {
   return max_xy(rect).y;
 }
+
+static inline float width_of(AlignedRect r) {
+  return r.offset.x * 2;
+}
+
+static inline float height_of(AlignedRect r) {
+  return r.offset.y * 2;
+}
+
+static inline V2 center(AlignedRect r) {
+  return r.center;
+}
+
+static inline void translate(AlignedRect *rect, V2 dp) {
+  rect->center += dp;
+}
+
+
+//
+// AlignedRect constructors ---
+//
+
+static inline AlignedRect aligned_rect(V2 center, float width, float height) {
+  AlignedRect result;
+  result.center = center;
+  result.offset = V2{width, height} / 2;
+  return result;
+}
+
+static inline AlignedRect aligned_rect(float min_x, float min_y, float max_x, float max_y) {
+  AlignedRect result;
+  result.center = V2{min_x + max_x, min_y + max_y} / 2;
+  result.offset = V2{max_x - min_x, max_y - min_y} / 2;
+  return result;
+}
+
+static inline AlignedRect aligned_rect(V2 min_p, V2 max_p) {
+  AlignedRect result = aligned_rect(min_p.x, min_p.y, max_p.x, max_p.y);
+  return result;
+}
+
+//
+// AlignedBox accessors ---
+//
 
 static inline V3 min_xyz(AlignedBox box) {
   return box.center - box.offset;
@@ -87,181 +160,6 @@ static inline float max_z(AlignedBox box) {
   return max_xyz(box).z;
 }
 
-static inline AlignedRect aligned_rect(V2 center, float width, float height) {
-  AlignedRect result;
-  result.center = center;
-  result.offset = V2{width, height} / 2;
-  return result;
-}
-
-static inline AlignedRect aligned_rect(float min_x, float min_y, float max_x, float max_y) {
-  AlignedRect result;
-  result.center = V2{min_x + max_x, min_y + max_y} / 2;
-  result.offset = V2{max_x - min_x, max_y - min_y} / 2;
-  return result;
-}
-
-static inline AlignedRect aligned_rect(V2 min_p, V2 max_p) {
-  AlignedRect result = aligned_rect(min_p.x, min_p.y, max_p.x, max_p.y);
-  return result;
-}
-
-static inline void translate(AlignedRect *rect, V2 dp) {
-  rect->center += dp;
-}
-
-static inline V2 center(AlignedRect r) {
-  return r.center;
-}
-
-static inline float width_of(AlignedRect r) {
-  return r.offset.x * 2;
-}
-
-static inline float height_of(AlignedRect r) {
-  return r.offset.y * 2;
-}
-
-
-// NOTE This is actually a parallelagram
-struct Rectangle {
-  V3 center;
-  V3 offsets[2];
-};
-
-static inline V3 center(Rectangle r) {
-  return r.center;
-}
-
-static inline V3 center(AlignedRect3 r) {
-  return r.center;
-}
-
-static inline Rectangle rectangle(V3 center, V3 offset_1, V3 offset_2) {
-  Rectangle result;
-  result.center = center;
-  result.offsets[0] = offset_1;
-  result.offsets[1] = offset_2;
-  return result;
-}
-
-static inline Rectangle rectangle(AlignedRect rect) {
-  Rectangle result = {};
-  result.center.xy = center(rect);
-  result.offsets[0] = v3(rect.offset, 0);
-  rect.offset.x *= -1;
-  result.offsets[1] = v3(rect.offset, 0);
-  return result;
-}
-
-static inline Rectangle rectangle(AlignedRect rect, float z) {
-  auto result = rectangle(rect);
-  result.center.z = z;
-  return result;
-}
-
-static inline Rectangle rectangle(AlignedRect3 rect) {
-  Rectangle result = {};
-  result.center = rect.center;
-  result.offsets[0] = rect.offset;
-  if (rect.offset.x) rect.offset.x *= -1;
-  else               rect.offset.y *= -1;
-  result.offsets[1] = rect.offset;
-  return result;
-}
-
-static inline void translate(Rectangle *r, V3 dp) {
-  r->center += dp;
-}
-
-struct Quad {
-  V3 verts[4];
-};
-
-static inline Quad to_quad(Rectangle r) {
-  Quad q;
-  q.verts[0] = r.center - r.offsets[0];
-  q.verts[1] = r.center - r.offsets[1];
-  q.verts[2] = r.center + r.offsets[0];
-  q.verts[3] = r.center + r.offsets[1];
-  return q;
-}
-
-static inline Quad to_quad(AlignedRect rect) {
-  // TODO inline this
-  return to_quad(rectangle(rect));
-}
-
-struct VerticalLine {
-  V2 bottom_pos;
-  float height;
-};
-
-struct HorizontalLine {
-  V2 left_pos;
-  float width;
-};
-
-struct Motion2 {
-  V2 v;
-  V2 a;
-  float dt;
-};
-
-struct Collision2 {
-  V2 pos;
-  V2 vel;
-  V2 normal;
-  float t;
-};
-
-struct Collision3 {
-  V3 pos;
-  V3 vel;
-  V3 normal;
-  float t;
-};
-
-struct Motion3 {
-  V3 v;
-  V3 a;
-  float dt;
-};
-
-#define COLLISION_MISS (Collision2{{},{},{}, -INFINITY})
-#define COLLISION3_MISS (Collision3{{},{},{}, -INFINITY})
-
-static inline bool is_earlier_collision(Collision2 first, Collision2 second) {
-  return is_earlier(first.t, second.t);
-}
-
-static inline Collision2 earlier_collision(Collision2 a, Collision2 b) {
-  if (b.t < 0) return a;
-  if (a.t < 0) return b;
-  if (a.t < b.t) return a;
-  return b;
-}
-
-static inline VerticalLine left_side(AlignedRect r) {
-  float height = height_of(r);
-  return VerticalLine{min_xy(r), height};
-}
-
-static inline VerticalLine right_side(AlignedRect r) {
-  float height = height_of(r);
-  return VerticalLine{V2{max_x(r), min_y(r)}, height};
-}
-
-static inline HorizontalLine top_side(AlignedRect r) {
-  float width = width_of(r);
-  return HorizontalLine{V2{min_x(r), max_y(r)}, width};
-}
-
-static inline HorizontalLine bottom_side(AlignedRect r) {
-  float width = width_of(r);
-  return HorizontalLine{min_xy(r), width};
-}
-
 static inline V3 center(AlignedBox r) {
   return r.center;
 }
@@ -270,20 +168,20 @@ static inline void translate(AlignedBox *r, V3 dp) {
   r->center += dp;
 }
 
-static inline AlignedRect3 top_face(AlignedBox r) {
-  AlignedRect3 result = {};
-  result.center = r.center;
-  result.center.z += r.offset.z;
-  result.offset.xy = r.offset.xy;
-  return result;
-}
+//
+// AlignedBox to AlignedRect conversions ---
+//
 
-// TODO replace flatten with this
 static inline AlignedRect top_rect(AlignedBox r) {
   AlignedRect result = {};
   result.center = r.center.xy;
   result.offset = r.offset.xy;
   return result;
+}
+
+// TODO Maybe delete this redundant function
+static inline AlignedRect flatten(AlignedBox r) {
+  return top_rect(r);
 }
 
 static inline AlignedRect bot_rect(AlignedBox r) {
@@ -326,6 +224,19 @@ static inline AlignedRect left_rect(AlignedBox r) {
   result.offset.y = r.offset.z;
   return result;
 }
+
+//
+// AlignedBox to AlignedRect3 conversions ---
+//
+
+static inline AlignedRect3 top_face(AlignedBox r) {
+  AlignedRect3 result = {};
+  result.center = r.center;
+  result.center.z += r.offset.z;
+  result.offset.xy = r.offset.xy;
+  return result;
+}
+
 
 static inline AlignedRect3 bottom_face(AlignedBox r) {
   AlignedRect3 result = {};
@@ -378,8 +289,12 @@ static inline AlignedRect3 left_face(AlignedBox r) {
   return result;
 }
 
-static inline Quad top_quad(AlignedBox b) {
-  Quad result;
+//
+// AlignedBox to Quad3 conversions ---
+//
+
+static inline Quad3 top_quad3(AlignedBox b) {
+  Quad3 result;
 
   auto min_p = b.center - b.offset;
   auto max_p = b.center + b.offset;
@@ -392,8 +307,8 @@ static inline Quad top_quad(AlignedBox b) {
   return result;
 }
 
-static inline Quad bot_quad(AlignedBox b) {
-  Quad result;
+static inline Quad3 bot_quad3(AlignedBox b) {
+  Quad3 result;
 
   auto min_p = b.center - b.offset;
   auto max_p = b.center + b.offset;
@@ -406,8 +321,8 @@ static inline Quad bot_quad(AlignedBox b) {
   return result;
 }
 
-static inline Quad front_quad(AlignedBox b) {
-  Quad result;
+static inline Quad3 front_quad3(AlignedBox b) {
+  Quad3 result;
 
   auto min_p = b.center - b.offset;
   auto max_p = b.center + b.offset;
@@ -420,8 +335,8 @@ static inline Quad front_quad(AlignedBox b) {
   return result;
 }
 
-static inline Quad back_quad(AlignedBox b) {
-  Quad result;
+static inline Quad3 back_quad3(AlignedBox b) {
+  Quad3 result;
 
   auto min_p = b.center - b.offset;
   auto max_p = b.center + b.offset;
@@ -434,8 +349,8 @@ static inline Quad back_quad(AlignedBox b) {
   return result;
 }
 
-static inline Quad left_quad(AlignedBox b) {
-  Quad result;
+static inline Quad3 left_quad3(AlignedBox b) {
+  Quad3 result;
 
   auto min_p = b.center - b.offset;
   auto max_p = b.center + b.offset;
@@ -448,8 +363,8 @@ static inline Quad left_quad(AlignedBox b) {
   return result;
 }
 
-static inline Quad right_quad(AlignedBox b) {
-  Quad result;
+static inline Quad3 right_quad3(AlignedBox b) {
+  Quad3 result;
 
   auto min_p = b.center - b.offset;
   auto max_p = b.center + b.offset;
@@ -462,12 +377,222 @@ static inline Quad right_quad(AlignedBox b) {
   return result;
 }
 
-static inline AlignedRect flatten(AlignedBox r) {
-  AlignedRect result = {};
-  result.center = r.center.xy;
-  result.offset = r.offset.xy;
+//
+// AlignedBox to Quad4 conversions ---
+//
+
+static inline Quad4 top_quad4(AlignedBox b, float w = 0) {
+  Quad4 result;
+
+  auto min_p = b.center - b.offset;
+  auto max_p = b.center + b.offset;
+
+  result.verts[0] = V4{min_p.x, min_p.y, max_p.z, w};
+  result.verts[1] = V4{max_p.x, min_p.y, max_p.z, w};
+  result.verts[2] = V4{max_p.x, max_p.y, max_p.z, w};
+  result.verts[3] = V4{min_p.x, max_p.y, max_p.z, w};
+
   return result;
 }
+
+static inline Quad4 bot_quad4(AlignedBox b, float w = 0) {
+  Quad4 result;
+
+  auto min_p = b.center - b.offset;
+  auto max_p = b.center + b.offset;
+
+  result.verts[0] = V4{max_p.x, min_p.y, min_p.z, w};
+  result.verts[1] = V4{min_p.x, min_p.y, min_p.z, w};
+  result.verts[2] = V4{min_p.x, max_p.y, min_p.z, w};
+  result.verts[3] = V4{max_p.x, max_p.y, min_p.z, w};
+
+  return result;
+}
+
+static inline Quad4 front_quad4(AlignedBox b, float w = 0) {
+  Quad4 result;
+
+  auto min_p = b.center - b.offset;
+  auto max_p = b.center + b.offset;
+
+  result.verts[0] = V4{min_p.x, min_p.y, min_p.z, w};
+  result.verts[1] = V4{max_p.x, min_p.y, min_p.z, w};
+  result.verts[2] = V4{max_p.x, min_p.y, max_p.z, w};
+  result.verts[3] = V4{min_p.x, min_p.y, max_p.z, w};
+
+  return result;
+}
+
+static inline Quad4 back_quad4(AlignedBox b, float w = 0) {
+  Quad4 result;
+
+  auto min_p = b.center - b.offset;
+  auto max_p = b.center + b.offset;
+
+  result.verts[0] = V4{max_p.x, max_p.y, min_p.z, w};
+  result.verts[1] = V4{min_p.x, max_p.y, min_p.z, w};
+  result.verts[2] = V4{min_p.x, max_p.y, max_p.z, w};
+  result.verts[3] = V4{max_p.x, max_p.y, max_p.z, w};
+
+  return result;
+}
+
+static inline Quad4 left_quad4(AlignedBox b, float w = 0) {
+  Quad4 result;
+
+  auto min_p = b.center - b.offset;
+  auto max_p = b.center + b.offset;
+
+  result.verts[0] = V4{min_p.x, max_p.y, min_p.z, w};
+  result.verts[1] = V4{min_p.x, min_p.y, min_p.z, w};
+  result.verts[2] = V4{min_p.x, min_p.y, max_p.z, w};
+  result.verts[3] = V4{min_p.x, max_p.y, max_p.z, w};
+
+  return result;
+}
+
+static inline Quad4 right_quad4(AlignedBox b, float w = 0) {
+  Quad4 result;
+
+  auto min_p = b.center - b.offset;
+  auto max_p = b.center + b.offset;
+
+  result.verts[0] = V4{max_p.x, min_p.y, min_p.z, w};
+  result.verts[1] = V4{max_p.x, max_p.y, min_p.z, w};
+  result.verts[2] = V4{max_p.x, max_p.y, max_p.z, w};
+  result.verts[3] = V4{max_p.x, min_p.y, max_p.z, w};
+
+  return result;
+}
+
+static inline void to_quad4s(AlignedBox b, Quad4 *quads, float w = 0) {
+  quads[0] = top_quad4(b, w);
+  quads[1] = front_quad4(b, w);
+  quads[2] = right_quad4(b, w);
+  quads[3] = left_quad4(b, w);
+  quads[4] = back_quad4(b, w);
+  quads[5] = bot_quad4(b, w);
+}
+
+//
+// Rectangle accessors ---
+//
+
+
+static inline V3 center(Rectangle r) {
+  return r.center;
+}
+
+static inline V3 center(AlignedRect3 r) {
+  return r.center;
+}
+
+static inline void translate(Rectangle *r, V3 dp) {
+  r->center += dp;
+}
+
+//
+// Rectangle constructors ---
+//
+
+static inline Rectangle rectangle(V3 center, V3 offset_1, V3 offset_2) {
+  Rectangle result;
+  result.center = center;
+  result.offsets[0] = offset_1;
+  result.offsets[1] = offset_2;
+  return result;
+}
+
+static inline Rectangle rectangle(AlignedRect rect) {
+  Rectangle result = {};
+  result.center.xy = center(rect);
+  result.offsets[0] = v3(rect.offset, 0);
+  rect.offset.x *= -1;
+  result.offsets[1] = v3(rect.offset, 0);
+  return result;
+}
+
+static inline Rectangle rectangle(AlignedRect rect, float z) {
+  auto result = rectangle(rect);
+  result.center.z = z;
+  return result;
+}
+
+static inline Rectangle rectangle(AlignedRect3 rect) {
+  Rectangle result = {};
+  result.center = rect.center;
+  result.offsets[0] = rect.offset;
+  if (rect.offset.x) rect.offset.x *= -1;
+  else               rect.offset.y *= -1;
+  result.offsets[1] = rect.offset;
+  return result;
+}
+
+//
+// Quad3 constructors ---
+//
+
+static inline Quad3 to_quad3(Rectangle r) {
+  Quad3 q;
+  q.verts[0] = r.center - r.offsets[0];
+  q.verts[1] = r.center - r.offsets[1];
+  q.verts[2] = r.center + r.offsets[0];
+  q.verts[3] = r.center + r.offsets[1];
+  return q;
+}
+
+static inline Quad3 to_quad3(AlignedRect rect) {
+  // TODO inline this
+  return to_quad3(rectangle(rect));
+}
+
+//
+// Quad4 constructors ---
+//
+
+static inline Quad4 to_quad4(Rectangle r, float w = 0) {
+  Quad4 q;
+  q.verts[0] = vec4(r.center - r.offsets[0], w);
+  q.verts[1] = vec4(r.center - r.offsets[1], w);
+  q.verts[2] = vec4(r.center + r.offsets[0], w);
+  q.verts[3] = vec4(r.center + r.offsets[1], w);
+  return q;
+}
+
+static inline Quad4 to_quad4(AlignedRect rect, float w = 0) {
+  // TODO inline this
+  return to_quad4(rectangle(rect), w);
+}
+
+//
+// VerticalLine accessors ---
+//
+
+static inline VerticalLine left_side(AlignedRect r) {
+  float height = height_of(r);
+  return VerticalLine{min_xy(r), height};
+}
+
+static inline VerticalLine right_side(AlignedRect r) {
+  float height = height_of(r);
+  return VerticalLine{V2{max_x(r), min_y(r)}, height};
+}
+
+//
+// HorizontalLine accessors ---
+//
+
+static inline HorizontalLine top_side(AlignedRect r) {
+  float width = width_of(r);
+  return HorizontalLine{V2{min_x(r), max_y(r)}, width};
+}
+
+static inline HorizontalLine bottom_side(AlignedRect r) {
+  float width = width_of(r);
+  return HorizontalLine{min_xy(r), width};
+}
+
+
 
 static inline AlignedBox aligned_box(AlignedRect r, float z, float height) {
   AlignedBox result;
@@ -475,6 +600,51 @@ static inline AlignedBox aligned_box(AlignedRect r, float z, float height) {
   result.offset = v3(r.offset, height / 2);
   return result;
 }
+
+//
+// Collision ---
+//
+
+struct Motion2 {
+  V2 v;
+  V2 a;
+  float dt;
+};
+
+struct Collision2 {
+  V2 pos;
+  V2 vel;
+  V2 normal;
+  float t;
+};
+
+struct Collision3 {
+  V3 pos;
+  V3 vel;
+  V3 normal;
+  float t;
+};
+
+struct Motion3 {
+  V3 v;
+  V3 a;
+  float dt;
+};
+
+#define COLLISION_MISS (Collision2{{},{},{}, -INFINITY})
+#define COLLISION3_MISS (Collision3{{},{},{}, -INFINITY})
+
+static inline bool is_earlier_collision(Collision2 first, Collision2 second) {
+  return is_earlier(first.t, second.t);
+}
+
+static inline Collision2 earlier_collision(Collision2 a, Collision2 b) {
+  if (b.t < 0) return a;
+  if (a.t < 0) return b;
+  if (a.t < b.t) return a;
+  return b;
+}
+
 
 // TODO fix this code, it doesn't work
 static inline Collision2 ray_intersect(V2 position, Motion2 move, V2 point) {
@@ -821,7 +991,6 @@ static inline void push(Simplex *s, V2 point) {
   s->count++;
 }
 
-#define towards(a, b) (dot((a),(b)) > 0)
 
 static V2 nearest_simplex_line(Simplex *s) {
   assert(s->count == 2);

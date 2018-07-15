@@ -80,7 +80,7 @@ union V4 {
   float elements[4];
 };
 
-static inline V4 v4(V3 xyz, float w) {
+static inline V4 vec4(V3 xyz, float w) {
   V4 result;
   result.xyz = xyz;
   result.w = w;
@@ -382,6 +382,7 @@ static inline float dot(V4 a, V4 b) {
 }
 
 #define length_sq(v) (dot((v),(v)))
+#define towards(a, b) (dot((a),(b)) > 0)
 
 static inline V3 cross(V3 a, V3 b) {
   V3 result;

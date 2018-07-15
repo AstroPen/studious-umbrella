@@ -272,7 +272,7 @@ static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_
         normal += V3{radius, radius, radius};
         normal /= diameter;
         // TODO include depth information
-        ncolor = to_color(v4(normal, 1));
+        ncolor = to_color(vec4(normal, 1));
       }
 
       uint32_t index = row + x * pixel_bytes;
