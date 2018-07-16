@@ -1,5 +1,6 @@
 stb*
 test
+create_normal_map
 *.bmp
 *.png
 *.xbm

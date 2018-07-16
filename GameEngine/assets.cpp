@@ -7,6 +7,14 @@ static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id) {
   return result;
 }
 
+static inline uint32_t get_texture_id(GameAssets *assets, BitmapID id) {
+  assert(id);
+  assert(id < BITMAP_COUNT);
+  auto texture = assets->bitmaps + id;
+  if (!texture->buffer) return 0;
+  return texture->texture_id;
+}
+
 static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) {
   assert(id);
   assert(id < BITMAP_COUNT);

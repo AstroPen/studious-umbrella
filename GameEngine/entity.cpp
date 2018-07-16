@@ -121,12 +121,14 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
     if (normal_map) normal_map_id = normal_map->texture_id;
   }
   uint32_t texture_id;
+  BitmapID texture_asset_id = BITMAP_WHITE;
   PixelBuffer *texture = NULL;
 
   if (e->flags & ENTITY_TEXTURE) {
     texture = get_bitmap(&g->assets, e->visual.texture_id);
     if (!texture) return;
     texture_id = texture->texture_id;
+    texture_asset_id = e->visual.texture_id;
   } else {
     texture = get_bitmap(&g->assets, BITMAP_WHITE);
     assert(texture);
@@ -163,8 +165,9 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
     r.offsets[1].x = -width / 2;
     r.offsets[0].y = height / 2;
     r.offsets[1].y = height / 2;
-    
-    push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture_id, normal_map_id);
+   
+    push_sprite(render_buffer, e->collision_box, e->visual);
+    //push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture_asset_id, normal_map_id);
 
   } else {
 

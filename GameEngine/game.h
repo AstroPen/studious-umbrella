@@ -192,6 +192,7 @@ struct GameAssets {
 
 static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
 static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id);
+static inline uint32_t get_texture_id(GameAssets *assets, BitmapID id);
 static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id);
 static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id);
 static inline BakedChar *get_baked_char(FontInfo *font, char c);

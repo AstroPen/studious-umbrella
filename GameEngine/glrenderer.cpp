@@ -147,6 +147,7 @@ struct RenderElementTextureQuads {
   int quad_count;
 };
 
+
 // TODO we may also want to clear the depth buffer
 struct RenderElementClear {
   RenderElement head;
@@ -691,21 +692,65 @@ static void draw_frame_records(RenderBuffer *buffer) {
 #undef TAB
 }
 
-static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float z_max, V4 color, uint32_t texture_id, uint32_t normal_map_id) {
+// TODO massively rework this to simplify and get better z biasing.
+static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_info) {
   TIMED_FUNCTION();
 
-  auto quad = to_quad4(rect);
+  auto texture = get_bitmap(buffer->assets, visual_info.texture_id);
+  auto texture_id = texture->texture_id;
+  auto normal_map_id = get_texture_id(buffer->assets, visual_info.normal_map_id);
+
+  // TODO Billboarding
+  GameCamera *camera = buffer->camera;
+  // TODO avoid recalculating this every time somehow :
+  V3 eye = camera->p;
+  V3 up = camera->up;
+  V3 target = camera->target;
+
+  // "Forward"
+  V3 Z = normalize(eye - target);
+  // "Left" (Right?)
+  V3 X = normalize(cross(up, Z)); 
+  // "Up" (recalculated so that the camera can tilt up and down)
+  V3 Y = normalize(cross(Z,X));
+
+  float width  = texture->width  * METERS_PER_PIXEL * visual_info.scale;
+  float height = texture->height * METERS_PER_PIXEL * visual_info.scale;
+
+  Rectangle r;
+  auto offset = visual_info.offset;
+  offset.z = 0;
+  r.center = center(box) + visual_info.offset;
+  r.center.z -= box.offset.z;
+  r.offsets[1].z = r.offsets[0].z = visual_info.offset.z;
+  r.offsets[0].x = width / 2;
+  r.offsets[1].x = -width / 2;
+  r.offsets[0].y = height / 2;
+  r.offsets[1].y = height / 2;
+
+  r.offsets[0] = X * r.offsets[0].x + Y * r.offsets[0].y;
+  r.offsets[1] = X * r.offsets[1].x + Y * r.offsets[1].y;
+
+
+  auto quad = to_quad4(r);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  auto c = color;
+  auto c = visual_info.color;
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
   
   V4 c4[4] = {c,c,c,c};
 
-  // NOTE : This is always correct if the sprite isn't skewed.
-  V3 n = {0,0,1};
+  V3 n = -Z;
   V3 n4[4] = {n,n,n,n};
+
+  /*
+  float z_min = visual_info.offset.z;
+  float z_max = visual_info.sprite_height;
+  */
+
+  float z_min = 0;
+  float z_max = 0.3; // TODO figure this out for real
 
   float bias[4] = {z_min, z_min, z_max, z_max};
   for (int i = 0; i < 4; i++) {
@@ -728,7 +773,6 @@ static void push_sprite(RenderBuffer *buffer, Rectangle rect, float z_min, float
 
   append_quads(buffer, 1, texture_id, normal_map_id);
 }
-
 
 static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_count) {
   auto vertices = buffer->vertices + start_idx;
@@ -763,11 +807,14 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
 #define PROJECTION 2
 
 #if PROJECTION == ORTHOGRAPHIC
+  e /= camera->p.z;
+  q = e / camera->aspect_ratio;
+
   float projection_mat[] = {
     e, 0, 0,  0,
     0, q, 0,  0,
-    0, 0, -2/(far_d-near_d),  p,
-    0, 0, 0,  1,
+    0, 0, -2/(far_d-near_d),  0,
+    0, 0, p,  1,
   };
 #elif PROJECTION == PERSPECTIVE
   float projection_mat[] = {
@@ -785,15 +832,13 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   };
 #endif
 
-  // View Matrix (flipped) :
-
   V3 eye = camera->p;
   V3 up = camera->up;
   V3 target = camera->target;
 
   // "Forward"
   V3 Z = normalize(eye - target);
-  // "Left"
+  // "Left" (Right?)
   V3 X = normalize(cross(up, Z)); 
   // "Up" (recalculated so that the camera can tilt up and down)
   V3 Y = normalize(cross(Z,X));
@@ -807,7 +852,6 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     X.z, Y.z, Z.z, 0,
     T.x, T.y, T.z, 1,
   };
-
 
   glClearColor(1,1,0,1);
   gl_check_error();

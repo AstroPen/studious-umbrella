@@ -48,7 +48,7 @@ void main() {
   }
 
   //vec3 light_p = vec3(7,9,2);
-  float Shininess = 130;
+  float Shininess = 40;
 
   // View direction:
   vec3 V = normalize(v_in.camera_p - v_in.p);

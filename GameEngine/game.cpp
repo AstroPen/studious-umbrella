@@ -202,14 +202,14 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   render_buffer->camera = &g->camera;
 
   //
-  // INIT TEXTURES
+  // INIT TEXTURES ---
   //
 
   init_assets(g, queue, render_buffer);
   
 
   //
-  // INIT PLAYER
+  // INIT PLAYER ---
   //
   
   float player_size = 60.0f * METERS_PER_PIXEL;
@@ -219,7 +219,7 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   assert(player);
   player->collision_box = aligned_box(aligned_rect(start_pos.xy, player_size, player_size / 1.3), 0, 0.6);
   player->visual.color = V4{1,1,1,1};
-  player->visual.offset  = V3{0,0.25,0.3};
+  player->visual.offset  = V3{0, 0.1, 0.8};
   player->visual.sprite_height = 1.3;
   /*
   player->visual.texture_id = BITMAP_TEST_SPRITE;

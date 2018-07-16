@@ -36,12 +36,18 @@ int main(int argc, char *argv[]) {
       Color y_light = *get_pixel(&lighting_buffer, width * 2 + x, y);
       Color z_light = *get_pixel(&lighting_buffer, width * 3 + x, y);
 
+      if (x_light.a) {
+        assert(x_light.r == x_light.g && x_light.r == x_light.b);
+        assert(y_light.r == y_light.g && y_light.r == y_light.b);
+        assert(z_light.r == z_light.g && z_light.r == z_light.b);
+      }
+
       auto out = get_pixel(&output, x, y);
       Color mix;
-      mix.r = x_light.r;
-      mix.g = y_light.r;
-      mix.b = z_light.r;
-      mix.a = x_light.a;
+      mix.rgba.r = x_light.r;
+      mix.rgba.g = y_light.r;
+      mix.rgba.b = z_light.r;
+      mix.rgba.a = x_light.a;
 
       *out = mix;
     }
