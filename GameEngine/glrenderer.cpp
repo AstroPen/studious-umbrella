@@ -697,12 +697,12 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   TIMED_FUNCTION();
 
   auto texture = get_bitmap(buffer->assets, visual_info.texture_id);
-  auto texture_id = texture->texture_id;
+  auto texture_id = get_texture_id(buffer->assets, visual_info.texture_id);
   auto normal_map_id = get_texture_id(buffer->assets, visual_info.normal_map_id);
 
-  // TODO Billboarding
   GameCamera *camera = buffer->camera;
-  // TODO avoid recalculating this every time somehow :
+
+  // TODO avoid recalculating this every time somehow, its copy-pasted from gl_draw_buffer :
   V3 eye = camera->p;
   V3 up = camera->up;
   V3 target = camera->target;
@@ -741,6 +741,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   
   V4 c4[4] = {c,c,c,c};
 
+  // TODO Figure out why this isn't -Z?
   V3 n = -Z;
   V3 n4[4] = {n,n,n,n};
 
@@ -758,7 +759,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   }
 
   // NOTE : This is always correct if the sprite isn't skewed.
-  V3 t = {1,0,0};
+  V3 t = X; //{1,0,0};
   V3 t4[4] = {t,t,t,t};
 
   VertexSOA verts;

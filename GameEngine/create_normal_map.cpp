@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
       Color mix;
       mix.rgba.r = x_light.r;
       mix.rgba.g = y_light.r;
-      mix.rgba.b = z_light.r;
+      mix.rgba.b = 255 - z_light.r;
       mix.rgba.a = x_light.a;
 
       *out = mix;

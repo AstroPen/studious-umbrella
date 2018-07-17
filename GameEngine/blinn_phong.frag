@@ -40,7 +40,10 @@ void main() {
 
     vec3 offset_normal = texture(normal_sampler, v_in.uv).xyz;
     offset_normal = normalize(offset_normal * 2 - 1);
+    //offset_normal.y *= -1;
+    //offset_normal.z *= -1;
     //N = offset_normal;
+    // TODO figure out what is going on with Z being the wrong way...
     mat3 TBN = mat3(v_in.tangent, v_in.bitangent, v_in.normal);
     N = normalize(TBN * offset_normal);
   } else {
@@ -82,7 +85,7 @@ void main() {
   }
   */
 
-  float light_intensity = 9;
+  float light_intensity = 14;
   float ambient_intensity = 4;
   vec3 light_ambient = vec3(0.6,0.7,0.8) * ambient_intensity;
   vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
@@ -97,8 +100,8 @@ void main() {
   vec3 specular = specularShade * specular_color * light_color;
 
   float a = 0.2;
-  float b = 0.4;
-  float c = 0.3;
+  float b = 0.5;
+  float c = 0.09;
 
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
   //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
