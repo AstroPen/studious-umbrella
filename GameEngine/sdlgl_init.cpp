@@ -77,7 +77,7 @@ static void init_opengl(RenderInfo *info) {
   view_matrix_id = glGetUniformLocation(program_id, "view_matrix");
   gl_check_error();
 
-  texture_sampler_id = glGetUniformLocation(program_id, "texture_sampler");
+  texture_sampler_id = glGetUniformLocation(program_id, "TEXTURE_SAMPLER");
   gl_check_error();
 
   auto buf = info->render_buffer;

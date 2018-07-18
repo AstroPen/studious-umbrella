@@ -310,7 +310,7 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
   gl_check_error();
 
   bool has_normal_map = normal_map_id ? true : false;
-  glUniform1i(glGetUniformLocation(program_id, "has_normal_map"), has_normal_map);
+  glUniform1i(glGetUniformLocation(program_id, "HAS_NORMAL_MAP"), has_normal_map);
 
   if (has_normal_map) {
     glActiveTexture(GL_TEXTURE0 + 1);
@@ -869,12 +869,12 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, view_mat);
   gl_check_error();
 
-  auto normal_sampler_id = glGetUniformLocation(program_id, "normal_sampler");
+  auto normal_sampler_id = glGetUniformLocation(program_id, "NORMAL_SAMPLER");
 
   glUniform1i(texture_sampler_id, 0); // Texture unit 0 is for the texture
   glUniform1i(normal_sampler_id, 1); // Texture unit 1 is for normal maps.
 
-  auto light_p_id = glGetUniformLocation(program_id, "light_p");
+  auto light_p_id = glGetUniformLocation(program_id, "LIGHT_P");
   V3 light_p = vec3(debug_global_memory.game_state->pointer_position, 0.5);
   
   //V3 light_p = {7,9,2};

@@ -12,10 +12,10 @@ in VertexData {
 
 out vec4 pixel_color;
 
-uniform bool has_normal_map;
-uniform sampler2D texture_sampler;
-uniform sampler2D normal_sampler;
-uniform vec3 light_p;
+uniform bool HAS_NORMAL_MAP;
+uniform sampler2D TEXTURE_SAMPLER;
+uniform sampler2D NORMAL_SAMPLER;
+uniform vec3 LIGHT_P;
 
 const mediump vec3 perception = vec3(0.299, 0.587, 0.114);
 
@@ -25,36 +25,8 @@ vec3 tone(vec3 v, float exposure) {
   return v * lum;
 }
 
-void main() {
-  vec4 textured_color = v_in.color * texture(texture_sampler, v_in.uv);
-  if (textured_color.a < 0.001) discard;
+vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 light_p, vec3 light_color, vec3 abc, float shininess) {
 
-  #if 0
-  pixel_color = textured_color;
-  #else
-
-  // Directional Light Vectors
-
-  vec3 N;
-  if (has_normal_map) {
-
-    vec3 offset_normal = texture(normal_sampler, v_in.uv).xyz;
-    offset_normal = normalize(offset_normal * 2 - 1);
-    //offset_normal.y *= -1;
-    //offset_normal.z *= -1;
-    //N = offset_normal;
-    // TODO figure out what is going on with Z being the wrong way...
-    mat3 TBN = mat3(v_in.tangent, v_in.bitangent, v_in.normal);
-    N = normalize(TBN * offset_normal);
-  } else {
-    N = normalize(v_in.normal);
-  }
-
-  //vec3 light_p = vec3(7,9,2);
-  float Shininess = 40;
-
-  // View direction:
-  vec3 V = normalize(v_in.camera_p - v_in.p);
   // vector from v_in.p to light source:
   vec3 R = light_p - v_in.p;
   // negative light direction:
@@ -71,7 +43,7 @@ void main() {
   // Contribution
   // B(N*L)
   float diffuseShade = max(dot(N, L), 0.0);
-  float shininess = Shininess > 0 ? Shininess : 0.00001;
+  shininess = max(shininess, 0.00001); //Shininess > 0 ? Shininess : 0.00001;
   // B(H*N)^ns
   float specularShade = B * pow(max(dot(H, N), 0.0), shininess);
 
@@ -85,27 +57,69 @@ void main() {
   }
   */
 
-  float light_intensity = 14;
-  float ambient_intensity = 4;
-  vec3 light_ambient = vec3(0.6,0.7,0.8) * ambient_intensity;
-  vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
-  vec3 diffuse_color = textured_color.xyz;
-  vec3 specular_color = textured_color.xyz;
-
-  // k*I_La
-  vec3 ambient = diffuse_color * light_ambient;
   // k*I_L * B(N*L)
   vec3 diffuse = diffuseShade * diffuse_color * light_color;
   // k*I_L * B(N*H)^ns
   vec3 specular = specularShade * specular_color * light_color;
 
-  float a = 0.2;
-  float b = 0.5;
-  float c = 0.09;
+  float a = abc.x;
+  float b = abc.y;
+  float c = abc.z;
 
   float f_atten = 1.0 / (0.01 + a + b*r + c*r*r);
-  //pixel_color = ambient + in_shadow * f_atten * (diffuse + specular);
-  pixel_color = vec4(ambient + f_atten * (diffuse + specular), textured_color.a);
+  //return in_shadow * f_atten * (diffuse + specular);
+  return f_atten * (diffuse + specular);
+}
+
+void main() {
+  vec4 textured_color = v_in.color * texture(TEXTURE_SAMPLER, v_in.uv);
+  if (textured_color.a < 0.001) discard;
+
+  #if 0
+  pixel_color = textured_color;
+  #else
+
+  vec3 N;
+  if (HAS_NORMAL_MAP) {
+
+    vec3 offset_normal = texture(NORMAL_SAMPLER, v_in.uv).xyz;
+    offset_normal = normalize(offset_normal * 2 - 1);
+    //offset_normal.y *= -1;
+    //offset_normal.z *= -1;
+    //N = offset_normal;
+    // TODO figure out what is going on with Z being the wrong way...
+    mat3 TBN = mat3(v_in.tangent, v_in.bitangent, v_in.normal);
+    N = normalize(TBN * offset_normal);
+  } else {
+    N = normalize(v_in.normal);
+  }
+
+  float shininess = 40;
+
+  // View direction:
+  vec3 V = normalize(v_in.camera_p - v_in.p);
+
+  float light_intensity = 10;
+  vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
+
+  vec3 diffuse_color = textured_color.xyz;
+  vec3 specular_color = textured_color.xyz;
+
+  vec3 abc = vec3(0.2, 0.5, 0.05);
+
+  vec3 point_light_color = point_light(diffuse_color, specular_color, N, V, LIGHT_P, light_color, abc, shininess);
+
+  vec3 other_light_color = vec3(0, 1, 1) * 4;
+  vec3 point_light_color_2 = point_light(diffuse_color, specular_color, N, V, vec3(6,8,4), other_light_color, abc / 2, shininess);
+
+
+  float ambient_intensity = 4;
+  vec3 ambient_light = vec3(0.6,0.7,0.8) * ambient_intensity;
+
+  // k*I_La
+  vec3 ambient_color = diffuse_color * ambient_light;
+
+  pixel_color = vec4(ambient_color + point_light_color + point_light_color_2, textured_color.a);
   pixel_color.rgb = tone(pixel_color.rgb, 0.04);
   #endif
 
