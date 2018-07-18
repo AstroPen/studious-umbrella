@@ -25,6 +25,26 @@ vec3 tone(vec3 v, float exposure) {
   return v * lum;
 }
 
+vec3 directional_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 light_dir, vec3 light_color, float shininess) {
+	// Directional Light Vectors
+	vec3 L = -normalize(light_dir);
+	vec3 H = normalize(V+L);
+
+	// B factor
+	float B = 1.0;
+	if (dot(N, L) < 0.00001) { B = 0.0; }
+
+	// Contribution
+  float diffuse_shade = max(dot(N, L), 0.0);
+  shininess = max(shininess, 0.00001);
+  float specular_shade = B * pow(max(dot(H, N), 0.0), shininess);
+
+	vec3 diffuse = diffuse_shade * diffuse_color * light_color;
+	vec3 specular = specular_shade * specular_color * light_color;
+
+	return diffuse + specular;
+}
+
 vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 light_p, vec3 light_color, vec3 abc, float shininess) {
 
   // vector from v_in.p to light source:
@@ -42,10 +62,10 @@ vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 l
 
   // Contribution
   // B(N*L)
-  float diffuseShade = max(dot(N, L), 0.0);
-  shininess = max(shininess, 0.00001); //Shininess > 0 ? Shininess : 0.00001;
+  float diffuse_shade = max(dot(N, L), 0.0);
+  shininess = max(shininess, 0.00001);
   // B(H*N)^ns
-  float specularShade = B * pow(max(dot(H, N), 0.0), shininess);
+  float specular_shade = B * pow(max(dot(H, N), 0.0), shininess);
 
   // For cast shadows :
   //float shadow_d = texture(point_light_shadowmap[light_num], -L).x;
@@ -58,9 +78,9 @@ vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 l
   */
 
   // k*I_L * B(N*L)
-  vec3 diffuse = diffuseShade * diffuse_color * light_color;
+  vec3 diffuse = diffuse_shade * diffuse_color * light_color;
   // k*I_L * B(N*H)^ns
-  vec3 specular = specularShade * specular_color * light_color;
+  vec3 specular = specular_shade * specular_color * light_color;
 
   float a = abc.x;
   float b = abc.y;
@@ -99,7 +119,7 @@ void main() {
   // View direction:
   vec3 V = normalize(v_in.camera_p - v_in.p);
 
-  float light_intensity = 10;
+  float light_intensity = 1.5;
   vec3 light_color = vec3(1.0,0.9,0.1) * light_intensity;
 
   vec3 diffuse_color = textured_color.xyz;
@@ -107,10 +127,12 @@ void main() {
 
   vec3 abc = vec3(0.2, 0.5, 0.05);
 
-  vec3 point_light_color = point_light(diffuse_color, specular_color, N, V, LIGHT_P, light_color, abc, shininess);
+  vec3 light_contributions = vec3(0);
+  light_contributions += point_light(diffuse_color, specular_color, N, V, LIGHT_P, light_color, abc, shininess);
 
-  vec3 other_light_color = vec3(0, 1, 1) * 4;
-  vec3 point_light_color_2 = point_light(diffuse_color, specular_color, N, V, vec3(6,8,4), other_light_color, abc / 2, shininess);
+  vec3 other_light_color = vec3(0, 1, 1) * 10;
+  //light_contributions += point_light(diffuse_color, specular_color, N, V, vec3(6,8,4), other_light_color, abc / 2, shininess);
+  light_contributions += directional_light(diffuse_color, specular_color, N, V, vec3(0.2,1,1), other_light_color, shininess);
 
 
   float ambient_intensity = 4;
@@ -119,7 +141,7 @@ void main() {
   // k*I_La
   vec3 ambient_color = diffuse_color * ambient_light;
 
-  pixel_color = vec4(ambient_color + point_light_color + point_light_color_2, textured_color.a);
+  pixel_color = vec4(ambient_color + light_contributions, textured_color.a);
   pixel_color.rgb = tone(pixel_color.rgb, 0.04);
   #endif
 
