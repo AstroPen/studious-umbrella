@@ -133,6 +133,7 @@ void main() {
   vec3 other_light_color = vec3(0, 1, 1) * 10;
   //light_contributions += point_light(diffuse_color, specular_color, N, V, vec3(6,8,4), other_light_color, abc / 2, shininess);
   light_contributions += directional_light(diffuse_color, specular_color, N, V, vec3(0.2,1,1), other_light_color, shininess);
+  light_contributions += directional_light(diffuse_color, specular_color, N, V, vec3(0.9,0.1,-0.1), vec3(9,0,0), shininess);
 
 
   float ambient_intensity = 4;
@@ -141,7 +142,8 @@ void main() {
   // k*I_La
   vec3 ambient_color = diffuse_color * ambient_light;
 
-  pixel_color = vec4(ambient_color + light_contributions, textured_color.a);
+  float alpha = textured_color.a; // / fwidth(textured_color.a);
+  pixel_color = vec4(ambient_color + light_contributions, alpha);
   pixel_color.rgb = tone(pixel_color.rgb, 0.04);
   #endif
 

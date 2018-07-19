@@ -296,6 +296,7 @@ int main(int argc, char ** argv){
 
     game_input.delta_t = (double) SDL_GetTicks() - (double) previous_time;
     game_input.delta_t /= 1000.0f;
+    game_input.delta_t = min(game_input.delta_t, 1.0f); // Caps to 1 second
     game_input.ticks = ticks;
     uint32_t current_time = SDL_GetTicks();
     //uint32_t time_passed = current_time - previous_time;

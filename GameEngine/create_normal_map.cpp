@@ -6,13 +6,13 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-void usage() {
-  printf("Usage : create_normal_map <lighting filename> <normal map filename>\n");
+void usage(char *program_name) {
+  printf("Usage : %s <lighting filename> <normal map filename>\n", program_name);
   exit(0);
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 3) usage();
+  if (argc != 3) usage(argv[0]);
   char *lighting_filename = argv[1];
   char *normal_map_filename = argv[2];
 

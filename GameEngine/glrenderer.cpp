@@ -129,8 +129,9 @@ static inline void draw_gradient_background(GameState *g, WorkQueue *queue) {
 enum RenderType : uint32_t {
   // TODO switch to RenderElementTextureTris
   RenderType_RenderElementTextureQuads,
+  RenderType_RenderElementClear,
+  RenderType_RenderElementHud,
   // TODO
-  //RenderType_RenderElementClear,
   //RenderType_RenderElementTransform
 };
 
@@ -147,11 +148,18 @@ struct RenderElementTextureQuads {
   int quad_count;
 };
 
+struct RenderElementHud {
+  RenderElement head;
+  uint32_t texture_id;
+  int vertex_index;
+  int quad_count;
+};
 
-// TODO we may also want to clear the depth buffer
+
 struct RenderElementClear {
   RenderElement head;
   V4 color;
+  float depth;
 };
 
 struct Vertex {
@@ -166,9 +174,14 @@ struct RenderBuffer {
   PushAllocator allocator;
   GameAssets *assets;
   GameCamera *camera;
+  RenderElement *first_element;
+  RenderElement *first_hud_element;
   RenderElement *tail;
+  RenderElement *hud_tail; // TODO consider generalizing this to "stages" or something?
   Vertex *vertices;
+
   int element_count;
+  int hud_element_count;
   int vertex_count;
   int max_vertices;
   int screen_width;
@@ -230,32 +243,49 @@ static void print_render_buffer(RenderBuffer *buffer) {
 }
 #endif
 
-#define push_element(render_buffer, type) ((type *) push_element_((render_buffer), RenderType_##type, sizeof(type)))
-static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, uint32_t size) {
+#define push_element(render_buffer, type) ((type *) push_element_((render_buffer), RenderType_##type, false, sizeof(type)))
+#define push_hud_element(render_buffer, type) ((type *) push_element_((render_buffer), RenderType_##type, true, sizeof(type)))
+static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, bool is_hud, uint32_t size) {
   TIMED_FUNCTION();
   auto elem = (RenderElement *) alloc_size(&buffer->allocator, size);
   if (!elem) {
-    assert(false);
+    assert(!"RenderElement allocator is full.");
     return NULL;
   }
-
-  if (buffer->tail) {
-    assert(!buffer->tail->next);
-    buffer->tail->next = elem;
-  }
-  buffer->tail = elem;
 
   elem->next = NULL;
   elem->type = type;
 
-  buffer->element_count++;
+  if (is_hud) {
+    if (!buffer->first_hud_element) buffer->first_hud_element = elem;
+    if (buffer->hud_tail) {
+      assert(!buffer->hud_tail->next);
+      buffer->hud_tail->next = elem;
+    }
+    buffer->hud_tail = elem;
+    buffer->hud_element_count++;
+  } else {
+
+    if (!buffer->first_element) buffer->first_element = elem;
+    if (buffer->tail) {
+      assert(!buffer->tail->next);
+      buffer->tail->next = elem;
+    }
+    buffer->tail = elem;
+    buffer->element_count++;
+  }
+
   return elem;
 }
 
 static inline void clear(RenderBuffer *buffer) {
   clear(&buffer->allocator);
+  buffer->first_element = NULL;
+  buffer->first_hud_element = NULL;
   buffer->tail = NULL;
+  buffer->hud_tail = NULL;
   buffer->element_count = 0;
+  buffer->hud_element_count = 0;
   buffer->vertex_count = 0;
   buffer->z_bias_accum = Z_BIAS_HUD_BASE;
 }
@@ -365,7 +395,7 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
   gl_check_error();
 }
 
-static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id, uint32_t normal_map_id = 0) {
+static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id, uint32_t normal_map_id, bool is_hud = false) {
   TIMED_FUNCTION();
   auto prev = buffer->tail;
   if (prev && prev->type == RenderType_RenderElementTextureQuads) {
@@ -376,12 +406,22 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
     }
   }
 
-  auto elem = push_element(buffer, RenderElementTextureQuads);
+  if (is_hud) {
+    auto elem = push_hud_element(buffer, RenderElementHud);
 
-  elem->texture_id = texture_id;
-  elem->normal_map_id = normal_map_id;
-  elem->quad_count = count;
-  elem->vertex_index = buffer->vertex_count - count * 6;
+    assert(!normal_map_id);
+    elem->texture_id = texture_id;
+    elem->quad_count = count;
+    elem->vertex_index = buffer->vertex_count - count * 6;
+
+  } else {
+    auto elem = push_element(buffer, RenderElementTextureQuads);
+
+    elem->texture_id = texture_id;
+    elem->normal_map_id = normal_map_id;
+    elem->quad_count = count;
+    elem->vertex_index = buffer->vertex_count - count * 6;
+  }
 }
 
 #if 0
@@ -569,7 +609,7 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
 
       float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
       buffer->z_bias_accum += Z_BIAS_EPSILON;
-      auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), z_bias);
+      auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0); //z_bias);
 
       V2 uv[4] = {
                  {b->x0 / font_width, b->y1 / font_height}, 
@@ -606,7 +646,7 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
     }
     text++;
   }
-  append_quads(buffer, num_quads, font_info->bitmap.texture_id);
+  append_quads(buffer, num_quads, font_info->bitmap.texture_id, 0, true);
 }
 
 // TODO I would like this to work with multiple colors...
@@ -741,7 +781,6 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   
   V4 c4[4] = {c,c,c,c};
 
-  // TODO Figure out why this isn't -Z?
   V3 n = -Z;
   V3 n4[4] = {n,n,n,n};
 
@@ -802,36 +841,36 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   float p = -(far_d + near_d) / (far_d - near_d);
   float r = -2 * far_d * near_d / (far_d - near_d);
 
-#define ORTHOGRAPHIC 1
-#define PERSPECTIVE 2
 
-#define PROJECTION 2
-
-#if PROJECTION == ORTHOGRAPHIC
-  e /= camera->p.z;
-  q = e / camera->aspect_ratio;
-
-  float projection_mat[] = {
-    e, 0, 0,  0,
-    0, q, 0,  0,
-    0, 0, -2/(far_d-near_d),  0,
-    0, 0, p,  1,
-  };
-#elif PROJECTION == PERSPECTIVE
-  float projection_mat[] = {
+  float perspective_proj[] = {
     e, 0, 0,  0,
     0, q, 0,  0,
     0, 0, p, -1,
     0, 0, r,  0,
   };
-#else // Infinite far plane
-  float projection_mat[] = {
+
+  float infinite_proj[] = {
     e, 0, 0,  0,
     0, q, 0,  0,
     0, 0, 0.001f-1, -1,
     0, 0, (0.001f-2)*near_d,  0,
   };
-#endif
+
+  // TODO clean up this mess.
+  // Dividing by camera z gives me zoom, but I don't want that for the hud!
+
+  //e /= camera->p.z;
+  e /= 10;
+  q = e / camera->aspect_ratio;
+
+  float orthographic_proj[] = {
+    e, 0, 0,  0,
+    0, q, 0,  0,
+    0, 0, -2/(far_d-near_d),  0,
+    0, 0, p,  1,
+  };
+
+  float *projection_mat = perspective_proj;
 
   V3 eye = camera->p;
   V3 up = camera->up;
@@ -852,6 +891,14 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     X.y, Y.y, Z.y, 0,
     X.z, Y.z, Z.z, 0,
     T.x, T.y, T.z, 1,
+  };
+
+  // TODO make the input coordinates be in the right place...
+  float identity_mat[] = {
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    -8, -6, -10, 1,
   };
 
   glClearColor(1,1,0,1);
@@ -883,26 +930,41 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   // DEBUG
   //print_render_buffer(buffer);
 
-  auto front = (RenderElement *) buffer->allocator.memory;
-  auto elem = front;
+  //
+  // Render Game
+  //
+
+  glEnable(GL_DEPTH_TEST);
+  auto elem = buffer->first_element;
+  auto default_texture_id = get_texture_id(buffer->assets, BITMAP_WHITE);
+#if 1
   for (int i = 0; i < buffer->element_count; i++) {
     assert(elem);
     gl_check_error();
+
+    uint32_t texture_id = default_texture_id;
 
     switch (elem->type) {
 
       case RenderType_RenderElementTextureQuads : {
         auto e = (RenderElementTextureQuads *) elem;
+
         set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
-        uint32_t texture_id;
         if (e->texture_id) texture_id = e->texture_id;
-        else texture_id = get_bitmap(buffer->assets, BITMAP_WHITE)->texture_id;
 
         draw_vertices(0, e->quad_count * 6, texture_id, e->normal_map_id);
       } break;
 
+      case RenderType_RenderElementClear : {
+        auto e = (RenderElementClear *) elem;
+        // TODO
+
+      } break;
+
       default : {
-        assert(false);
+        printf("Invalid Render element : %d, index : %d\n", elem->type, i);
+
+        assert(!"Invalid Render element.");
       };
     }
 
@@ -914,7 +976,57 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     }
   }
   if (buffer->element_count) assert(!elem->next);
+#endif
 
+#if 1
+  //
+  // Render Hud
+  //
+
+  glDisable(GL_DEPTH_TEST);
+  glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, orthographic_proj);
+  glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, identity_mat);
+  elem = buffer->first_hud_element;
+
+  for (int i = 0; i < buffer->hud_element_count; i++) {
+    assert(elem);
+    gl_check_error();
+
+    uint32_t texture_id = default_texture_id;
+
+    switch (elem->type) {
+
+      case RenderType_RenderElementHud : {
+        auto e = (RenderElementHud *) elem;
+
+        set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
+        if (e->texture_id) texture_id = e->texture_id;
+
+        draw_vertices(0, e->quad_count * 6, texture_id, 0);
+      } break;
+
+      case RenderType_RenderElementClear : {
+        auto e = (RenderElementClear *) elem;
+        // TODO
+
+      } break;
+
+      default : {
+        printf("Invalid Hud element : %d, index : %d\n", elem->type, i);
+
+        assert(!"Invalid Hud element.");
+      };
+    }
+
+    // TODO figure out why this crashes when I don't check first?
+    if (elem->next) {
+      elem = elem->next;
+    } else {
+      break;
+    }
+  }
+  if (buffer->hud_element_count) assert(!elem->next);
+#endif
 }
 
 
