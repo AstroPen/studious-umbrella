@@ -935,6 +935,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   //
 
   glEnable(GL_DEPTH_TEST);
+  glUniform1i(glGetUniformLocation(program_id, "HAS_LIGHTING"), true);
   auto elem = buffer->first_element;
   auto default_texture_id = get_texture_id(buffer->assets, BITMAP_WHITE);
 #if 1
@@ -986,6 +987,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glDisable(GL_DEPTH_TEST);
   glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, orthographic_proj);
   glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, identity_mat);
+  glUniform1i(glGetUniformLocation(program_id, "HAS_LIGHTING"), false);
   elem = buffer->first_hud_element;
 
   for (int i = 0; i < buffer->hud_element_count; i++) {

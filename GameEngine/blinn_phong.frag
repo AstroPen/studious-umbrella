@@ -13,6 +13,7 @@ in VertexData {
 out vec4 pixel_color;
 
 uniform bool HAS_NORMAL_MAP;
+uniform bool HAS_LIGHTING;
 uniform sampler2D TEXTURE_SAMPLER;
 uniform sampler2D NORMAL_SAMPLER;
 uniform vec3 LIGHT_P;
@@ -95,9 +96,10 @@ void main() {
   vec4 textured_color = v_in.color * texture(TEXTURE_SAMPLER, v_in.uv);
   if (textured_color.a < 0.001) discard;
 
-  #if 0
-  pixel_color = textured_color;
-  #else
+  if (!HAS_LIGHTING) {
+    pixel_color = textured_color;
+    return;
+  }
 
   vec3 N;
   if (HAS_NORMAL_MAP) {
@@ -145,7 +147,6 @@ void main() {
   float alpha = textured_color.a; // / fwidth(textured_color.a);
   pixel_color = vec4(ambient_color + light_contributions, alpha);
   pixel_color.rgb = tone(pixel_color.rgb, 0.04);
-  #endif
 
 }
 
