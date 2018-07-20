@@ -109,7 +109,7 @@ struct VisualInfo {
   //PixelBuffer texture;
   V4 color;
   V3 offset;
-  float sprite_height;
+  float sprite_depth;
   float scale;
   BitmapID texture_id;
   BitmapID normal_map_id;
@@ -205,11 +205,33 @@ struct TemporaryState {
 struct GameCamera {
   V3 p;
   V3 target;
+  V3 right;
   V3 up;
+  V3 forward;
   float aspect_ratio; // height/width
   float focal_length;
   float near_dist, far_dist;
 };
+
+// TODO maybe move these to another file
+static inline void look_at(GameCamera *camera, V3 target, V3 up = {0,1,0}) {
+  camera->target = target;
+  auto eye = camera->p;
+  // "Forward"
+  V3 Z = normalize(eye - target);
+  // "Left" (Right?)
+  V3 X = normalize(cross(up, Z)); 
+  // "Up" (recalculated so that the camera can tilt up and down)
+  V3 Y = normalize(cross(Z,X));
+
+  camera->right = X;
+  camera->up = Y;
+  camera->forward = Z;
+}
+
+static inline void look_at_target(GameCamera *camera, V3 up = {0,1,0}) {
+  look_at(camera, camera->target, up);
+}
 
 struct GameState {
   GameAssets assets;

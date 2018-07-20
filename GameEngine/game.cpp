@@ -95,6 +95,7 @@ static bool apply_input(GameState *g, ControllerState controller) {
     debug_global_memory.camera_mode = !debug_global_memory.camera_mode;
   } 
 
+
   if (debug_global_memory.camera_mode) {
     float camera_speed = 0.2;
     float zoom_speed = 0.1;
@@ -142,6 +143,8 @@ static bool apply_input(GameState *g, ControllerState controller) {
     if (b->first_press == PRESS_EVENT) {
       g->camera.target.yz -= vec2(tilt_speed);
     }
+
+    look_at_target(&g->camera);
   }
 
   g->player_color = player_color;
@@ -192,12 +195,12 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
 
   g->camera.p = V3{g->width / 2, g->height / 2, 10};
   g->camera.target = V3{g->width / 2, g->height / 2, 0.2};
-  g->camera.up = V3{0, 1, 0};
   g->camera.aspect_ratio = g->height / g->width;
   // focal length = 1 / tan(FOV / 2) = 2 (distance to target) / (width of target)
   g->camera.focal_length = 2 * g->camera.p.z / g->width;
   g->camera.near_dist = 1;
   g->camera.far_dist = 15;
+  look_at_target(&g->camera);
 
   render_buffer->camera = &g->camera;
 
@@ -219,12 +222,8 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   assert(player);
   player->collision_box = aligned_box(aligned_rect(start_pos.xy, player_size, player_size / 1.3), 0, 0.6);
   player->visual.color = V4{1,1,1,1};
-  player->visual.offset  = V3{0, 0.1, 0.8};
-  player->visual.sprite_height = 1.3;
-  /*
-  player->visual.texture_id = BITMAP_TEST_SPRITE;
-  player->visual.normal_map_id = BITMAP_TEST_SPRITE_NORMAL_MAP;
-  */
+  player->visual.offset  = V3{0, 0.1, 0.2};
+  player->visual.sprite_depth = 0.3;
   player->visual.texture_id = BITMAP_LINK;
   player->visual.normal_map_id = BITMAP_LINK_NORMAL_MAP;
   player->visual.scale = 4.0f;
@@ -324,11 +323,11 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
 
   auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
   auto circle_normal_map = get_bitmap(&g->assets, BITMAP_SPHERE_NORMAL_MAP);
-  float cursor_size = 15.f / PIXELS_PER_METER;
+  float cursor_size = 10.f / PIXELS_PER_METER;
   auto cursor_a_rect = aligned_rect(g->pointer_position, cursor_size, cursor_size);
   auto cursor_rect = rectangle(cursor_a_rect, 0);
-  g->cursor_color.rgb /= 2;
-  push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id, circle_normal_map->texture_id);
+  //g->cursor_color.rgb /= 2;
+  push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id); //, circle_normal_map->texture_id);
 
 
   //push_rectangle(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id, circle_normal_map->texture_id);

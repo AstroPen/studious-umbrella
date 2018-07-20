@@ -461,12 +461,17 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
 #endif
 
 
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, float tex_width, float tex_height, uint32_t normal_map_id = 0) {
+static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID texture_asset_id, float scale, uint32_t normal_map_id = 0) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
 #if DEBUG_COLORS
   V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 #endif
+
+  auto texture = get_bitmap(buffer->assets, texture_asset_id);
+  auto texture_id = get_texture_id(buffer->assets, texture_asset_id);
+  float tex_width = texture->width * METERS_PER_PIXEL * scale;
+  float tex_height = texture->height * METERS_PER_PIXEL * scale;
 
   assert(tex_width);
   assert(tex_height);
@@ -550,13 +555,13 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   append_quads(buffer, 1, texture_id, normal_map_id);
 }
 
-static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
+static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id) {
   TIMED_FUNCTION();
 
-  float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
-  buffer->z_bias_accum += Z_BIAS_EPSILON;
+  //float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
+  //buffer->z_bias_accum += Z_BIAS_EPSILON;
 
-  auto quad = to_quad4(rect, z_bias);
+  auto quad = to_quad4(rect);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
   auto c = color;
@@ -580,7 +585,7 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, normal_map_id);
+  append_quads(buffer, 1, texture_id, 0, true);
 }
 
 
@@ -660,7 +665,7 @@ static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *for
   va_end(args);
 
   float const shadow_depth = 0.02;
-  push_hud_text(buffer, cursor_p + V2{shadow_depth, -shadow_depth}, dest, V4{0,0,0,1}, FONT_DEBUG);
+  push_hud_text(buffer, cursor_p + V2{shadow_depth, -shadow_depth * 2}, dest, V4{0,0,0,1}, FONT_DEBUG);
   push_hud_text(buffer, cursor_p, dest, V4{1,1,1,1}, FONT_DEBUG);
 }
 
@@ -668,7 +673,7 @@ static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *for
 static void draw_frame_records(RenderBuffer *buffer) {
   // NOTE : This is basically copied from print_frame_records.
 #define TAB "   "
-  V2 cursor_p = { 0.4, 11 };
+  V2 cursor_p = { 1.2, 11 };
   float const newline_height = 0.5f;
 
   static darray<uint32_t> block_ids;
@@ -734,6 +739,7 @@ static void draw_frame_records(RenderBuffer *buffer) {
 
 // TODO massively rework this to simplify and get better z biasing.
 static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_info) {
+#define DEBUG_CUBES 1
   TIMED_FUNCTION();
 
   auto texture = get_bitmap(buffer->assets, visual_info.texture_id);
@@ -742,17 +748,9 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 
   GameCamera *camera = buffer->camera;
 
-  // TODO avoid recalculating this every time somehow, its copy-pasted from gl_draw_buffer :
-  V3 eye = camera->p;
-  V3 up = camera->up;
-  V3 target = camera->target;
-
-  // "Forward"
-  V3 Z = normalize(eye - target);
-  // "Left" (Right?)
-  V3 X = normalize(cross(up, Z)); 
-  // "Up" (recalculated so that the camera can tilt up and down)
-  V3 Y = normalize(cross(Z,X));
+  V3 Z = camera->forward;
+  V3 X = camera->right;
+  V3 Y = camera->up;
 
   float width  = texture->width  * METERS_PER_PIXEL * visual_info.scale;
   float height = texture->height * METERS_PER_PIXEL * visual_info.scale;
@@ -761,8 +759,9 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   auto offset = visual_info.offset;
   offset.z = 0;
   r.center = center(box) + visual_info.offset;
-  r.center.z -= box.offset.z;
-  r.offsets[1].z = r.offsets[0].z = visual_info.offset.z;
+  //r.center.z -= box.offset.z;
+  r.center.z += visual_info.offset.z;
+  r.offsets[1].z = r.offsets[0].z = height;
   r.offsets[0].x = width / 2;
   r.offsets[1].x = -width / 2;
   r.offsets[0].y = height / 2;
@@ -790,7 +789,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   */
 
   float z_min = 0;
-  float z_max = 0.3; // TODO figure this out for real
+  float z_max = visual_info.sprite_depth; //0.3; // TODO figure this out for real
 
   float bias[4] = {z_min, z_min, z_max, z_max};
   for (int i = 0; i < 4; i++) {
@@ -812,6 +811,11 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   push_quad_vertices(buffer, verts);
 
   append_quads(buffer, 1, texture_id, normal_map_id);
+
+#if DEBUG_CUBES
+  push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
+#endif
+#undef DEBUG_CUBES
 }
 
 static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_count) {
@@ -873,15 +877,11 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   float *projection_mat = perspective_proj;
 
   V3 eye = camera->p;
-  V3 up = camera->up;
-  V3 target = camera->target;
+  //V3 target = camera->target;
 
-  // "Forward"
-  V3 Z = normalize(eye - target);
-  // "Left" (Right?)
-  V3 X = normalize(cross(up, Z)); 
-  // "Up" (recalculated so that the camera can tilt up and down)
-  V3 Y = normalize(cross(Z,X));
+  V3 Z = camera->forward;
+  V3 X = camera->right;
+  V3 Y = camera->up;
 
   // "Translation" (dotted because view = translation * rotation)
   V3 T = V3{-dot(X, eye), -dot(Y, eye), -dot(Z, eye)};

@@ -19,6 +19,16 @@ static inline void free_entity(GameState *g, Entity *e) {
   g->num_entities--;
 }
 
+static inline void make_entity_sprite(Entity *e, BitmapID bitmap_id, float sprite_depth, V3 offset, float scale, BitmapID normal_map_id, V4 color) {
+  e->flags |= ENTITY_SPRITE;
+  e->visual.texture_id = bitmap_id;
+  e->visual.sprite_depth = sprite_depth;
+  e->visual.offset = offset;
+  e->visual.scale = scale;
+  e->visual.normal_map_id = normal_map_id;
+  e->visual.color = color;
+}
+
 // TODO rename these to "projectile" or "bullet" or something
 static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float mass, float radius, float lifetime, V4 color) {
   TIMED_FUNCTION();
@@ -32,9 +42,14 @@ static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float
   // e->acc = 0;
   e->mass = mass;
   e->lifetime = lifetime;
+  auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
+  float texture_radius = circle_texture->height * METERS_PER_PIXEL / 2;
+  make_entity_sprite(e, BITMAP_CIRCLE, 0, vec3(0), radius/texture_radius, BITMAP_SPHERE_NORMAL_MAP, color);
+  /*
   e->visual.color = color;
   e->visual.texture_id = BITMAP_CIRCLE;
   e->visual.normal_map_id = BITMAP_SPHERE_NORMAL_MAP;
+  */
   e->friction_multiplier = 1.0;
   e->bounce_factor = 1.0;
   //e->slip_factor = 1.0;
@@ -137,9 +152,7 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
 
   if (e->flags & ENTITY_CUBOID) {
     if (e->flags & ENTITY_TEXTURE_REPEAT) {
-      float tex_width = texture->width * METERS_PER_PIXEL * e->visual.scale;
-      float tex_height = texture->height * METERS_PER_PIXEL * e->visual.scale;
-      push_box(render_buffer, e->collision_box, e->visual.color, texture_id, tex_width, tex_height, normal_map_id);
+      push_box(render_buffer, e->collision_box, e->visual.color, texture_asset_id, e->visual.scale, normal_map_id);
       return;
     }
 
@@ -150,24 +163,8 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
   }
 
 
-  if (e->flags & ENTITY_SPRITE) {
-
-    float width  = texture->width  * METERS_PER_PIXEL * e->visual.scale;
-    float height = texture->height * METERS_PER_PIXEL * e->visual.scale;
-
-    Rectangle r;
-    auto offset = e->visual.offset;
-    offset.z = 0;
-    r.center = center(e->collision_box) + e->visual.offset;
-    r.center.z -= e->collision_box.offset.z;
-    r.offsets[1].z = r.offsets[0].z = 0; //e->collision_box.offset.z; //e->visual.sprite_height;
-    r.offsets[0].x = width / 2;
-    r.offsets[1].x = -width / 2;
-    r.offsets[0].y = height / 2;
-    r.offsets[1].y = height / 2;
-   
+  if (e->flags & ENTITY_SPRITE) { 
     push_sprite(render_buffer, e->collision_box, e->visual);
-    //push_sprite(render_buffer, r, e->visual.offset.z, e->visual.sprite_height, e->visual.color, texture_asset_id, normal_map_id);
 
   } else {
 

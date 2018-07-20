@@ -280,8 +280,8 @@ static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_
         // radius_sq = len_sq + b^2
         float depth_sq = radius_sq - len_sq;
         normal.x = diff.x;
-        normal.y = -diff.y;
-        normal.z = sqrt(depth_sq);
+        normal.y = diff.y;
+        normal.z = -sqrt(depth_sq);
         normal += vec3(radius);
         normal /= diameter;
         // TODO include depth information
