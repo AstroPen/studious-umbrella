@@ -739,7 +739,7 @@ static void draw_frame_records(RenderBuffer *buffer) {
 
 // TODO massively rework this to simplify and get better z biasing.
 static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_info) {
-#define DEBUG_CUBES 1
+#define DEBUG_CUBES 0
   TIMED_FUNCTION();
 
   auto texture = get_bitmap(buffer->assets, visual_info.texture_id);

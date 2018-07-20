@@ -215,30 +215,32 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   // INIT PLAYER ---
   //
   
-  float player_size = 60.0f * METERS_PER_PIXEL;
+  float player_size = 80.0f * METERS_PER_PIXEL;
   auto start_pos = V3{5, 5, 0};
 
   Entity *player = alloc_entity(g);
   assert(player);
-  player->collision_box = aligned_box(aligned_rect(start_pos.xy, player_size, player_size / 1.3), 0, 0.6);
-  player->visual.color = V4{1,1,1,1};
-  player->visual.offset  = V3{0, 0.1, 0.2};
+  player->collision_box = aligned_box(aligned_rect(start_pos.xy, player_size, player_size / 1.5), 0, 1.3);
+  player->flags |= 
+    ENTITY_COLLIDES | 
+    ENTITY_PLAYER_CONTROLLED | 
+    ENTITY_SOLID;
+
+  make_sprite(player);
+  set_texture(player, BITMAP_LINK);
+  set_normal_map(player, BITMAP_LINK_NORMAL_MAP);
+  player->visual.offset = vec3(0, 0.40, 0.06);
+  player->visual.scale = 4.0;
   player->visual.sprite_depth = 0.3;
-  player->visual.texture_id = BITMAP_LINK;
-  player->visual.normal_map_id = BITMAP_LINK_NORMAL_MAP;
-  player->visual.scale = 4.0f;
-  player->flags = 
-    ENTITY_COLLIDES | ENTITY_TEXTURE | 
-    ENTITY_PLAYER_CONTROLLED | ENTITY_SLIDING | 
-    ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_SOLID |
-    ENTITY_SPRITE | ENTITY_NORMAL_MAP;// | ENTITY_CUBOID;
+
+  set_friction_multiplier(player, 0.87);
+  set_bounce_factor(player, 0.1);
+  set_slip_factor(player, 0.95);
+
   player->mass = 1.0f;
   player->accel_max = 300.0f;
   player->time_to_max_accel = 0.2f;
   player->time_to_zero_accel = 0.1f;
-  player->friction_multiplier = 0.87;
-  player->bounce_factor = 0.1;
-  player->slip_factor = 0.95;
 
   //
   // INIT WALLS

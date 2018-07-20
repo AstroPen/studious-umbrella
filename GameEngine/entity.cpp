@@ -19,14 +19,47 @@ static inline void free_entity(GameState *g, Entity *e) {
   g->num_entities--;
 }
 
-static inline void make_entity_sprite(Entity *e, BitmapID bitmap_id, float sprite_depth, V3 offset, float scale, BitmapID normal_map_id, V4 color) {
-  e->flags |= ENTITY_SPRITE;
-  e->visual.texture_id = bitmap_id;
-  e->visual.sprite_depth = sprite_depth;
-  e->visual.offset = offset;
-  e->visual.scale = scale;
+inline void make_sprite(Entity *e) {
+  e->flags |= ENTITY_SPRITE | ENTITY_TEXTURE;
+  if (!e->visual.scale) e->visual.scale = 1;
+  if (e->visual.color == vec4(0)) e->visual.color = vec4(1,1,1,1);
+}
+
+inline void set_texture(Entity *e, BitmapID texture_id) {
+  e->flags |= ENTITY_TEXTURE;
+  e->visual.texture_id = texture_id;
+}
+
+inline void set_normal_map(Entity *e, BitmapID normal_map_id) {
+  e->flags |= ENTITY_NORMAL_MAP;
   e->visual.normal_map_id = normal_map_id;
-  e->visual.color = color;
+}
+
+inline void make_moving(Entity *e) {
+  e->flags |= ENTITY_MOVING;
+  e->friction_multiplier = 1.0f;
+}
+
+inline void set_friction_multiplier(Entity *e, float friction) {
+  e->flags |= ENTITY_MOVING;
+  e->friction_multiplier = friction;
+}
+
+inline void set_lifetime(Entity *e, float lifetime) {
+  e->flags |= ENTITY_TEMPORARY;
+  e->lifetime = lifetime;
+}
+
+inline void set_bounce_factor(Entity *e, float bounce_factor) {
+  if (!(e->flags & ENTITY_MOVING)) make_moving(e);
+  e->flags |= ENTITY_BOUNCING;
+  e->bounce_factor = bounce_factor;
+}
+
+inline void set_slip_factor(Entity *e, float slip_factor) {
+  if (!(e->flags & ENTITY_MOVING)) make_moving(e);
+  e->flags |= ENTITY_SLIDING;
+  e->slip_factor = slip_factor;
 }
 
 // TODO rename these to "projectile" or "bullet" or something
@@ -35,24 +68,23 @@ static inline Entity *add_particle(GameState *g, V2 position, V2 velocity, float
 
   auto e = alloc_entity(g);
   if (!e) return NULL;
-  e->flags = ENTITY_COLLIDES | ENTITY_BOUNCING | ENTITY_MOVING | ENTITY_TEXTURE | ENTITY_TEMPORARY | ENTITY_NORMAL_MAP;
-  //e->collision_box = aligned_rect(position, 2*radius, 2*radius);
+
+  e->flags |= ENTITY_COLLIDES;
   e->collision_box = aligned_box(aligned_rect(position, 2*radius, 2*radius), 0.5 - radius, radius * 2);
-  e->vel.xy = velocity;
-  // e->acc = 0;
   e->mass = mass;
-  e->lifetime = lifetime;
+  set_bounce_factor(e, 1);
+  e->vel.xy = velocity;
+  set_lifetime(e, lifetime);
+
   auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
   float texture_radius = circle_texture->height * METERS_PER_PIXEL / 2;
-  make_entity_sprite(e, BITMAP_CIRCLE, 0, vec3(0), radius/texture_radius, BITMAP_SPHERE_NORMAL_MAP, color);
-  /*
+
+  make_sprite(e);
+  set_texture(e, BITMAP_CIRCLE);
+  set_normal_map(e, BITMAP_SPHERE_NORMAL_MAP);
   e->visual.color = color;
-  e->visual.texture_id = BITMAP_CIRCLE;
-  e->visual.normal_map_id = BITMAP_SPHERE_NORMAL_MAP;
-  */
-  e->friction_multiplier = 1.0;
-  e->bounce_factor = 1.0;
-  //e->slip_factor = 1.0;
+  e->visual.scale = radius / texture_radius;
+
   return e;
 }
 
