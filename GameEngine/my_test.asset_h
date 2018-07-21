@@ -1,0 +1,11 @@
+version 0
+
+# Comments
+#
+# ID bitmap "filename"
+# ID normal_map "filename"
+# ID lighting "filename"
+
+LINK bitmap "lttp_link.png"
+LINK_NORMAL_MAP lighting "Lttp_lighting.png"
+#LINK_NORMAL_MAP normal_map "lttp_normal_map.png"

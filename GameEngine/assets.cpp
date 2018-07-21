@@ -22,6 +22,22 @@ static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) 
   return result;
 }
 
+#if 0
+static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, uint32_t frame) {
+  switch (group_id) {
+    case ASSET_GROUP_LINK : {
+      BitmapID 
+    } break;
+    case ASSET_GROUP_WALL : {
+    } break;
+
+    default : assert(!"Invalid asset group.");
+  }
+  return BITMAP_INVALID;
+}
+#endif
+
+
 struct LoadBitmapWork {
   GameAssets *assets;
   char const *filename;

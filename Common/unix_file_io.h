@@ -11,7 +11,25 @@
 #define FILE_IO_ERROR_MSG_3 "Failed to allocate file."
 #define FILE_IO_ERROR_MSG_4 "Error on read."
 
-// TODO move this out somewhere maybe? Or at least pre-define it so that it doesn't need to be inlined up here.
+static void print_io_error(int error, const char *filename = NULL) {
+  if (!error) return;
+  char *error_message;
+
+  switch (error) {
+    case 1 : error_message = FILE_IO_ERROR_MSG_1; break;
+    case 2 : error_message = FILE_IO_ERROR_MSG_2; break;
+    case 3 : error_message = FILE_IO_ERROR_MSG_3; break;
+    case 4 : error_message = FILE_IO_ERROR_MSG_4; break;
+    default : error_message = "Invalid error value."; break;
+  }
+
+  if (filename) {
+    printf("Error loading %s : %s\n", filename, error_message);
+  } else {
+    printf("Error loading file : %s\n", error_message);
+  }
+}
+
 static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator, int *error, int alignment = 8) {
   int fd = open(filename, O_RDONLY);
   if (fd < 0) {
@@ -48,6 +66,7 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
     }
   }
 
+  if (error) *error = 0;
   return (uint8_t *) buffer;
 }
 

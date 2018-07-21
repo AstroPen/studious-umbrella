@@ -18,7 +18,9 @@
 // TODO Or alternatively, maybe better, just make a global structure that has pointers to everything useful in the GameState.
 // TODO At some point I need to add sound!
 
-
+//
+// Platform interface ---
+//
 
 enum ButtonType : uint8_t {
   BUTTON_LEFT,
@@ -34,10 +36,10 @@ enum ButtonType : uint8_t {
 
   BUTTON_DEBUG_CAMERA_TOGGLE,
   
-  BUTTON_DEBUG_CAMERA_UP,
-  BUTTON_DEBUG_CAMERA_DOWN,
   BUTTON_DEBUG_CAMERA_LEFT,
   BUTTON_DEBUG_CAMERA_RIGHT,
+  BUTTON_DEBUG_CAMERA_UP,
+  BUTTON_DEBUG_CAMERA_DOWN,
 
   BUTTON_DEBUG_CAMERA_IN,
   BUTTON_DEBUG_CAMERA_OUT,
@@ -87,6 +89,10 @@ struct GameInput {
   uint8_t ticks;
 };
 
+//
+// Asset interface ---
+//
+
 enum BitmapID : uint32_t {
   BITMAP_INVALID,
 
@@ -104,6 +110,157 @@ enum BitmapID : uint32_t {
 
   BITMAP_COUNT
 };
+
+// TODO 
+// Replace the BitmapID in entity/visual info with a TextureGroupID
+// Lookup should happen through an accessor that passes the entity in. 
+// Based on the entity it chooses what animation to play, what direction to use,
+// and what frame its on (as well as color, scale, etc). Then in creates a 
+// VisualInfo (or something) that gets passed to the renderer. 
+//
+// Also, for sprites that are in multiple pieces (head, body, shadow, etc) maybe
+// we call push_sprite once for each?
+//
+// I should add a "HAS_TEXTURE" to the shader so that I can get rid of BITMAP_WHITE.
+//
+// 
+enum TextureGroupID {
+  TEXTURE_GROUP_INVALID,
+
+  TEXTURE_GROUP_LINK,
+  TEXTURE_GROUP_WALL,
+
+  TEXTURE_GROUP_COUNT
+};
+
+// TODO This might replace VisualInfo
+// TODO Rename this 'RenderInfo' and rename the thing called RenderInfo to 'PlatformWindow' or something
+struct RenderingInfo {
+  // NOTE : {0,0,0,0} means no texture or normal_map
+  V4 texture_uv; 
+  V4 normal_map_uv;
+  V4 color;
+  V3 offset;
+  float sprite_depth; // TODO This should maybe become a V4 or something
+  float scale;
+
+  uint32_t bitmap_id; // NOTE : This is an OpenGL texture id
+};
+
+// Specifies how to enumerate a texture into different sprites
+enum TextureLayoutType : uint32_t {
+  LAYOUT_SINGLETON,
+  LAYOUT_CHARACTER,
+  LAYOUT_TERRAIN,
+};
+
+struct TextureGroup {
+  PixelBuffer bitmap; // TODO remove the texture_id from PixelBuffer
+  TextureLayoutType layout;
+  uint32_t sprite_width; // TODO Should maybe be column count, row count
+  uint32_t sprite_height;
+  union {
+    float sprite_depth;
+    uint32_t sprite_depth_index; // used to index an array of sprite_depths
+  };
+  uint32_t render_id;
+};
+
+#if 0
+RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
+  TextureGroup *group = get_texure_group(assets, e->texture_group_id);
+  switch (group->layout) {
+    case LAYOUT_CHARACTER : {
+      Direction dir = get_facing_direction(e);
+      AnimationType animation = get_current_animation(e); // This should actually return the final result, the stuff below should happen there
+      float t = get_current_animation_time(e);
+      uint32_t num_frames = get_num_frames(animation);
+      float frame_dt = get_frame_dt(animation);
+      uint32_t current_frame = uint32_t(t / frame_dt);
+      assert(current_frame < num_frames);
+
+      uint32_t sprite_index = get_sprite_index(layout, animation, dir, current_frame);
+      RenderingInfo result = {};
+      result.bitmap_id = group->render_id;
+      // TODO handle left/right reflection somehow
+      static V4 get_sprite_uv(TextureGroup *group, uint32_t sprite_index) {
+        uint32_t h_count = group->bitmap.width / group->sprite_width;
+        uint32_t v_count = group->bitmap.height / group->sprite_height;
+        uint32_t row_idx = sprite_index / h_count;
+        assert(row_idx < v_count);
+        uint32_t col_idx = sprite_index % h_count;
+        float umin = float(col_idx) / float(h_count);
+        assert(umin >= 0 && umin <= 1);
+        float umax = float(col_idx + 1) / float(h_count);
+        assert(umax >= 0 && umax <= 1);
+
+        float vmin = float(row_idx) / float(v_count);
+        assert(vmin >= 0 && vmin <= 1);
+        float vmax = float(row_idx + 1) / float(v_count);
+        assert(vmax >= 0 && vmax <= 1);
+
+        return vec4(umin, vmin, umax, vmax);
+      }
+      result.texture_uv = get_sprite_uv(group, sprite_index);
+      if (has_normal_map(group)) 
+        result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2);
+      result.color = get_color(e);
+      result.offset = get_sprite_offset(group);
+      result.sprite_depth = get_sprite_depth(group, sprite_index);
+      result.scale = get_sprite_scale(e);
+    } break;
+  }
+}
+#endif
+
+enum Direction {
+  LEFT,
+  RIGHT,
+  UP,
+  DOWN
+};
+
+enum AnimationType {
+  ANIM_IDLE,
+  ANIM_MOVE,
+};
+
+enum FontID {
+  FONT_INVALID,
+  FONT_ARIAL,
+  FONT_COURIER_NEW_BOLD,
+  FONT_DEBUG,
+  FONT_COUNT,
+};
+
+struct BakedChar;
+
+struct FontInfo {
+  PixelBuffer bitmap;
+  BakedChar *baked_chars;
+};
+
+struct GameAssets {
+  WorkQueue *work_queue;
+  HeapAllocator work_allocator;
+  PixelBuffer bitmaps[BITMAP_COUNT];
+  FontInfo fonts[FONT_COUNT];
+
+  TextureGroup texture_groups[TEXTURE_GROUP_COUNT];
+};
+
+static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
+static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id);
+static inline uint32_t get_texture_id(GameAssets *assets, BitmapID id);
+static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id);
+static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id);
+static inline BakedChar *get_baked_char(FontInfo *font, char c);
+
+static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, uint32_t frame);
+
+//
+// Game interface ---
+//
 
 struct VisualInfo {
   //PixelBuffer texture;
@@ -163,40 +320,6 @@ struct Entity {
 
   ShapeType shape_type;
 };
-
-// TODO move asset stuff to assets.h file
-enum FontID {
-  FONT_INVALID,
-  FONT_ARIAL,
-  FONT_COURIER_NEW_BOLD,
-  FONT_DEBUG,
-  FONT_COUNT,
-};
-
-struct BakedChar;
-
-struct FontInfo {
-  PixelBuffer bitmap;
-  BakedChar *baked_chars;
-};
-
-struct GameAssets {
-  WorkQueue *work_queue;
-  HeapAllocator work_allocator;
-  PixelBuffer bitmaps[BITMAP_COUNT];
-  FontInfo fonts[FONT_COUNT];
-  // TODO arrayed assets
-  // TODO structured assets
-};
-
-
-static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
-static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id);
-static inline uint32_t get_texture_id(GameAssets *assets, BitmapID id);
-static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id);
-static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id);
-static inline BakedChar *get_baked_char(FontInfo *font, char c);
-
 
 // TODO use this for temporary storage management
 struct TemporaryState {
