@@ -22,6 +22,7 @@ static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) 
   return result;
 }
 
+// TODO some of these getters should be made safe in case the group/layout does not exist
 static inline TextureGroup *get_texure_group(GameAssets * assets, TextureGroupID id) {
   assert(id);
   assert(id < TEXTURE_GROUP_COUNT);
@@ -100,7 +101,7 @@ static float get_sprite_depth(TextureGroup *group, int sprite_index) {
   return group->sprite_depth;
 }
 
-RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
+static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
   TextureGroup *group = get_texure_group(assets, e->texture_group_id);
   switch (group->layout) {
     case LAYOUT_CHARACTER : {
@@ -129,6 +130,78 @@ RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
   }
 
   return {};
+}
+#if 0
+// TODO Delete this when it is no longer needed for reference
+struct TextureGroup {
+  PixelBuffer bitmap; // TODO remove the texture_id from PixelBuffer
+  TextureLayoutType layout;
+  uint32_t sprite_width; // TODO Should maybe be column count, row count
+  uint32_t sprite_height;
+  union {
+    float sprite_depth;
+    uint32_t sprite_depth_index; // used to index an array of sprite_depths
+  };
+  uint32_t render_id;
+  uint32_t sprite_count; // TODO I'd like to get rid of this
+  V3 sprite_offset;
+  bool has_normal_map;
+};
+
+enum Direction {
+  LEFT,
+  RIGHT,
+  UP,
+  DOWN
+};
+
+enum AnimationType {
+  ANIM_IDLE,
+  ANIM_MOVE,
+
+  ANIM_COUNT
+};
+
+struct TextureLayout {
+  uint16_t animation_frame_counts[ANIM_COUNT];
+  uint16_t animation_start_index[ANIM_COUNT][4]; // 4 is for direction count
+  float animation_times[ANIM_COUNT];
+};
+#endif
+
+static void unpack_assets(GameAssets *assets) {
+  // TODO Implement this
+  // Stream in "assets/game_assets.packed_assets"
+ 
+  // For each layout type :
+  // - Get TextureLayoutType
+  // assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
+  // TextureLayout *layout = assets->texture_layout + layout_type;
+  // 
+  // For each animation :
+  // - Get AnimationType with frame_count and duration
+  // layout->animation_frame_counts[animation] = frame_count;
+  // layout->animation_time[animation] = duration;
+  //
+  // For each facing direction :
+  // - Get start_index
+  // layout->animation_start_index[animation] = start_index;
+  //
+
+  // For each texture group :
+  // - Get TextureGroupID
+  // TextureGroup *group = assets->texture_groups + group_id;
+  // group->bitmap;
+  // group->layout;
+  // group->sprite_width;
+  // group->sprite_height;
+  // group->sprite_depth;
+  // group->render_id; // TODO init in OpenGL
+  // group->sprite_count;
+  // group->sprite_offset;
+  // group->has_normal_map;
+  //
+
 }
 
 struct LoadBitmapWork {

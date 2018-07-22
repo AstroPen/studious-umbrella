@@ -111,6 +111,20 @@ enum BitmapID : uint32_t {
   BITMAP_COUNT
 };
 
+//
+// NOTE : TextureGroups represent individual bitmaps while TextureLayouts are shared between
+// skins. In other words, a reskin has the same sprite layout, but a different bitmap. 
+//
+// Different layouts will represent different ingame uses when necessary, but it may be 
+// beneficial to try and use reskins when possible since they can be easily swapped out by
+// only changing the TextureGroupID.
+//
+// I may also want to define a way to make 'subtypes' of layouts so that simpler layouts
+// can be used in place of complex onces by just reusing animations or sprites. This can
+// already be done to some extent by just mapping to the same animation/sprite multiple times.
+//
+
+
 // TODO 
 // Replace the BitmapID in entity/visual info with a TextureGroupID
 // Lookup should happen through an accessor that passes the entity in. 
