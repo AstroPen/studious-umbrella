@@ -22,21 +22,114 @@ static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) 
   return result;
 }
 
-#if 0
-static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, uint32_t frame) {
-  switch (group_id) {
-    case ASSET_GROUP_LINK : {
-      BitmapID 
-    } break;
-    case ASSET_GROUP_WALL : {
-    } break;
-
-    default : assert(!"Invalid asset group.");
-  }
-  return BITMAP_INVALID;
+static inline TextureGroup *get_texure_group(GameAssets * assets, TextureGroupID id) {
+  assert(id);
+  assert(id < TEXTURE_GROUP_COUNT);
+  auto result = assets->texture_groups + id;
+  return result;
 }
-#endif
 
+static inline TextureLayout *get_layout(GameAssets *assets, TextureLayoutType id) {
+  assert(id);
+  assert(id < LAYOUT_COUNT);
+  auto result = assets->texture_layouts + id;
+  return result;
+}
+
+static V4 get_sprite_uv(TextureGroup *group, int sprite_index) {
+  if (sprite_index < 0) return {};
+
+  uint32_t h_count = group->bitmap.width / group->sprite_width;
+  uint32_t v_count = group->bitmap.height / group->sprite_height;
+  uint32_t row_idx = sprite_index / h_count;
+  assert(row_idx < v_count);
+  uint32_t col_idx = sprite_index % h_count;
+
+  float umin = float(col_idx) / float(h_count);
+  assert(umin >= 0 && umin <= 1);
+  float umax = float(col_idx + 1) / float(h_count);
+  assert(umax >= 0 && umax <= 1);
+
+  float vmin = float(row_idx) / float(v_count);
+  assert(vmin >= 0 && vmin <= 1);
+  float vmax = float(row_idx + 1) / float(v_count);
+  assert(vmax >= 0 && vmax <= 1);
+
+  return vec4(umin, vmin, umax, vmax);
+}
+
+static AnimationType get_current_animation(Entity *e) {
+  if (non_zero(e->vel)) {
+    return ANIM_MOVE;
+  }
+  return ANIM_IDLE;
+}
+
+
+static int get_sprite_index(TextureLayout *layout, AnimationType animation, Direction dir, float dt) {
+  // TODO handle left/right reflection somehow
+  
+  auto frame_count = layout->animation_frame_counts[animation];
+  if (!frame_count) return -1;
+
+  float animation_time = layout->animation_times[animation];
+
+  float normalized_dt = dt / animation_time;
+  uint16_t frame_index = lroundf(normalized_dt * frame_count);
+  if (frame_index >= frame_count) frame_index = frame_count - 1;
+
+  auto start_index = layout->animation_start_index[animation][dir];
+  
+  return start_index + frame_index;
+}
+
+static bool has_normal_map(TextureGroup *group) {
+  return group->has_normal_map;
+}
+
+static V4 get_color(Entity *e) {
+  return e->visual.color;
+}
+static float get_sprite_scale(Entity *e) {
+  return e->visual.scale;
+}
+static V3 get_sprite_offset(TextureGroup *group) {
+  return group->sprite_offset;
+}
+static float get_sprite_depth(TextureGroup *group, int sprite_index) {
+  return group->sprite_depth;
+}
+
+RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
+  TextureGroup *group = get_texure_group(assets, e->texture_group_id);
+  switch (group->layout) {
+    case LAYOUT_CHARACTER : {
+      TextureLayout *layout = get_layout(assets, group->layout);
+
+      Direction dir = e->facing_direction; //get_facing_direction(e);
+      AnimationType animation = get_current_animation(e);
+      float t = e->animation_dt; //get_current_animation_time(e);
+
+      int sprite_index = get_sprite_index(layout, animation, dir, t);
+
+      RenderingInfo result = {};
+      result.bitmap_id = group->render_id;
+      result.texture_uv = get_sprite_uv(group, sprite_index);
+      if (has_normal_map(group)) 
+        result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2);
+      result.color = get_color(e);
+      result.offset = get_sprite_offset(group);
+      result.sprite_depth = get_sprite_depth(group, sprite_index);
+      result.scale = get_sprite_scale(e);
+
+      return result;
+    } break;
+
+    default : assert(!"Invalid texture layout.");
+  }
+
+  return {};
+}
 
 struct LoadBitmapWork {
   GameAssets *assets;

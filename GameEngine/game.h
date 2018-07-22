@@ -152,6 +152,8 @@ enum TextureLayoutType : uint32_t {
   LAYOUT_SINGLETON,
   LAYOUT_CHARACTER,
   LAYOUT_TERRAIN,
+
+  LAYOUT_COUNT
 };
 
 struct TextureGroup {
@@ -164,54 +166,10 @@ struct TextureGroup {
     uint32_t sprite_depth_index; // used to index an array of sprite_depths
   };
   uint32_t render_id;
+  uint32_t sprite_count; // TODO I'd like to get rid of this
+  V3 sprite_offset;
+  bool has_normal_map;
 };
-
-#if 0
-RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
-  TextureGroup *group = get_texure_group(assets, e->texture_group_id);
-  switch (group->layout) {
-    case LAYOUT_CHARACTER : {
-      Direction dir = get_facing_direction(e);
-      AnimationType animation = get_current_animation(e); // This should actually return the final result, the stuff below should happen there
-      float t = get_current_animation_time(e);
-      uint32_t num_frames = get_num_frames(animation);
-      float frame_dt = get_frame_dt(animation);
-      uint32_t current_frame = uint32_t(t / frame_dt);
-      assert(current_frame < num_frames);
-
-      uint32_t sprite_index = get_sprite_index(layout, animation, dir, current_frame);
-      RenderingInfo result = {};
-      result.bitmap_id = group->render_id;
-      // TODO handle left/right reflection somehow
-      static V4 get_sprite_uv(TextureGroup *group, uint32_t sprite_index) {
-        uint32_t h_count = group->bitmap.width / group->sprite_width;
-        uint32_t v_count = group->bitmap.height / group->sprite_height;
-        uint32_t row_idx = sprite_index / h_count;
-        assert(row_idx < v_count);
-        uint32_t col_idx = sprite_index % h_count;
-        float umin = float(col_idx) / float(h_count);
-        assert(umin >= 0 && umin <= 1);
-        float umax = float(col_idx + 1) / float(h_count);
-        assert(umax >= 0 && umax <= 1);
-
-        float vmin = float(row_idx) / float(v_count);
-        assert(vmin >= 0 && vmin <= 1);
-        float vmax = float(row_idx + 1) / float(v_count);
-        assert(vmax >= 0 && vmax <= 1);
-
-        return vec4(umin, vmin, umax, vmax);
-      }
-      result.texture_uv = get_sprite_uv(group, sprite_index);
-      if (has_normal_map(group)) 
-        result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2);
-      result.color = get_color(e);
-      result.offset = get_sprite_offset(group);
-      result.sprite_depth = get_sprite_depth(group, sprite_index);
-      result.scale = get_sprite_scale(e);
-    } break;
-  }
-}
-#endif
 
 enum Direction {
   LEFT,
@@ -223,6 +181,14 @@ enum Direction {
 enum AnimationType {
   ANIM_IDLE,
   ANIM_MOVE,
+
+  ANIM_COUNT
+};
+
+struct TextureLayout {
+  uint16_t animation_frame_counts[ANIM_COUNT];
+  uint16_t animation_start_index[ANIM_COUNT][4]; // 4 is for direction count
+  float animation_times[ANIM_COUNT];
 };
 
 enum FontID {
@@ -247,6 +213,7 @@ struct GameAssets {
   FontInfo fonts[FONT_COUNT];
 
   TextureGroup texture_groups[TEXTURE_GROUP_COUNT];
+  TextureLayout texture_layouts[LAYOUT_COUNT];
 };
 
 static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
@@ -307,6 +274,10 @@ struct Entity {
   VisualInfo visual;
   V3 vel;
   V3 acc;
+
+  TextureGroupID texture_group_id;
+  Direction facing_direction;
+  float animation_dt;
 
   float mass;
   float accel_max;

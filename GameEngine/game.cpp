@@ -63,6 +63,8 @@ static bool apply_input(GameState *g, ControllerState controller) {
     return false;
   }
 
+  // FIXME Projectiles are not shooting directly at the pointer, probably
+  // because of screenspace/worldspace conversions
   if (controller.pointer_moved) {
     V2 pointer_p = controller.pointer;
     g->pointer_position = to_game_coordinate(pointer_p, g->height);
