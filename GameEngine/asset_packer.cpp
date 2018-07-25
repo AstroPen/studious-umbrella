@@ -136,9 +136,14 @@ int main(int argc, char *argv[]) {
   link_group->height = buffer.height;
   link_group->texture_group_id = TEXTURE_GROUP_LINK;
   link_group->layout_type = LAYOUT_CHARACTER;
-  link_group->sprite_count = 1; // For now, no normal maps
+  link_group->sprite_count = 1;
   link_group->sprite_width = buffer.width; // TODO needs to be per sprite
   link_group->sprite_height = buffer.height;
+  link_group->flags = 0; // No normal map for now
+  link_group->min_blend = LINEAR_BLEND;
+  link_group->max_blend = NEAREST_BLEND;
+  link_group->s_clamp = CLAMP_TO_EDGE;
+  link_group->t_clamp = CLAMP_TO_EDGE;
   link_group->offset_x = 0; // Copied from game.cpp
   link_group->offset_y = 0.40;
   link_group->offset_z = 0.06;

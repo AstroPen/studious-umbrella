@@ -23,15 +23,28 @@ struct PackedTextureLayout {
   PackedAnimation animations[0];
 };
 
+enum PackedGroupFlags {
+  GROUP_HAS_NORMAL_MAP = 1,
+};
+
 struct PackedTextureGroup {
   uint64_t bitmap_offset; // In bytes from start of data
+
   uint32_t width; // In pixels
   uint32_t height; 
-  uint8_t texture_group_id;
-  uint8_t layout_type;
-  int16_t sprite_count; // Negative value indicates it has a normal map
+
+  uint16_t texture_group_id;
+  uint16_t layout_type;
+  uint16_t sprite_count;
   uint16_t sprite_width; // In pixels
   uint16_t sprite_height;
+
+  uint16_t flags;
+  uint8_t min_blend;
+  uint8_t max_blend;
+  uint8_t s_clamp;
+  uint8_t t_clamp;
+
   float offset_x;
   float offset_y;
   float offset_z;

@@ -23,7 +23,7 @@ static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) 
 }
 
 // TODO some of these getters should be made safe in case the group/layout does not exist
-static inline TextureGroup *get_texure_group(GameAssets * assets, TextureGroupID id) {
+static inline TextureGroup *get_texture_group(GameAssets * assets, TextureGroupID id) {
   assert(id);
   assert(id < TEXTURE_GROUP_COUNT);
   auto result = assets->texture_groups + id;
@@ -102,7 +102,7 @@ static float get_sprite_depth(TextureGroup *group, int sprite_index) {
 }
 
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
-  TextureGroup *group = get_texure_group(assets, e->texture_group_id);
+  TextureGroup *group = get_texture_group(assets, e->texture_group_id);
   switch (group->layout) {
     case LAYOUT_CHARACTER : {
       TextureLayout *layout = get_layout(assets, group->layout);
@@ -227,7 +227,7 @@ static void unpack_assets(GameAssets *assets) {
   // For each texture group :
   for (uint32_t tg = 0; tg < texture_group_count; tg++) {
     auto packed_group = (PackedTextureGroup *) file_buffer;
-    auto group_id = packed_group->texture_group_id;
+    TextureGroupID group_id = (TextureGroupID) packed_group->texture_group_id;
 
 
     TextureGroup *group = assets->texture_groups + group_id;
@@ -240,12 +240,21 @@ static void unpack_assets(GameAssets *assets) {
     group->sprite_width = packed_group->sprite_width;
     group->sprite_height = packed_group->sprite_height;
     group->sprite_depth = packed_group->sprite_depth;
-    group->render_id = 0; // TODO init in OpenGL
+    group->render_id = 0; // init in OpenGL with init_texture
     group->sprite_count = packed_group->sprite_count;
     group->sprite_offset.x = packed_group->offset_x;
     group->sprite_offset.y = packed_group->offset_y;
     group->sprite_offset.z = packed_group->offset_z;
     group->has_normal_map = (packed_group->sprite_count > 0);
+
+    TextureParameters param = default_texture_parameters;
+    param.min_blend = (TextureFormatSpecifier) packed_group->min_blend;
+    param.max_blend = (TextureFormatSpecifier) packed_group->max_blend;
+    param.s_clamp = (TextureFormatSpecifier) packed_group->s_clamp;
+    param.t_clamp = (TextureFormatSpecifier) packed_group->t_clamp;
+    init_texture(assets, group_id, param);
+
+    file_buffer += sizeof(PackedTextureGroup);
   }
 }
 

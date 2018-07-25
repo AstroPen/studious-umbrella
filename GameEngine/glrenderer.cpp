@@ -30,14 +30,17 @@ enum ShaderAttribute {
   VERTEX_TANGENT,
 };
 
-enum TextureFormatSpecifier : uint32_t {
-  RGBA = GL_RGBA,
-  BGRA = GL_BGRA,
-  CLAMP_TO_EDGE = GL_CLAMP_TO_EDGE,
-  REPEAT_CLAMPING = GL_REPEAT,
-  LINEAR_BLEND = GL_LINEAR,
-  NEAREST_BLEND = GL_NEAREST
-};
+GLint to_gl_format_specifier(TextureFormatSpecifier spec) {
+  switch (spec) {
+    case RGBA : return GL_RGBA;
+    case BGRA : return GL_BGRA;
+    case CLAMP_TO_EDGE : return GL_CLAMP_TO_EDGE;
+    case REPEAT_CLAMPING : return GL_REPEAT;
+    case LINEAR_BLEND : return GL_LINEAR;
+    case NEAREST_BLEND : return GL_NEAREST;
+    default : return 0;
+  };
+}
 
 static void draw_grad_bg_internal(PixelBuffer buf, uint32_t game_ticks, int y_start, int y_end) {
   TIMED_FUNCTION();
@@ -1099,14 +1102,15 @@ static GLuint create_shader_program(char* header,
 }
 
 struct TextureParameters {
-  uint32_t min_blend = LINEAR_BLEND;
-  uint32_t max_blend = NEAREST_BLEND;
-  uint32_t s_clamp = CLAMP_TO_EDGE;
-  uint32_t t_clamp = CLAMP_TO_EDGE;
-  uint32_t pixel_format = BGRA;
+  TextureFormatSpecifier min_blend = LINEAR_BLEND;
+  TextureFormatSpecifier max_blend = NEAREST_BLEND;
+  TextureFormatSpecifier s_clamp = CLAMP_TO_EDGE;
+  TextureFormatSpecifier t_clamp = CLAMP_TO_EDGE;
+  TextureFormatSpecifier pixel_format = BGRA;
 } default_texture_parameters;
 
-static void update_texture(GameAssets *assets, BitmapID bitmap_id, uint32_t pixel_format = BGRA) {
+// TODO delete this when I finish switching to the new asset path
+static void update_texture(GameAssets *assets, BitmapID bitmap_id, TextureFormatSpecifier pixel_format = BGRA) {
   auto texture = get_bitmap(assets, bitmap_id);
   if (!texture) return;
   assert(texture->texture_id);
@@ -1116,9 +1120,22 @@ static void update_texture(GameAssets *assets, BitmapID bitmap_id, uint32_t pixe
   gl_check_error();
   // NOTE switch to GL_SRGB8_ALPHA8 if you want srgb (gamma correction)
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texture->width, texture->height, 0,
-               pixel_format, GL_UNSIGNED_BYTE, texture->buffer);
+               to_gl_format_specifier(pixel_format), GL_UNSIGNED_BYTE, texture->buffer);
 }
 
+static void update_texture(GameAssets *assets, TextureGroupID id, TextureFormatSpecifier pixel_format = BGRA) {
+  auto texture = get_texture_group(assets, id);
+  if (!texture) return;
+  assert(texture->render_id);
+  gl_check_error();
+  glBindTexture(GL_TEXTURE_2D, texture->render_id);
+  gl_check_error();
+  // NOTE switch to GL_SRGB8_ALPHA8 if you want srgb (gamma correction)
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texture->bitmap.width, texture->bitmap.height, 0,
+               to_gl_format_specifier(pixel_format), GL_UNSIGNED_BYTE, texture->bitmap.buffer);
+}
+
+// TODO delete this when I finish switching to the new asset path
 static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParameters param = default_texture_parameters) {
   auto texture = get_bitmap(assets, bitmap_id);
   if (!texture) return;
@@ -1129,10 +1146,27 @@ static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParamete
   texture->texture_id = texture_id;
   update_texture(assets, bitmap_id, param.pixel_format);
   gl_check_error();
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, param.min_blend);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, param.max_blend);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, param.s_clamp);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, param.t_clamp);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, to_gl_format_specifier(param.min_blend));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, to_gl_format_specifier(param.max_blend));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, to_gl_format_specifier(param.s_clamp));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, to_gl_format_specifier(param.t_clamp));
+  gl_check_error();
+}
+
+static void init_texture(GameAssets *assets, TextureGroupID id, TextureParameters param = default_texture_parameters) {
+  auto texture = get_texture_group(assets, id);
+  if (!texture) return;
+  uint32_t texture_id;
+  glGenTextures(1, &texture_id);
+  assert(texture_id);
+  //assert(texture->texture_id < BITMAP_COUNT);
+  texture->render_id = texture_id;
+  update_texture(assets, id, param.pixel_format);
+  gl_check_error();
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, to_gl_format_specifier(param.min_blend));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, to_gl_format_specifier(param.max_blend));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, to_gl_format_specifier(param.s_clamp));
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, to_gl_format_specifier(param.t_clamp));
   gl_check_error();
 }
 

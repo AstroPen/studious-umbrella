@@ -127,5 +127,13 @@ struct FontInfo {
   BakedChar *baked_chars;
 };
 
+enum TextureFormatSpecifier : uint32_t {
+  RGBA,
+  BGRA,
+  CLAMP_TO_EDGE,
+  REPEAT_CLAMPING,
+  LINEAR_BLEND,
+  NEAREST_BLEND,
+};
 
 

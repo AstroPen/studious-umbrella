@@ -112,7 +112,8 @@ static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id);
 static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id);
 static inline BakedChar *get_baked_char(FontInfo *font, char c);
 
-static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, uint32_t frame);
+//static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, uint32_t frame);
+static inline TextureGroup *get_texture_group(GameAssets * assets, TextureGroupID id);
 
 //
 // Game interface ---
