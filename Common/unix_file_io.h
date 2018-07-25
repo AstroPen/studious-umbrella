@@ -66,6 +66,7 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
     }
   }
 
+  assert(close(fd) == 0);
   if (error) *error = 0;
   return (uint8_t *) buffer;
 }

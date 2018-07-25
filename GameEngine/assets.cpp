@@ -169,39 +169,84 @@ struct TextureLayout {
 };
 #endif
 
+#include "packed_assets.h"
+
 static void unpack_assets(GameAssets *assets) {
   // TODO Implement this
-  // Stream in "assets/game_assets.packed_assets"
- 
+  // Stream in "assets/packed_assets.pack"
+
+  // TODO pass in allocator
+  PushAllocator temporary_ = new_push_allocator(2048*128);
+  auto temporary = &temporary_;
+  // TODO once files get large, this needs to be a stream
+  auto file_buffer = read_entire_file("assets/packed_assets.pack", temporary, 64);
+  assert(file_buffer);
+
+  auto header = (PackedAssetHeader *)file_buffer;
+
+  assert(header->magic == 'PACK');
+  assert(header->version == 0);
+  assert(header->total_size <= temporary->bytes_allocated);
+
+  uint32_t layout_count = header->layout_count;
+  uint32_t texture_group_count = header->texture_group_count;
+  uint8_t *data = file_buffer + header->data_offset;
+
+  assert(header->total_size == temporary->bytes_allocated); // TODO delete these
+  assert(layout_count == 1);
+  assert(texture_group_count == 1);
+
+  file_buffer += sizeof(PackedAssetHeader);
+
   // For each layout type :
-  // - Get TextureLayoutType
-  // assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
-  // TextureLayout *layout = assets->texture_layout + layout_type;
-  // 
-  // For each animation :
-  // - Get AnimationType with frame_count and duration
-  // layout->animation_frame_counts[animation] = frame_count;
-  // layout->animation_time[animation] = duration;
-  //
-  // For each facing direction :
-  // - Get start_index
-  // layout->animation_start_index[animation] = start_index;
-  //
+  for (uint32_t lt = 0; lt < layout_count; lt++) {
+    auto packed_layout = (PackedTextureLayout *) file_buffer;
+    uint32_t layout_type = packed_layout->layout_type;
+
+    assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
+    assert(layout_type = LAYOUT_CHARACTER); // TODO delete this
+    TextureLayout *layout = assets->texture_layouts + layout_type;
+    uint32_t animation_count = packed_layout->animation_count;
+
+    file_buffer += sizeof(PackedTextureLayout);
+
+    // For each animation :
+    for (uint32_t an = 0; an < animation_count; an++) {
+      auto packed_animation = packed_layout->animations + an;
+      auto animation_type = packed_animation->animation_type;
+      auto frame_count = packed_animation->frame_count;
+      auto duration = packed_animation->duration;
+      
+      layout->animation_frame_counts[animation_type] = frame_count;
+      layout->animation_times[animation_type] = duration;
+
+      file_buffer += sizeof(PackedAnimation);
+    }
+  }
 
   // For each texture group :
-  // - Get TextureGroupID
-  // TextureGroup *group = assets->texture_groups + group_id;
-  // group->bitmap;
-  // group->layout;
-  // group->sprite_width;
-  // group->sprite_height;
-  // group->sprite_depth;
-  // group->render_id; // TODO init in OpenGL
-  // group->sprite_count;
-  // group->sprite_offset;
-  // group->has_normal_map;
-  //
+  for (uint32_t tg = 0; tg < texture_group_count; tg++) {
+    auto packed_group = (PackedTextureGroup *) file_buffer;
+    auto group_id = packed_group->texture_group_id;
 
+
+    TextureGroup *group = assets->texture_groups + group_id;
+    // TODO FIXME We cant free the buffer because we point into it here
+    group->bitmap.buffer = data + packed_group->bitmap_offset;
+    group->bitmap.width = packed_group->width;
+    group->bitmap.height = packed_group->height;
+    assert(packed_group->layout_type > 0 && packed_group->layout_type < LAYOUT_COUNT);
+    group->layout = (TextureLayoutType) packed_group->layout_type;
+    group->sprite_width = packed_group->sprite_width;
+    group->sprite_height = packed_group->sprite_height;
+    group->sprite_depth = packed_group->sprite_depth;
+    group->render_id = 0; // TODO init in OpenGL
+    group->sprite_count = packed_group->sprite_count;
+    group->sprite_offset.x = packed_group->offset_x;
+    group->sprite_offset.y = packed_group->offset_y;
+    group->sprite_offset.z = packed_group->offset_z;
+    group->has_normal_map = (packed_group->sprite_count > 0);
+  }
 }
 
 struct LoadBitmapWork {
@@ -230,29 +275,29 @@ static inline void load_bitmap(GameAssets *assets, BitmapID id) {
       return;
     } break;
     case BITMAP_FACE : {
-      work->filename = "face.png";
+      work->filename = "assets/face.png";
     } break;
     case BITMAP_TEST_SPRITE : {
-      work->filename = "test_sprite.png";
+      work->filename = "assets/test_sprite.png";
     } break;
     case BITMAP_LINK : {
-      work->filename = "lttp_link.png";
+      work->filename = "assets/lttp_link.png";
     } break;
     case BITMAP_LINK_NORMAL_MAP : {
-      work->filename = "lttp_normal_map.png";
+      work->filename = "assets/lttp_normal_map.png";
     } break;
     case BITMAP_TEST_SPRITE_NORMAL_MAP : {
-      work->filename = "test_sprite_normal_map.png";
+      work->filename = "assets/test_sprite_normal_map.png";
     } break;
     case BITMAP_BACKGROUND : {
       assert(!"Invalid BitmapID load.");
       return;
     } break;
     case BITMAP_WALL : {
-      work->filename = "wall_texture.png";
+      work->filename = "assets/wall_texture.png";
     } break;
     case BITMAP_WALL_NORMAL_MAP : {
-      work->filename = "wall_normal_map.png";
+      work->filename = "assets/wall_normal_map.png";
     } break;
     case BITMAP_WHITE : {
       assert(!"Invalid BitmapID load.");

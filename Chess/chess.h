@@ -236,8 +236,8 @@ typedef struct {
   int value = DEBUG_VAL; // TODO remove this when done debugging
 } ChessNode;
 
-#define MAX_NODES (65536*128)
-#define MAX_DEPTH 5
+#define MAX_NODES (65536*128*2)
+#define MAX_DEPTH 6
 
 typedef struct {
   ChessNode  nodes[MAX_NODES];

@@ -1,6 +1,8 @@
 stb*
 test
 create_normal_map
+assets
+asset_packer
 *.bmp
 *.png
 *.xbm
