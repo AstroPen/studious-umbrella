@@ -117,6 +117,7 @@ int main(int argc, char *argv[]) {
   PackedAssetHeader *asset_header = alloc_struct(dest_allocator, PackedAssetHeader);
   asset_header->magic = 'PACK';
   asset_header->version = 0;
+  asset_header->total_size = pre_data_size;
   asset_header->layout_count = 1;
   asset_header->texture_group_count = 1;
   asset_header->data_offset = pre_data_size;
@@ -151,7 +152,7 @@ int main(int argc, char *argv[]) {
   link_group->bitmap_offset = 0; //dest_allocator->bytes_allocated; // TODO maybe consider alignment
   
   uint64_t bitmap_size = uint64_t(buffer.width) * buffer.height * 4;
-  asset_header->total_size = link_group->bitmap_offset + bitmap_size;
+  asset_header->total_size += bitmap_size;
 
 
   // TODO I might want to make my own version of this, but this is fine for now
@@ -161,6 +162,8 @@ int main(int argc, char *argv[]) {
   assert(written == dest_allocator->bytes_allocated);
   written = fwrite(buffer.buffer, 1, bitmap_size, pack_file);
   assert(written == bitmap_size);
+  printf("Packed in %ld bytes\n", ftell(pack_file));
+  printf("Calculated size is %u bytes\n", asset_header->total_size);
   fclose(pack_file);
 
 

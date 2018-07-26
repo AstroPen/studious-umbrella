@@ -244,6 +244,10 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   player->time_to_max_accel = 0.2f;
   player->time_to_zero_accel = 0.1f;
 
+  player->texture_group_id = TEXTURE_GROUP_LINK;
+  player->facing_direction = DOWN;
+  player->animation_dt = 0;
+
   //
   // INIT WALLS
   //

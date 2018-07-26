@@ -15,12 +15,15 @@ typedef double float64;
 union bit32 {
   int i;
   uint32_t u;
+  float f;
 
   inline bit32(int _i) { i = _i; }
   inline bit32(uint32_t _u) { u = _u; }
+  inline bit32(float _f) { f= _f; }
   
   inline operator int() { return i; }
   inline operator uint32_t() { return u; }
+  inline operator float() { return f; }
 };
 
 // NOTE : this does not work if val is a rvalue

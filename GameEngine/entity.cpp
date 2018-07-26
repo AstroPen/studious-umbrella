@@ -162,6 +162,11 @@ static inline void push_cuboid_entity(RenderBuffer *render_buffer, Entity *e) {
 static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity *e) {
   TIMED_FUNCTION();
 
+  if (e->flags & ENTITY_PLAYER_CONTROLLED) {
+    render_entity(render_buffer, e); 
+    return;
+  }
+
   uint32_t normal_map_id = 0;
   if (e->flags & ENTITY_NORMAL_MAP) {
     auto normal_map = get_bitmap(&g->assets, e->visual.normal_map_id);

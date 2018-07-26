@@ -1,5 +1,5 @@
 
-all: test create_normal_map asset_packer
+all: test create_normal_map asset_packer assets/packed_assets.pack
 
 compile = g++ -Wall -Wno-writable-strings -Wno-unused-function -Wno-missing-braces -std=c++11 -O2 -c
 link = g++ -Wall -Wno-writable-strings -Wno-unused-function -Wno-missing-braces -std=c++11 -O2 -o
@@ -29,6 +29,9 @@ asset_packer : asset_packer.cpp pixel.h asset_interface.h ../Common/* stb_image.
 	$(compile) asset_packer.cpp -o asset_packer.o \
 	-I/usr/local/include/GL -I../Common
 	$(link) asset_packer asset_packer.o stb_image.o stb_truetype.o
+
+assets/packed_assets.pack : asset_packer assets/*.png
+	./asset_packer
 
 object_files = stb_image.o stb_truetype.o
 

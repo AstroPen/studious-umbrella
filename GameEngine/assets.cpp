@@ -27,7 +27,8 @@ static inline TextureGroup *get_texture_group(GameAssets * assets, TextureGroupI
   assert(id);
   assert(id < TEXTURE_GROUP_COUNT);
   auto result = assets->texture_groups + id;
-  return result;
+  if (result->bitmap.buffer) return result;
+  return NULL;
 }
 
 static inline TextureLayout *get_layout(GameAssets *assets, TextureLayoutType id) {
@@ -103,6 +104,8 @@ static float get_sprite_depth(TextureGroup *group, int sprite_index) {
 
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
   TextureGroup *group = get_texture_group(assets, e->texture_group_id);
+  if (!group) return {};
+
   switch (group->layout) {
     case LAYOUT_CHARACTER : {
       TextureLayout *layout = get_layout(assets, group->layout);
@@ -112,6 +115,7 @@ static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
       float t = e->animation_dt; //get_current_animation_time(e);
 
       int sprite_index = get_sprite_index(layout, animation, dir, t);
+      if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
 
       RenderingInfo result = {};
       result.bitmap_id = group->render_id;
@@ -122,6 +126,8 @@ static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
       result.offset = get_sprite_offset(group);
       result.sprite_depth = get_sprite_depth(group, sprite_index);
       result.scale = get_sprite_scale(e);
+      result.width = group->sprite_width;
+      result.height = group->sprite_height;
 
       return result;
     } break;
@@ -172,10 +178,8 @@ struct TextureLayout {
 #include "packed_assets.h"
 
 static void unpack_assets(GameAssets *assets) {
-  // TODO Implement this
-  // Stream in "assets/packed_assets.pack"
 
-  // TODO pass in allocator
+  // TODO pass in allocator probably
   PushAllocator temporary_ = new_push_allocator(2048*128);
   auto temporary = &temporary_;
   // TODO once files get large, this needs to be a stream
@@ -192,10 +196,12 @@ static void unpack_assets(GameAssets *assets) {
   uint32_t texture_group_count = header->texture_group_count;
   uint8_t *data = file_buffer + header->data_offset;
 
-  assert(header->total_size == temporary->bytes_allocated); // TODO delete these
+  assert(file_buffer == temporary->memory); // TODO delete these :
+  assert(header->total_size == temporary->bytes_allocated);
   assert(layout_count == 1);
   assert(texture_group_count == 1);
 
+  // NOTE : This only works if the structs are tightly packed and aligned properly.
   file_buffer += sizeof(PackedAssetHeader);
 
   // For each layout type :
@@ -245,9 +251,10 @@ static void unpack_assets(GameAssets *assets) {
     group->sprite_offset.x = packed_group->offset_x;
     group->sprite_offset.y = packed_group->offset_y;
     group->sprite_offset.z = packed_group->offset_z;
-    group->has_normal_map = (packed_group->sprite_count > 0);
+    group->has_normal_map = (packed_group->flags & GROUP_HAS_NORMAL_MAP) != 0;
 
     TextureParameters param = default_texture_parameters;
+    param.pixel_format = RGBA;
     param.min_blend = (TextureFormatSpecifier) packed_group->min_blend;
     param.max_blend = (TextureFormatSpecifier) packed_group->max_blend;
     param.s_clamp = (TextureFormatSpecifier) packed_group->s_clamp;
@@ -604,6 +611,8 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   param.t_clamp = REPEAT_CLAMPING;
   init_texture(assets, BITMAP_WALL, param);
   init_texture(assets, BITMAP_WALL_NORMAL_MAP, param);
+
+  unpack_assets(assets);
 }
 
 

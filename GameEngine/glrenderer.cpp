@@ -740,6 +740,117 @@ static void draw_frame_records(RenderBuffer *buffer) {
 #undef TAB
 }
 
+static RenderingInfo get_render_info(GameAssets *assets, Entity *e);
+
+// TODO switch everthing to use the same path
+static void render_entity(RenderBuffer *buffer, Entity *e) {
+#define DEBUG_CUBES 0
+  TIMED_FUNCTION();
+
+#if 0
+struct RenderingInfo {
+  // NOTE : {0,0,0,0} means no texture or normal_map
+  V4 texture_uv; 
+  V4 normal_map_uv;
+  V4 color;
+  V3 offset;
+  float sprite_depth; // TODO This should maybe become a V4 or something
+  float scale;
+  uint32_t width;
+  uint32_t height;
+
+  uint32_t bitmap_id; // NOTE : This is an OpenGL texture id
+};
+#endif 
+  RenderingInfo info = get_render_info(buffer->assets, e);
+  if (info.texture_uv == vec4(0)) return;
+  assert(info.texture_uv == vec4(0,0,1,1));
+  assert(info.normal_map_uv == vec4(0,0,0,0));
+  assert(info.color == vec4(1,1,1,1));
+  assert(info.offset == vec3(0, 0.4, 0.06));
+  assert(info.sprite_depth == 0.3f);
+  assert(info.scale == 4.0);
+  assert(info.width == 16);
+  assert(info.height == 22);
+  assert(info.bitmap_id);
+
+
+  uint32_t bitmap_id = info.bitmap_id;
+  uint32_t normal_map_id = 0;
+
+  GameCamera *camera = buffer->camera;
+
+  V3 Z = camera->forward;
+  V3 X = camera->right;
+  V3 Y = camera->up;
+
+  float width  = info.width  * METERS_PER_PIXEL * info.scale;
+  float height = info.height * METERS_PER_PIXEL * info.scale;
+
+  auto box = e->collision_box;
+  Rectangle r;
+  auto offset = info.offset;
+  offset.z = 0;
+  r.center = center(box) + info.offset;
+  //r.center.z -= box.offset.z;
+  r.center.z += info.offset.z;
+  r.offsets[1].z = r.offsets[0].z = height;
+  r.offsets[0].x = width / 2;
+  r.offsets[1].x = -width / 2;
+  r.offsets[0].y = height / 2;
+  r.offsets[1].y = height / 2;
+
+  r.offsets[0] = X * r.offsets[0].x + Y * r.offsets[0].y;
+  r.offsets[1] = X * r.offsets[1].x + Y * r.offsets[1].y;
+
+
+  auto quad = to_quad4(r);
+
+  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  auto c = info.color;
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
+  
+  V4 c4[4] = {c,c,c,c};
+
+  V3 n = -Z;
+  V3 n4[4] = {n,n,n,n};
+
+  /*
+  float z_min = visual_info.offset.z;
+  float z_max = visual_info.sprite_height;
+  */
+
+  float z_min = 0;
+  float z_max = info.sprite_depth;
+
+  float bias[4] = {z_min, z_min, z_max, z_max};
+  for (int i = 0; i < 4; i++) {
+    quad.verts[i].w = bias[i];
+  }
+
+  // NOTE : This is always correct if the sprite isn't skewed.
+  V3 t = X; //{1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = quad.verts;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+
+  push_quad_vertices(buffer, verts);
+
+  append_quads(buffer, 1, bitmap_id, normal_map_id);
+
+#if DEBUG_CUBES
+  push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
+#endif
+#undef DEBUG_CUBES
+}
+
 // TODO massively rework this to simplify and get better z biasing.
 static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_info) {
 #define DEBUG_CUBES 0

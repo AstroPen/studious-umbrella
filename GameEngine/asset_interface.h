@@ -64,6 +64,8 @@ struct RenderingInfo {
   V3 offset;
   float sprite_depth; // TODO This should maybe become a V4 or something
   float scale;
+  uint32_t width;
+  uint32_t height;
 
   uint32_t bitmap_id; // NOTE : This is an OpenGL texture id
 };
