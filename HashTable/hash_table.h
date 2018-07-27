@@ -3,7 +3,7 @@
 
 #ifndef _HASH_TABLE_H_
 #define _HASH_TABLE_H_
-// TODO change this when I move push_allocator.h
+
 #include "push_allocator.h"
 
 namespace hash_table_internal {
@@ -33,10 +33,21 @@ namespace hash_table_internal {
 #error "HASH_TABLE_VALUE_TYPE must be user-defined."
 #endif
 
-// TODO require EMPTY and REMOVED
 #ifndef HASH_TABLE_KEY_TYPE
 #error "HASH_TABLE_KEY_TYPE must be user-defined."
 #endif
+
+#ifndef HASH_KEY_EMPTY
+#error "HASH_KEY_EMPTY must be user-defined."
+#endif
+
+#define EMPTY HASH_KEY_EMPTY
+
+#ifndef HASH_KEY_REMOVED
+#error "HASH_KEY_REMOVED must be user-defined."
+#endif
+
+#define REMOVED HASH_KEY_REMOVED
 
 #define Key HASH_TABLE_KEY_TYPE
 

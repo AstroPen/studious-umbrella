@@ -94,6 +94,22 @@ union V4 {
   };
 
   struct {
+    V2 xy;
+    V2 _pad4;
+  };
+
+  struct {
+    V2 _pad5;
+    V2 zw;
+  };
+
+  struct {
+    float _pad6;
+    V2 yz;
+    float _pad7;
+  };
+
+  struct {
     float r;
     float g;
     float b;

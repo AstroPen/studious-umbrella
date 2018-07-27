@@ -806,7 +806,8 @@ struct RenderingInfo {
 
   auto quad = to_quad4(r);
 
-  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  V4 uv = info.texture_uv;
+  V2 uv4[4] = {{uv.x,uv.w}, uv.zw, {uv.z,uv.y}, uv.xy};
   auto c = info.color;
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
@@ -835,7 +836,7 @@ struct RenderingInfo {
 
   VertexSOA verts;
   verts.p = quad.verts;
-  verts.uv = uv;
+  verts.uv = uv4;
   verts.c = c4;
   verts.n = n4;
   verts.t = t4;

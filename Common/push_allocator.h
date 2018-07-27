@@ -155,5 +155,15 @@ static inline void *pop_size(PushAllocator *allocator, uint32_t size) {
 #undef TIMED_FUNCTION
 #endif
 
-#endif // _PUSH_ALLOCATOR_H_
+#ifndef PUSH_ALLOCATOR_MULTITHREADED 
+#define _PUSH_ALLOCATOR_SINGLE_THREADED_INCLUDE_
+#endif
+
+#else // _PUSH_ALLOCATOR_H_
+
+#if defined(PUSH_ALLOCATOR_MULTITHREADED) && defined(_PUSH_ALLOCATOR_SINGLE_THREADED_INCLUDE_)
+#warning "push_allocator.h was previously included as single threaded."
+#endif
+
+#endif
 

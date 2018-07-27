@@ -48,6 +48,15 @@ struct Array {
   inline operator T*() { return e; }
 };
 
+inline void mem_copy(void const *source, void *dest, uint32_t len) {
+  auto s = (uint8_t *) source;
+  auto d = (uint8_t *) dest;
+
+  for (uint32_t i = 0; i < len; i++) {
+    d[i] = s[i];
+  }
+}
+
 #include "scalar_math.h"
 //#include "push_allocator.h"
 #endif

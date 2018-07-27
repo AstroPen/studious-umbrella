@@ -44,6 +44,281 @@ void usage(char *program_name) {
   exit(0);
 }
 
+// TODO move string functions to Common
+struct lstring {
+  char *str;
+  uint32_t len;
+
+  inline char &operator[](uint32_t i) {
+    assert(i < len);
+    return str[i];
+  }
+
+  inline lstring operator+(uint32_t i) {
+    return {str + i, len - i};
+  }
+
+  // NOTE : This is in place of bool, which acts as a number and messes with 
+  // some of the other operators. Since there isn't much you can do with a void*, 
+  // this is a good alternative.
+  inline operator void*() {
+    return (void *)(len > 0 && str);
+  }
+};
+
+inline lstring length_string(char *cstr) {
+  if (!cstr) return {};
+  uint32_t len = 0;
+  while (cstr[len]) {
+    len++;
+  }
+  return {cstr, len};
+}
+
+struct hstring {
+  union {
+    struct {
+      char *str;
+      uint32_t len;
+    };
+    lstring lstr;
+  };
+  uint32_t hash;
+
+  inline operator lstring() { return lstr; }
+};
+
+struct Stream {
+  lstring data;
+  uint32_t cursor;
+};
+
+static Stream get_stream(uint8_t *data, uint32_t len) {
+  return {(char *)data, len, 0};
+}
+
+// djb2 by Dan Bernstein, found on stackoverflow
+static hstring hash_string(uint8_t *str, uint32_t len, int end_char) {
+  if (!str) return {};
+  if (!len) return {};
+
+  uint32_t hash = 5381; int c;
+
+  uint32_t i;
+  for (i = 0; i < len; i++) {
+    c = str[i];
+    if (c == end_char) return {(char *)str, i, hash};
+    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+  }
+  return {(char *)str, len, hash};
+}
+
+inline hstring hash_string(const char *str, uint32_t len, int end_char = -1) {
+  return hash_string((uint8_t *) str, len, end_char);
+}
+
+inline hstring hash_string(const char *cstr, char end_char = '\0') {
+  return hash_string(cstr, UINT_MAX, end_char);
+}
+
+inline hstring hash_string(lstring str) {
+  return hash_string(str.str, str.len, -1);
+}
+
+inline hstring hash_string(lstring str, char end_char) {
+  return hash_string(str.str, str.len, end_char);
+}
+
+
+static bool str_equal(lstring a, lstring b) {
+  if (a.len != b.len) return false;
+  if (a.str == b.str) return true;
+  for (uint32_t i = 0; i < a.len; i++) {
+    if (a.str[i] != b.str[i]) return false;
+  }
+  return true;
+}
+
+static bool str_equal(hstring a, hstring b) {
+  if (a.hash != b.hash) return false;
+  return str_equal(a.lstr, b.lstr);
+  return true;
+}
+
+static lstring pop_line(Stream *stream) {
+  assert(stream); assert(stream->data);
+  lstring str = stream->data + stream->cursor;
+  uint32_t len = 0;
+  while (len < str.len && str[len] != '\n') len++;
+  stream->cursor += len + 1;
+  return {str.str, len};
+}
+
+static hstring pop_hline(Stream *stream) {
+  assert(stream); assert(stream->data);
+  lstring remainder = stream->data + stream->cursor;
+  hstring result = hash_string(remainder, '\n');
+  return result;
+}
+
+#define KEYWORD_LIST \
+  ENUM_OR_STR( VERSION ), \
+  ENUM_OR_STR( SET ), \
+  ENUM_OR_STR( LAYOUT ), \
+  ENUM_OR_STR( ANIMATION ), \
+  ENUM_OR_STR( BITMAP ), \
+
+#undef ENUM_OR_STR
+#define ENUM_OR_STR(e) e
+
+enum SpecKeyword {
+  NONE,
+  KEYWORD_LIST
+};
+
+#undef ENUM_OR_STR
+#define ENUM_OR_STR(e) #e
+
+const char *keyword_strings[] = {KEYWORD_LIST};
+#undef ENUM_OR_STR
+
+// TODO use a hash table
+struct StringTable {
+  hstring keyword_hstrings[count_of(keyword_strings)];
+} string_table_;
+
+StringTable * const string_table = &string_table_;
+
+static void init_string_table() {
+  uint32_t keyword_count = count_of(keyword_strings);
+  for (uint32_t i = 0; i < keyword_count; i++) {
+    string_table->keyword_hstrings[i] = hash_string(keyword_strings[i]);
+  }
+}
+
+static void print_hstring(hstring str) {
+  char tmp[256] = {};
+  assert(str.len < 256);
+  mem_copy(str.str, tmp, str.len);
+  printf("hstring : '%s', len : %u, hash : %u\n", tmp, str.len, str.hash);
+}
+
+static void print_lstring(lstring str) {
+  char tmp[256] = {};
+  assert(str.len < 256);
+  mem_copy(str.str, tmp, str.len);
+  printf("lstring : '%s', len : %u\n", tmp, str.len);
+}
+
+static SpecKeyword keyword_lookup(StringTable *table, hstring str) {
+  uint32_t keyword_count = count_of(keyword_strings);
+  for (uint32_t i = 0; i < keyword_count; i++) {
+    if (str_equal(string_table->keyword_hstrings[i], str)) return SpecKeyword(i + 1);
+  }
+  return NONE;
+}
+
+
+struct Token {
+  union {
+    hstring hstr;
+    lstring lstr;
+    int i;
+    float f;
+  };
+  lstring remainder;
+};
+
+inline lstring remove_whitespace(lstring line) {
+  uint32_t i;
+  for (i = 0; i < line.len; i++) {
+    if (line[i] == ' ' || line[i] == '\t' || line[i] == '\n') continue;
+    break;
+  }
+  return line + i;
+}
+
+static Token pop_token(lstring line) {
+  line = remove_whitespace(line);
+
+  uint32_t i;
+  for (i = 0; i < line.len; i++) {
+    if (line[i] == ' ' || line[i] == '\t' || line[i] == '\n') break;
+  }
+  Token result;
+  result.lstr = {line.str, i};
+  result.remainder = line + i;
+  return result;
+}
+
+static Token pop_hash(lstring line) {
+  // TODO make a hash_token that splits by all whitespace for speed
+  Token token = pop_token(line);
+  hstring hstr = hash_string(token.lstr);
+  lstring remainder = line + hstr.len;
+  Token result;
+  result.hstr = hstr; result.remainder = remainder;
+  return result;
+}
+
+// TODO I may eventually want this to work without requiring the length first
+static int parse_int(lstring line, int *error = NULL) {
+#define PARSE_INT_ERROR(cond, msg) \
+  if ((cond)) { if (error) *error = 1; else assert(!(msg)); return 0; }
+
+  PARSE_INT_ERROR(!line, "Null string.");
+  PARSE_INT_ERROR(line.len >= 10, "Integer is too large.");
+
+  bool is_negative = false;
+  if (line[0] == '-') {
+    is_negative = true;
+    line = remove_whitespace(line + 1);
+  }
+
+  PARSE_INT_ERROR(!line, "Singleton minus.");
+
+  int result = 0;
+  for (uint32_t i = 0; i < line.len; i++) {
+
+    PARSE_INT_ERROR(line[i] > '9' || line[i] < '0', "Received non-numeric character.");
+
+    int digit = line[i] - '0';
+    result *= 10; result += digit;
+  }
+
+  if (is_negative) result = -result;
+  return result;
+#undef PARSE_INT_ERROR
+}
+
+static Token pop_int(lstring line) {
+  Token token = pop_token(line);
+
+  int i = parse_int(token.lstr);
+  Token result;
+  result.i = i; result.remainder = token.remainder;
+  return result;
+}
+
+// TODO this needs to return some sort of general result or something...
+static SpecKeyword parse_line(lstring line) {
+  Token keyword = pop_hash(line);
+  SpecKeyword keyword_num = keyword_lookup(string_table, keyword.hstr);
+  switch (keyword_num) {
+    case NONE : {
+    } break;
+    case VERSION : {
+      Token version_num = pop_int(keyword.remainder);
+      assert(version_num.i == 0);
+    } break;
+    
+    default : {
+      assert(!"Unhandled keyword.");
+    } break;
+  }
+  return keyword_num;
+}
+
 int main(int argc, char *argv[]) {
   if (argc > 2) usage(argv[0]);
   // TODO I may actually want it to just read all the files ending in .spec
@@ -53,13 +328,24 @@ int main(int argc, char *argv[]) {
   printf("Packing assets from %s\n", build_filename);
 
 #if 0
+  init_string_table();
+
   auto allocator_ = new_push_allocator(2048 * 4);
   auto allocator = &allocator_;
 
   // TODO read build file for info about what files to read and what to do with them
-  int error;
-  uint8_t *build_file = read_entire_file(build_filename, allocator, &error);
-  print_io_error(error, build_filename);
+  File build_file_ = open_file(build_filename);
+  File *build_file = &build_file_;
+
+  int error = read_entire_file(build_file, allocator);
+
+  auto build_stream_ = get_stream(build_file->buffer, build_file->size);
+  auto build_stream = &build_stream_;
+
+  lstring version_ln = pop_line(build_stream);
+  assert(parse_line(version_ln) == VERSION);
+
+  close_file(build_file);
 #endif
 
   // TODO - load_png on sprite sheet

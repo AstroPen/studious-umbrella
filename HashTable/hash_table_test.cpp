@@ -59,8 +59,8 @@ struct PointEntity {
 
 #define HASH_TABLE_KEY_TYPE Point
 #define HASH_TABLE_VALUE_TYPE PointEntity
-#define EMPTY Point{INT_MAX, INT_MAX}
-#define REMOVED Point{INT_MIN, INT_MIN}
+#define HASH_KEY_EMPTY Point{INT_MAX, INT_MAX}
+#define HASH_KEY_REMOVED Point{INT_MIN, INT_MIN}
 #include "hash_table.h"
 
 static bool array_contains(uint32_t *a, int len, uint32_t value) {
