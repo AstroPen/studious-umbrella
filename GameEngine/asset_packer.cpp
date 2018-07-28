@@ -9,6 +9,11 @@
 #include "packed_assets.h"
 
 
+static void print_error(char *msg, char *filename, u32 line_num) {
+  printf("Error on line %u of %s : %s.\n", line_num, filename, msg);
+  exit(1); // TODO should maybe close more cleanly
+}
+
 // For each layout type :
 // - Get TextureLayoutType
 // assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
@@ -154,26 +159,35 @@ static lstring pop_line(Stream *stream) {
   return {str.str, len};
 }
 
+inline bool has_remaining(Stream *stream) {
+  return stream->cursor < stream->data.len;
+}
+
+#if 0
 static hstring pop_hline(Stream *stream) {
   assert(stream); assert(stream->data);
   lstring remainder = stream->data + stream->cursor;
   hstring result = hash_string(remainder, '\n');
   return result;
 }
+#endif
 
 #define KEYWORD_LIST \
   ENUM_OR_STR( VERSION ), \
   ENUM_OR_STR( SET ), \
   ENUM_OR_STR( LAYOUT ), \
   ENUM_OR_STR( ANIMATION ), \
-  ENUM_OR_STR( BITMAP ), \
+  ENUM_OR_STR( BITMAP ) \
 
 #undef ENUM_OR_STR
 #define ENUM_OR_STR(e) e
 
 enum SpecKeyword {
   NONE,
-  KEYWORD_LIST
+  KEYWORD_LIST,
+  
+  UNHANDLED_COMMAND,
+  UNHANDLED_ATTRIBUTE,
 };
 
 #undef ENUM_OR_STR
@@ -218,15 +232,97 @@ static SpecKeyword keyword_lookup(StringTable *table, hstring str) {
   return NONE;
 }
 
+enum TokenType {
+  TOKEN_ERROR,
+  TOKEN_HSTRING,
+  TOKEN_LSTRING,
+  TOKEN_INT,
+  TOKEN_FLOAT,
+  TOKEN_KEYWORD,
+};
+
+enum TokenError : u32 {
+  ERROR_NOT_SET,
+
+  EMPTY_STRING,
+  UNEXPECTED_ADDITIONAL_ARGUMENTS,
+
+  // NUMBERS :
+  NON_NUMERIC_CHARACTER,
+  UNEXPECTED_FLOATING_POINT,
+  INTEGER_TOO_LARGE,
+  SINGLETON_MINUS,
+
+  INVALID_ATTRIBUTE_NAME,
+  INVALID_COMMAND_NAME,
+};
+
+static char *to_string(TokenError error) {
+  switch (error) {
+    case EMPTY_STRING : return "Expected additonal token";
+    case UNEXPECTED_ADDITIONAL_ARGUMENTS : return "Received unexpected additional arguments";
+    case NON_NUMERIC_CHARACTER : return "Received unexpected non-numeric character";
+    case UNEXPECTED_FLOATING_POINT : return "Received unexpected floating point";
+    case INTEGER_TOO_LARGE : return "Integer argument was too large";
+    case SINGLETON_MINUS : return "Received a minus sign with no number following it";
+    case INVALID_ATTRIBUTE_NAME : return "Received an unrecognized attribute name";
+    case INVALID_COMMAND_NAME : return "Received an invalid command name";
+    default : return "Unknown error";
+  }
+}
+
+static void print_error(TokenError error, char *filename, u32 line_num) {
+  assert(error);
+  auto msg = to_string(error);
+  printf("Error parsing line %u of %s : %s.\n", line_num, filename, msg);
+  exit(1); // TODO should maybe close more cleanly
+}
+
 
 struct Token {
+  // TODO consider making this private?
   union {
     hstring hstr;
     lstring lstr;
     int i;
     float f;
+    SpecKeyword keyword;
+    TokenError error;
   };
   lstring remainder;
+  TokenType type;
+
+  inline Token set(hstring arg, lstring rem = {}) { 
+    type = TOKEN_HSTRING; hstr = arg; remainder = rem; return *this;
+  }
+  inline Token set(lstring arg, lstring rem = {}) { 
+    type = TOKEN_LSTRING; lstr = arg; remainder = rem; return *this;
+  }
+  inline Token set(int arg, lstring rem = {}) { 
+    type = TOKEN_INT; i = arg; remainder = rem; return *this;
+  }
+  inline Token set(float arg, lstring rem = {}) { 
+    type = TOKEN_FLOAT; f = arg; remainder = rem; return *this;
+  }
+  inline Token set(SpecKeyword arg, lstring rem = {}) { 
+    type = TOKEN_KEYWORD; keyword = arg; remainder = rem; return *this;
+  }
+  inline Token set(TokenError arg, lstring rem = {}) { 
+    type = TOKEN_ERROR; error = arg; remainder = rem; return *this;
+  }
+
+  inline operator bool() { return (type != TOKEN_ERROR); }
+
+  inline explicit operator hstring() { 
+    assert(!type || type == TOKEN_HSTRING); return hstr; }
+  inline explicit operator lstring() { 
+    assert(!type || type == TOKEN_LSTRING); return lstr; }
+  inline explicit operator int() { 
+    assert(!type || type == TOKEN_INT); return i; }
+  inline explicit operator float() { 
+    assert(!type || type == TOKEN_FLOAT); return f; }
+  inline explicit operator SpecKeyword() { 
+    assert(!type || type == TOKEN_KEYWORD); return keyword; }
 };
 
 inline lstring remove_whitespace(lstring line) {
@@ -245,29 +341,29 @@ static Token pop_token(lstring line) {
   for (i = 0; i < line.len; i++) {
     if (line[i] == ' ' || line[i] == '\t' || line[i] == '\n') break;
   }
+  lstring str = {line.str, i};
   Token result;
-  result.lstr = {line.str, i};
-  result.remainder = line + i;
+
+  if (str) result.set(str, line + i);
+  else result.set(EMPTY_STRING, line + i);
+
   return result;
 }
 
 static Token pop_hash(lstring line) {
   // TODO make a hash_token that splits by all whitespace for speed
   Token token = pop_token(line);
-  hstring hstr = hash_string(token.lstr);
-  lstring remainder = line + hstr.len;
-  Token result;
-  result.hstr = hstr; result.remainder = remainder;
-  return result;
+  if (!token) return token;
+
+  hstring hstr = hash_string(lstring(token));
+  return Token().set(hstr, token.remainder);
 }
 
 // TODO I may eventually want this to work without requiring the length first
-static int parse_int(lstring line, int *error = NULL) {
-#define PARSE_INT_ERROR(cond, msg) \
-  if ((cond)) { if (error) *error = 1; else assert(!(msg)); return 0; }
+static Token parse_int(lstring line) {
 
-  PARSE_INT_ERROR(!line, "Null string.");
-  PARSE_INT_ERROR(line.len >= 10, "Integer is too large.");
+  assert(line);
+  if (line.len >= 10) return Token().set(INTEGER_TOO_LARGE);
 
   bool is_negative = false;
   if (line[0] == '-') {
@@ -275,49 +371,139 @@ static int parse_int(lstring line, int *error = NULL) {
     line = remove_whitespace(line + 1);
   }
 
-  PARSE_INT_ERROR(!line, "Singleton minus.");
+  if (!line) return Token().set(SINGLETON_MINUS);
 
   int result = 0;
   for (uint32_t i = 0; i < line.len; i++) {
 
-    PARSE_INT_ERROR(line[i] > '9' || line[i] < '0', "Received non-numeric character.");
+    if (line[i] == '.') return Token().set(UNEXPECTED_FLOATING_POINT);
+    if (line[i] > '9' || line[i] < '0') return Token().set(NON_NUMERIC_CHARACTER);
 
     int digit = line[i] - '0';
     result *= 10; result += digit;
   }
 
   if (is_negative) result = -result;
-  return result;
-#undef PARSE_INT_ERROR
+  return Token().set(result);
 }
 
 static Token pop_int(lstring line) {
   Token token = pop_token(line);
+  if (!token) return token;
 
-  int i = parse_int(token.lstr);
-  Token result;
-  result.i = i; result.remainder = token.remainder;
+  Token result = parse_int(lstring(token));
+  result.remainder = token.remainder;
+  return result;
+}
+
+struct VersionArgs {
+  uint32_t version_number;
+
+  TokenError error;
+};
+
+// TODO I think the hstrings here should actually be interned for fast comparison
+struct LayoutArgs {
+  hstring name;
+  TextureLayoutType type;
+
+  TokenError error;
+};
+
+struct AnimationArgs {
+  AnimationType type;
+  uint16_t frames;
+  float duration;
+  Direction direction;
+
+  TokenError error;
+};
+
+struct SetArgs {
+  SpecKeyword attribute;
+  hstring name;
+
+  TokenError error;
+};
+
+// TODO I may want to allow people to set more than this...
+struct BitmapArgs {
+  lstring filename;
+  TextureGroupID id;
+  uint16_t sprite_count;
+  uint16_t sprite_width;
+  uint16_t sprite_height;
+
+  TokenError error;
+};
+
+static VersionArgs parse_version_args(lstring args) {
+  Token version_num = pop_int(args);
+
+  VersionArgs result = {};
+  if (!version_num) 
+    result.error = version_num.error;
+
+  else if (remove_whitespace(version_num.remainder)) 
+    result.error = UNEXPECTED_ADDITIONAL_ARGUMENTS;
+
+  else 
+    result.version_number = int(version_num);
+
+  return result;
+}
+static LayoutArgs parse_layout_args(lstring args) {
+  Token name = pop_hash(args);
+
+  LayoutArgs result = {};
+  if (!name) {
+    result.error = name.error;
+    return result;
+  }
+
+  result.name = hstring(name);
+
+  Token layout_type = pop_hash(name.remainder);
+  if (!layout_type) {
+    result.error = layout_type.error;
+    return result;
+  }
+
+  if (remove_whitespace(layout_type.remainder)) {
+    result.error = UNEXPECTED_ADDITIONAL_ARGUMENTS;
+    return result;
+  }
+
+  //result.type = hstring(layout_type);
+
+  //Token parsed_layout_type = layout_type_lookup(string_table, hstring(layout_type));
+
   return result;
 }
 
 // TODO this needs to return some sort of general result or something...
-static SpecKeyword parse_line(lstring line) {
+static Token parse_command(lstring line) {
+  line = remove_whitespace(line);
+  if (!line) return Token().set(NONE);
+  if (line[0] == '#') return Token().set(NONE);
+
   Token keyword = pop_hash(line);
-  SpecKeyword keyword_num = keyword_lookup(string_table, keyword.hstr);
+  if (!keyword) return keyword;
+
+  SpecKeyword keyword_num = keyword_lookup(string_table, hstring(keyword));
   switch (keyword_num) {
-    case NONE : {
-    } break;
-    case VERSION : {
-      Token version_num = pop_int(keyword.remainder);
-      assert(version_num.i == 0);
-    } break;
-    
+    case NONE    : break;
+    case VERSION : break; 
+    case LAYOUT  : break; 
+
     default : {
-      assert(!"Unhandled keyword.");
+      keyword_num = UNHANDLED_COMMAND;
     } break;
   }
-  return keyword_num;
+
+  return Token().set(keyword_num, keyword.remainder);
 }
+
 
 int main(int argc, char *argv[]) {
   if (argc > 2) usage(argv[0]);
@@ -327,7 +513,7 @@ int main(int argc, char *argv[]) {
 
   printf("Packing assets from %s\n", build_filename);
 
-#if 0
+#if 1
   init_string_table();
 
   auto allocator_ = new_push_allocator(2048 * 4);
@@ -342,8 +528,47 @@ int main(int argc, char *argv[]) {
   auto build_stream_ = get_stream(build_file->buffer, build_file->size);
   auto build_stream = &build_stream_;
 
+  u32 line_number = 0;
+
   lstring version_ln = pop_line(build_stream);
-  assert(parse_line(version_ln) == VERSION);
+  line_number++;
+
+  Token command = parse_command(version_ln);
+  if (!command) print_error(command.error, build_filename, line_number);
+  if (SpecKeyword(command) != VERSION) {
+    print_error("VERSION not specified", build_filename, line_number);
+  }
+  auto args = parse_version_args(command.remainder);
+  if (args.error) print_error(args.error, build_filename, line_number);
+
+  while (has_remaining(build_stream)) {
+    lstring next_line = pop_line(build_stream);
+    line_number++;
+
+    Token command = parse_command(next_line);
+    if (!command) print_error(command.error, build_filename, line_number);
+
+    SpecKeyword command_num = SpecKeyword(command);
+    switch (command_num) {
+      case NONE    : { // Comment or newline, do nothing
+      } break;
+      case VERSION : {
+        print_error("VERSION repeated", build_filename, line_number);
+      } break; 
+      case LAYOUT  : {
+        auto args = parse_layout_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number);
+      } break; 
+      case UNHANDLED_COMMAND : {
+        //print_error(INVALID_COMMAND_NAME, build_filename, line_number);
+      } break;
+
+      default : {
+        print_lstring(next_line);
+        assert(!"Invalid command from parse_command.");
+      } break;
+    }
+  }
 
   close_file(build_file);
 #endif

@@ -11,6 +11,7 @@
 #include <climits>
 
 typedef double float64;
+typedef uint32_t u32;
 
 union bit32 {
   int i;
