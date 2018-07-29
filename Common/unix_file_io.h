@@ -12,12 +12,15 @@ enum File_IO_Error : int {
   FILE_STAT_NOT_FOUND,
   FAILED_TO_ALLOCATE_FILE,
   ERROR_ON_READ,
+  ERROR_ON_CLOSE,
 };
 
+// TODO put these into an array
 #define FILE_IO_ERROR_MSG_1 "File not found."
 #define FILE_IO_ERROR_MSG_2 "File stat not found."
 #define FILE_IO_ERROR_MSG_3 "Failed to allocate file."
 #define FILE_IO_ERROR_MSG_4 "Error on read."
+#define FILE_IO_ERROR_MSG_5 "Error on close."
 
 struct File {
   char *filename;
@@ -39,13 +42,14 @@ static void print_io_error(int error, const char *filename = NULL) {
     case FILE_STAT_NOT_FOUND     : error_message = FILE_IO_ERROR_MSG_2; break;
     case FAILED_TO_ALLOCATE_FILE : error_message = FILE_IO_ERROR_MSG_3; break;
     case ERROR_ON_READ           : error_message = FILE_IO_ERROR_MSG_4; break;
+    case ERROR_ON_CLOSE          : error_message = FILE_IO_ERROR_MSG_5; break;
     default : error_message = "Invalid error value."; break;
   }
 
   if (filename) {
-    printf("Error loading %s : %s\n", filename, error_message);
+    printf("IO error in %s : %s\n", filename, error_message);
   } else {
-    printf("Error loading file : %s\n", error_message);
+    printf("IO error in file : %s\n", error_message);
   }
 }
 
@@ -83,8 +87,8 @@ static File open_file(char *filename, PushAllocator error_stream = {}) {
 
 // TODO finish this
 static void close_file(File *file) {
-  assert(file->descriptor >= 0);
   int error = close(file->descriptor);
+  if (error) log_error(file, ERROR_ON_CLOSE);
 }
 
 static int read_entire_file(File *file, PushAllocator *allocator, int alignment = 8) {

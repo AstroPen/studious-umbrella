@@ -76,7 +76,8 @@ enum TextureLayoutType : uint32_t {
   LAYOUT_CHARACTER,
   LAYOUT_TERRAIN,
 
-  LAYOUT_COUNT
+  LAYOUT_COUNT,
+  LAYOUT_INVALID
 };
 
 struct TextureGroup {
@@ -98,19 +99,23 @@ enum Direction {
   LEFT,
   RIGHT,
   UP,
-  DOWN
+  DOWN,
+
+  DIRECTION_COUNT,
+  DIRECTION_INVALID,
 };
 
 enum AnimationType {
   ANIM_IDLE,
   ANIM_MOVE,
 
-  ANIM_COUNT
+  ANIM_COUNT,
+  ANIM_INVALID
 };
 
 struct TextureLayout {
   uint16_t animation_frame_counts[ANIM_COUNT];
-  uint16_t animation_start_index[ANIM_COUNT][4]; // 4 is for direction count
+  uint16_t animation_start_index[ANIM_COUNT][DIRECTION_COUNT];
   float animation_times[ANIM_COUNT];
 };
 
@@ -129,13 +134,24 @@ struct FontInfo {
   BakedChar *baked_chars;
 };
 
+// NOTE : WARNING : Clamping and blending values must be contiguous for the packer to work.
 enum TextureFormatSpecifier : uint32_t {
-  RGBA,
-  BGRA,
-  CLAMP_TO_EDGE,
+  RGBA, BGRA,
+
+  CLAMP_FIRST,
+  CLAMP_TO_EDGE = CLAMP_FIRST,
   REPEAT_CLAMPING,
-  LINEAR_BLEND,
+  CLAMP_LAST = REPEAT_CLAMPING,
+
+  BLEND_FIRST,
+  LINEAR_BLEND = BLEND_FIRST,
   NEAREST_BLEND,
+  BLEND_LAST = NEAREST_BLEND,
+
+  CLAMP_COUNT = CLAMP_LAST - CLAMP_FIRST + 1,
+  CLAMP_INVALID,
+  BLEND_COUNT = BLEND_LAST - BLEND_FIRST + 1,
+  BLEND_INVALID,
 };
 
 

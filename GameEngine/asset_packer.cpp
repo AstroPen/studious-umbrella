@@ -3,6 +3,7 @@
 #include <push_allocator.h>
 #include <unix_file_io.h>
 #include <vector_math.h>
+#include <lstring.h>
 #include "pixel.h"
 #include "custom_stb.h"
 #include "asset_interface.h"
@@ -14,223 +15,197 @@ static void print_error(char *msg, char *filename, u32 line_num) {
   exit(1); // TODO should maybe close more cleanly
 }
 
-// For each layout type :
-// - Get TextureLayoutType
-// assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
-// TextureLayout *layout = assets->texture_layout + layout_type;
-// 
-// For each animation :
-// - Get AnimationType with frame_count and duration
-// layout->animation_frame_counts[animation] = frame_count;
-// layout->animation_time[animation] = duration;
-//
-// For each facing direction :
-// - Get start_index
-// layout->animation_start_index[animation] = start_index;
-//
-
-// For each texture group :
-// - Get TextureGroupID
-// TextureGroup *group = assets->texture_groups + group_id;
-// group->bitmap;
-// group->layout;
-// group->sprite_width;
-// group->sprite_height;
-// group->sprite_depth;
-// group->render_id; // TODO init in OpenGL
-// group->sprite_count;
-// group->sprite_offset;
-// group->has_normal_map;
-//
-
-void usage(char *program_name) {
+// TODO write a proper usage message
+static void usage(char *program_name) {
   printf("Usage : %s\n", program_name);
   printf("Usage : %s <header filename>\n", program_name);
   exit(0);
 }
 
-// TODO move string functions to Common
-struct lstring {
-  char *str;
-  uint32_t len;
+enum CommandKeyword {
+  COMMAND_VERSION,
+  COMMAND_LAYOUT,
+  COMMAND_ANIMATION,
+  COMMAND_SET,
+  COMMAND_BITMAP,
 
-  inline char &operator[](uint32_t i) {
-    assert(i < len);
-    return str[i];
-  }
-
-  inline lstring operator+(uint32_t i) {
-    return {str + i, len - i};
-  }
-
-  // NOTE : This is in place of bool, which acts as a number and messes with 
-  // some of the other operators. Since there isn't much you can do with a void*, 
-  // this is a good alternative.
-  inline operator void*() {
-    return (void *)(len > 0 && str);
-  }
+  COMMAND_COUNT,
+  COMMAND_INVALID,
+  COMMAND_NONE,
 };
 
-inline lstring length_string(char *cstr) {
-  if (!cstr) return {};
-  uint32_t len = 0;
-  while (cstr[len]) {
-    len++;
-  }
-  return {cstr, len};
-}
+enum AttributeKeyword {
+  ATTRIBUTE_LAYOUT,
+  ATTRIBUTE_HAS_NORMAL_MAP,
+  ATTRIBUTE_MIN_BLEND,
+  ATTRIBUTE_MAX_BLEND,
+  ATTRIBUTE_S_CLAMP,
+  ATTRIBUTE_T_CLAMP,
+  ATTRIBUTE_OFFSET,
+  ATTRIBUTE_SPRITE_DEPTH,
 
-struct hstring {
-  union {
-    struct {
-      char *str;
-      uint32_t len;
-    };
-    lstring lstr;
-  };
-  uint32_t hash;
-
-  inline operator lstring() { return lstr; }
+  ATTRIBUTE_COUNT,
+  ATTRIBUTE_INVALID,
 };
 
-struct Stream {
-  lstring data;
-  uint32_t cursor;
-};
+//
+// StringTable functions ---
+//
 
-static Stream get_stream(uint8_t *data, uint32_t len) {
-  return {(char *)data, len, 0};
-}
-
-// djb2 by Dan Bernstein, found on stackoverflow
-static hstring hash_string(uint8_t *str, uint32_t len, int end_char) {
-  if (!str) return {};
-  if (!len) return {};
-
-  uint32_t hash = 5381; int c;
-
-  uint32_t i;
-  for (i = 0; i < len; i++) {
-    c = str[i];
-    if (c == end_char) return {(char *)str, i, hash};
-    hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-  }
-  return {(char *)str, len, hash};
-}
-
-inline hstring hash_string(const char *str, uint32_t len, int end_char = -1) {
-  return hash_string((uint8_t *) str, len, end_char);
-}
-
-inline hstring hash_string(const char *cstr, char end_char = '\0') {
-  return hash_string(cstr, UINT_MAX, end_char);
-}
-
-inline hstring hash_string(lstring str) {
-  return hash_string(str.str, str.len, -1);
-}
-
-inline hstring hash_string(lstring str, char end_char) {
-  return hash_string(str.str, str.len, end_char);
-}
-
-
-static bool str_equal(lstring a, lstring b) {
-  if (a.len != b.len) return false;
-  if (a.str == b.str) return true;
-  for (uint32_t i = 0; i < a.len; i++) {
-    if (a.str[i] != b.str[i]) return false;
-  }
-  return true;
-}
-
-static bool str_equal(hstring a, hstring b) {
-  if (a.hash != b.hash) return false;
-  return str_equal(a.lstr, b.lstr);
-  return true;
-}
-
-static lstring pop_line(Stream *stream) {
-  assert(stream); assert(stream->data);
-  lstring str = stream->data + stream->cursor;
-  uint32_t len = 0;
-  while (len < str.len && str[len] != '\n') len++;
-  stream->cursor += len + 1;
-  return {str.str, len};
-}
-
-inline bool has_remaining(Stream *stream) {
-  return stream->cursor < stream->data.len;
-}
-
-#if 0
-static hstring pop_hline(Stream *stream) {
-  assert(stream); assert(stream->data);
-  lstring remainder = stream->data + stream->cursor;
-  hstring result = hash_string(remainder, '\n');
-  return result;
-}
-#endif
-
-#define KEYWORD_LIST \
-  ENUM_OR_STR( VERSION ), \
-  ENUM_OR_STR( SET ), \
-  ENUM_OR_STR( LAYOUT ), \
-  ENUM_OR_STR( ANIMATION ), \
-  ENUM_OR_STR( BITMAP ) \
-
-#undef ENUM_OR_STR
-#define ENUM_OR_STR(e) e
-
-enum SpecKeyword {
-  NONE,
-  KEYWORD_LIST,
-  
-  UNHANDLED_COMMAND,
-  UNHANDLED_ATTRIBUTE,
-};
-
-#undef ENUM_OR_STR
-#define ENUM_OR_STR(e) #e
-
-const char *keyword_strings[] = {KEYWORD_LIST};
-#undef ENUM_OR_STR
-
-// TODO use a hash table
 struct StringTable {
-  hstring keyword_hstrings[count_of(keyword_strings)];
+  hstring command_hstrings[COMMAND_COUNT];
+  hstring attribute_hstrings[ATTRIBUTE_COUNT];
+  hstring animation_type_hstrings[ANIM_COUNT];
+  hstring layout_type_hstrings[LAYOUT_COUNT];
+  hstring group_id_hstrings[TEXTURE_GROUP_COUNT];
+  hstring blend_mode_hstrings[BLEND_COUNT];
+  hstring clamp_mode_hstrings[CLAMP_COUNT];
+  hstring direction_hstrings[DIRECTION_COUNT];
 } string_table_;
 
 StringTable * const string_table = &string_table_;
 
 static void init_string_table() {
-  uint32_t keyword_count = count_of(keyword_strings);
-  for (uint32_t i = 0; i < keyword_count; i++) {
-    string_table->keyword_hstrings[i] = hash_string(keyword_strings[i]);
+
+  {
+#define ADD_COMMAND_HASH(name) \
+    string_table->command_hstrings[COMMAND_##name] = hash_string(#name); i++;
+    uint32_t i = 0;
+    ADD_COMMAND_HASH(VERSION);
+    ADD_COMMAND_HASH(LAYOUT);
+    ADD_COMMAND_HASH(ANIMATION);
+    ADD_COMMAND_HASH(BITMAP);
+    ADD_COMMAND_HASH(SET);
+    assert(i == COMMAND_COUNT);
+#undef ADD_COMMAND_HASH
   }
-}
 
-static void print_hstring(hstring str) {
-  char tmp[256] = {};
-  assert(str.len < 256);
-  mem_copy(str.str, tmp, str.len);
-  printf("hstring : '%s', len : %u, hash : %u\n", tmp, str.len, str.hash);
-}
-
-static void print_lstring(lstring str) {
-  char tmp[256] = {};
-  assert(str.len < 256);
-  mem_copy(str.str, tmp, str.len);
-  printf("lstring : '%s', len : %u\n", tmp, str.len);
-}
-
-static SpecKeyword keyword_lookup(StringTable *table, hstring str) {
-  uint32_t keyword_count = count_of(keyword_strings);
-  for (uint32_t i = 0; i < keyword_count; i++) {
-    if (str_equal(string_table->keyword_hstrings[i], str)) return SpecKeyword(i + 1);
+  {
+#define ADD_ATTRIBUTE_HASH(name) \
+    string_table->attribute_hstrings[ATTRIBUTE_##name] = hash_string(#name); i++;
+    uint32_t i = 0;
+    ADD_ATTRIBUTE_HASH(LAYOUT);
+    ADD_ATTRIBUTE_HASH(HAS_NORMAL_MAP);
+    ADD_ATTRIBUTE_HASH(MIN_BLEND);
+    ADD_ATTRIBUTE_HASH(MAX_BLEND);
+    ADD_ATTRIBUTE_HASH(S_CLAMP);
+    ADD_ATTRIBUTE_HASH(T_CLAMP);
+    ADD_ATTRIBUTE_HASH(OFFSET);
+    ADD_ATTRIBUTE_HASH(SPRITE_DEPTH);
+    assert(i == ATTRIBUTE_COUNT);
+#undef ADD_ATTRIBUTE_HASH
   }
-  return NONE;
+
+  {
+#define ADD_ANIM_HASH(type) \
+    string_table->animation_type_hstrings[ANIM_##type] = hash_string(#type); i++;
+    uint32_t i = 0;
+    ADD_ANIM_HASH(IDLE);
+    ADD_ANIM_HASH(MOVE);
+    assert(i == ANIM_COUNT);
+#undef ADD_ANIM_HASH
+  }
+
+  {
+#define ADD_LAYOUT_HASH(type) \
+    string_table->layout_type_hstrings[LAYOUT_##type] = hash_string(#type); i++;
+    uint32_t i = 0;
+    ADD_LAYOUT_HASH(CHARACTER);
+    ADD_LAYOUT_HASH(TERRAIN);
+    ADD_LAYOUT_HASH(SINGLETON);
+    assert(i == LAYOUT_COUNT);
+#undef ADD_LAYOUT_HASH
+  }
+
+  {
+#define ADD_GROUP_HASH(type) \
+    string_table->group_id_hstrings[TEXTURE_GROUP_##type] = hash_string(#type); i++;
+    uint32_t i = 1; // NOTE : Texture groups start at 1
+    ADD_GROUP_HASH(LINK);
+    ADD_GROUP_HASH(WALL);
+    assert(i == TEXTURE_GROUP_COUNT);
+#undef ADD_GROUP_HASH
+  }
+
+  {
+#define ADD_BLEND_HASH(type) \
+    string_table->blend_mode_hstrings[type##_BLEND - BLEND_FIRST] \
+        = hash_string(#type); i++;
+    uint32_t i = 0;
+    ADD_BLEND_HASH(LINEAR);
+    ADD_BLEND_HASH(NEAREST);
+    assert(i == BLEND_COUNT);
+#undef ADD_BLEND_HASH
+  }
+
+  {
+#define ADD_CLAMP_HASH(type) \
+    string_table->clamp_mode_hstrings[type - CLAMP_FIRST] = hash_string(#type); i++;
+    uint32_t i = 0;
+    ADD_CLAMP_HASH(CLAMP_TO_EDGE);
+    ADD_CLAMP_HASH(REPEAT_CLAMPING);
+    assert(i == CLAMP_COUNT);
+#undef ADD_CLAMP_HASH
+  }
+
+  {
+#define ADD_DIRECTION_HASH(dir) \
+    string_table->direction_hstrings[dir] = hash_string(#dir); i++;
+    uint32_t i = 0;
+    ADD_DIRECTION_HASH(UP);
+    ADD_DIRECTION_HASH(DOWN);
+    ADD_DIRECTION_HASH(LEFT);
+    ADD_DIRECTION_HASH(RIGHT);
+    assert(i == DIRECTION_COUNT);
+#undef ADD_DIRECTION_HASH
+  }
+
+#if 0
+  for (uint32_t i = 0; i < ANIM_COUNT; i++) {
+    print_hstring(string_table->animation_type_hstrings[i]);
+  }
+
+  for (uint32_t i = 0; i < LAYOUT_COUNT; i++) {
+    print_hstring(string_table->layout_type_hstrings[i]);
+  }
+
+  for (uint32_t i = 1; i < TEXTURE_GROUP_COUNT; i++) {
+    print_hstring(string_table->group_id_hstrings[i]);
+  }
+
+  for (uint32_t i = 0; i < BLEND_COUNT; i++) {
+    print_hstring(string_table->blend_mode_hstrings[i]);
+  }
+
+  for (uint32_t i = 0; i < CLAMP_COUNT; i++) {
+    print_hstring(string_table->clamp_mode_hstrings[i]);
+  }
+
+  printf("\n");
+#endif
 }
+
+#define MAKE_LOOKUP_FUNCTION(Type, array, PREFIX, start, offset) \
+  static Type array##_lookup(StringTable *table, hstring str) { \
+    for (u32 i = start; i < PREFIX##_COUNT; i++) { \
+      if (str_equal(string_table-> array##_hstrings[i], str)) \
+        return Type(i + offset); \
+    } \
+    return PREFIX##_INVALID; \
+  }
+
+MAKE_LOOKUP_FUNCTION(CommandKeyword, command, COMMAND, 0, 0);
+MAKE_LOOKUP_FUNCTION(AttributeKeyword, attribute, ATTRIBUTE, 0, 0);
+MAKE_LOOKUP_FUNCTION(TextureLayoutType, layout_type, LAYOUT, 0, 0);
+MAKE_LOOKUP_FUNCTION(AnimationType, animation_type, ANIM, 0, 0);
+MAKE_LOOKUP_FUNCTION(TextureGroupID, group_id, TEXTURE_GROUP, 1, 0);
+MAKE_LOOKUP_FUNCTION(TextureFormatSpecifier, blend_mode, BLEND, 0, BLEND_FIRST);
+MAKE_LOOKUP_FUNCTION(TextureFormatSpecifier, clamp_mode, CLAMP, 0, CLAMP_FIRST);
+MAKE_LOOKUP_FUNCTION(Direction, direction, DIRECTION, 0, 0);
+
+//
+// Token functions ---
+//
 
 enum TokenType {
   TOKEN_ERROR,
@@ -238,36 +213,54 @@ enum TokenType {
   TOKEN_LSTRING,
   TOKEN_INT,
   TOKEN_FLOAT,
-  TOKEN_KEYWORD,
+  TOKEN_COMMAND,
+  TOKEN_ATTRIBUTE,
 };
 
 enum TokenError : u32 {
   ERROR_NOT_SET,
 
   EMPTY_STRING,
+  MISSING_END_QUOTE,
   UNEXPECTED_ADDITIONAL_ARGUMENTS,
 
   // NUMBERS :
   NON_NUMERIC_CHARACTER,
   UNEXPECTED_FLOATING_POINT,
   INTEGER_TOO_LARGE,
+  FLOAT_TOO_LARGE,
   SINGLETON_MINUS,
 
+  // KEYWORDS :
   INVALID_ATTRIBUTE_NAME,
   INVALID_COMMAND_NAME,
+  INVALID_LAYOUT_TYPE,
+  INVALID_ANIMATION_TYPE,
+  INVALID_GROUP_ID,
+  INVALID_BLEND_MODE,
+  INVALID_CLAMP_MODE,
+  INVALID_DIRECTION,
 };
 
 static char *to_string(TokenError error) {
   switch (error) {
     case EMPTY_STRING : return "Expected additonal token";
+    case MISSING_END_QUOTE : return "Missing end quote on quoted string";
     case UNEXPECTED_ADDITIONAL_ARGUMENTS : return "Received unexpected additional arguments";
     case NON_NUMERIC_CHARACTER : return "Received unexpected non-numeric character";
-    case UNEXPECTED_FLOATING_POINT : return "Received unexpected floating point";
+    case UNEXPECTED_FLOATING_POINT : return "Received unexpected decimal point";
     case INTEGER_TOO_LARGE : return "Integer argument was too large";
+    case FLOAT_TOO_LARGE : return "Floating point argument was too large";
     case SINGLETON_MINUS : return "Received a minus sign with no number following it";
     case INVALID_ATTRIBUTE_NAME : return "Received an unrecognized attribute name";
     case INVALID_COMMAND_NAME : return "Received an invalid command name";
-    default : return "Unknown error";
+    case INVALID_LAYOUT_TYPE : return "Received an invalid layout type";
+    case INVALID_ANIMATION_TYPE : return "Received an invalid layout type";
+    case INVALID_GROUP_ID : return "Received an invalid texture group id";
+    case INVALID_BLEND_MODE : return "Received an invalid blend mode";
+    case INVALID_CLAMP_MODE : return "Received an invalid clamp mode";
+    case INVALID_DIRECTION : return "Received an direction name";
+    default : return "Unspecified error";
   }
 }
 
@@ -278,6 +271,13 @@ static void print_error(TokenError error, char *filename, u32 line_num) {
   exit(1); // TODO should maybe close more cleanly
 }
 
+#define MAKE_TOKEN_FUNCTIONS(name, type_name, POSTFIX) \
+  inline Token set(type_name arg, lstring rem = {}) { \
+    type = TOKEN_##POSTFIX; name = arg; remainder = rem; return *this; \
+  } \
+  inline explicit operator type_name() { \
+    assert(!type || type == TOKEN_##POSTFIX); return name; \
+  }
 
 struct Token {
   // TODO consider making this private?
@@ -286,68 +286,60 @@ struct Token {
     lstring lstr;
     int i;
     float f;
-    SpecKeyword keyword;
+    CommandKeyword command;
+    AttributeKeyword attribute;
     TokenError error;
   };
   lstring remainder;
   TokenType type;
 
-  inline Token set(hstring arg, lstring rem = {}) { 
-    type = TOKEN_HSTRING; hstr = arg; remainder = rem; return *this;
-  }
-  inline Token set(lstring arg, lstring rem = {}) { 
-    type = TOKEN_LSTRING; lstr = arg; remainder = rem; return *this;
-  }
-  inline Token set(int arg, lstring rem = {}) { 
-    type = TOKEN_INT; i = arg; remainder = rem; return *this;
-  }
-  inline Token set(float arg, lstring rem = {}) { 
-    type = TOKEN_FLOAT; f = arg; remainder = rem; return *this;
-  }
-  inline Token set(SpecKeyword arg, lstring rem = {}) { 
-    type = TOKEN_KEYWORD; keyword = arg; remainder = rem; return *this;
-  }
-  inline Token set(TokenError arg, lstring rem = {}) { 
-    type = TOKEN_ERROR; error = arg; remainder = rem; return *this;
-  }
+  MAKE_TOKEN_FUNCTIONS(hstr, hstring, HSTRING);
+  MAKE_TOKEN_FUNCTIONS(lstr, lstring, LSTRING);
+  MAKE_TOKEN_FUNCTIONS(i, int, INT);
+  MAKE_TOKEN_FUNCTIONS(f, float, FLOAT);
+  MAKE_TOKEN_FUNCTIONS(command, CommandKeyword, COMMAND);
+  MAKE_TOKEN_FUNCTIONS(attribute, AttributeKeyword, ATTRIBUTE);
+  MAKE_TOKEN_FUNCTIONS(error, TokenError, ERROR);
 
   inline operator bool() { return (type != TOKEN_ERROR); }
-
-  inline explicit operator hstring() { 
-    assert(!type || type == TOKEN_HSTRING); return hstr; }
-  inline explicit operator lstring() { 
-    assert(!type || type == TOKEN_LSTRING); return lstr; }
-  inline explicit operator int() { 
-    assert(!type || type == TOKEN_INT); return i; }
-  inline explicit operator float() { 
-    assert(!type || type == TOKEN_FLOAT); return f; }
-  inline explicit operator SpecKeyword() { 
-    assert(!type || type == TOKEN_KEYWORD); return keyword; }
 };
 
-inline lstring remove_whitespace(lstring line) {
-  uint32_t i;
-  for (i = 0; i < line.len; i++) {
-    if (line[i] == ' ' || line[i] == '\t' || line[i] == '\n') continue;
-    break;
-  }
-  return line + i;
-}
-
-static Token pop_token(lstring line) {
-  line = remove_whitespace(line);
-
+static Token parse_string(lstring line) {
   uint32_t i;
   for (i = 0; i < line.len; i++) {
     if (line[i] == ' ' || line[i] == '\t' || line[i] == '\n') break;
   }
   lstring str = {line.str, i};
-  Token result;
+  return Token().set(str, line + i);
+}
 
-  if (str) result.set(str, line + i);
-  else result.set(EMPTY_STRING, line + i);
+static Token pop_token(lstring line) {
+  line = remove_whitespace(line);
+  if (!line) return Token().set(EMPTY_STRING);
 
-  return result;
+  return parse_string(line);
+}
+
+static Token pop_quote(lstring line) {
+  line = remove_whitespace(line);
+  if (!line) return Token().set(EMPTY_STRING);
+
+  if (line[0] == '\"') {
+    line = line + 1;
+    uint32_t i;
+    for (i = 0; i < line.len; i++) {
+      if (line[i] == '\"') {
+        lstring str = {line.str, i};
+        if (!str) return Token().set(EMPTY_STRING);
+        lstring remainder = line + i + 1;
+        assert(!remainder || remainder[0] != '\"');
+        return Token().set(str, remainder);
+      }
+    }
+    return Token().set(MISSING_END_QUOTE);
+  }
+
+  return parse_string(line);
 }
 
 static Token pop_hash(lstring line) {
@@ -396,6 +388,63 @@ static Token pop_int(lstring line) {
   return result;
 }
 
+// TODO I may eventually want this to work without requiring the length first
+static Token parse_float(lstring line) {
+
+  assert(line);
+  if (line.len >= 149) return Token().set(FLOAT_TOO_LARGE);
+
+  bool is_negative = false;
+  if (line[0] == '-') {
+    is_negative = true;
+    line = remove_whitespace(line + 1);
+  }
+
+  if (!line) return Token().set(SINGLETON_MINUS);
+
+  float result = 0;
+  u32 i;
+  for (i = 0; i < line.len; i++) {
+
+    if (line[i] == '.') break;
+    if (line[i] > '9' || line[i] < '0') return Token().set(NON_NUMERIC_CHARACTER);
+
+    float digit = line[i] - '0';
+    result *= 10; result += digit;
+  }
+
+  assert(i == line.len || line[i] == '.');
+
+  float place = 10;
+  for (i++; i < line.len; i++) {
+
+    if (line[i] == '.') return Token().set(UNEXPECTED_FLOATING_POINT);
+    if (line[i] > '9' || line[i] < '0') return Token().set(NON_NUMERIC_CHARACTER);
+
+    float digit = line[i] - '0';
+    result += digit / place;
+    place *= 10;
+  }
+
+
+  if (is_negative) result = -result;
+  printf("Float : %f\n", result); // TODO delete this
+  return Token().set(result);
+}
+
+static Token pop_float(lstring line) {
+  Token token = pop_token(line);
+  if (!token) return token;
+
+  Token result = parse_float(lstring(token));
+  result.remainder = token.remainder;
+  return result;
+}
+
+//
+// Spec file parsing helpers ---
+//
+
 struct VersionArgs {
   uint32_t version_number;
 
@@ -420,8 +469,15 @@ struct AnimationArgs {
 };
 
 struct SetArgs {
-  SpecKeyword attribute;
-  hstring name;
+  AttributeKeyword attribute;
+  union {
+    bool has_normal_map;
+    TextureLayoutType layout;
+    TextureFormatSpecifier blend_mode;
+    TextureFormatSpecifier clamp_mode;
+    V3 offset;
+    float sprite_depth;
+  };
 
   TokenError error;
 };
@@ -437,71 +493,188 @@ struct BitmapArgs {
   TokenError error;
 };
 
+#define HANDLE_TOKEN_ERROR(token) \
+  if (!token) { \
+    result.error = token.error; \
+    return result; \
+  }
+
+#define HANDLE_EXTRA_ARGS() \
+  if (remove_whitespace(args)) { \
+    result.error = UNEXPECTED_ADDITIONAL_ARGUMENTS; \
+    return result; \
+  }
+
+inline TextureGroupID invalid_of(TextureGroupID) { return TEXTURE_GROUP_INVALID; }
+inline TextureLayoutType invalid_of(TextureLayoutType) { return LAYOUT_INVALID; }
+inline AnimationType invalid_of(AnimationType) { return ANIM_INVALID; }
+inline CommandKeyword invalid_of(CommandKeyword) { return COMMAND_INVALID; }
+inline AttributeKeyword invalid_of(AttributeKeyword) { return ATTRIBUTE_INVALID; }
+inline Direction invalid_of(Direction) { return DIRECTION_INVALID; }
+inline TextureFormatSpecifier invalid_of(TextureFormatSpecifier spec) { 
+  if (spec == BLEND_INVALID) return BLEND_INVALID;
+  if (spec == CLAMP_INVALID) return CLAMP_INVALID;
+  if (spec >= BLEND_FIRST && spec <= BLEND_LAST) return BLEND_INVALID;
+  if (spec >= CLAMP_FIRST && spec <= CLAMP_LAST) return CLAMP_INVALID;
+  assert(!"Unknown spec invalid");
+  return BLEND_INVALID; 
+}
+
+inline TokenError error_of(TextureGroupID) { return INVALID_GROUP_ID; }
+inline TokenError error_of(TextureLayoutType) { return INVALID_LAYOUT_TYPE; }
+inline TokenError error_of(AnimationType) { return INVALID_ANIMATION_TYPE; }
+inline TokenError error_of(CommandKeyword) { return INVALID_COMMAND_NAME; }
+inline TokenError error_of(AttributeKeyword) { return INVALID_ATTRIBUTE_NAME; }
+inline TokenError error_of(Direction) { return INVALID_DIRECTION; }
+inline TokenError error_of(TextureFormatSpecifier spec) { 
+  if (spec == BLEND_INVALID) return INVALID_BLEND_MODE;
+  if (spec == CLAMP_INVALID) return INVALID_CLAMP_MODE;
+  if (spec >= BLEND_FIRST && spec <= BLEND_LAST) return INVALID_BLEND_MODE;
+  if (spec >= CLAMP_FIRST && spec <= CLAMP_LAST) return INVALID_CLAMP_MODE;
+  assert(!"Unknown spec error");
+  return INVALID_BLEND_MODE; 
+}
+#define IS_VALID(x) ((x) != invalid_of(x))
+#define DO_LOOKUP(arg, type, token) \
+  auto arg = type##_lookup(string_table, hstring(token)); \
+  result.arg = arg; \
+  if (!IS_VALID(arg)) { \
+    result.error = error_of(arg); \
+    return result; \
+  }
+
+#define HANDLE_ARG_INT(name) \
+  Token name = pop_int(args); \
+  args = name.remainder; \
+  HANDLE_TOKEN_ERROR(name); \
+  result.name = int(name);
+
+// TODO better checking
+#define HANDLE_ARG_UINT16(name) \
+  Token name = pop_int(args); \
+  args = name.remainder; \
+  HANDLE_TOKEN_ERROR(name); \
+  result.name = int(name);
+
+#define PARSE_ARG_FLOAT(name) \
+  Token name = pop_float(args); \
+  args = name.remainder; \
+  HANDLE_TOKEN_ERROR(name);
+
+#define HANDLE_ARG_FLOAT(name) \
+  PARSE_ARG_FLOAT(name) \
+  result.name = float(name);
+
+#define HANDLE_ARG_LOOKUP(name, type) \
+  Token name##_str = pop_hash(args); \
+  args = name##_str.remainder; \
+  HANDLE_TOKEN_ERROR(name##_str); \
+  DO_LOOKUP(name, type, name##_str);
+
+#define HANDLE_ARG_QUOTE(name) \
+  Token name = pop_quote(args); \
+  args = name.remainder; \
+  HANDLE_TOKEN_ERROR(name); \
+  result.name = lstring(name);
+
+//
+// Spec file parsing ---
+//
+
 static VersionArgs parse_version_args(lstring args) {
-  Token version_num = pop_int(args);
-
   VersionArgs result = {};
-  if (!version_num) 
-    result.error = version_num.error;
-
-  else if (remove_whitespace(version_num.remainder)) 
-    result.error = UNEXPECTED_ADDITIONAL_ARGUMENTS;
-
-  else 
-    result.version_number = int(version_num);
-
+  HANDLE_ARG_INT(version_number);
+  HANDLE_EXTRA_ARGS();
   return result;
 }
+
 static LayoutArgs parse_layout_args(lstring args) {
-  Token name = pop_hash(args);
-
   LayoutArgs result = {};
-  if (!name) {
-    result.error = name.error;
-    return result;
-  }
-
-  result.name = hstring(name);
-
-  Token layout_type = pop_hash(name.remainder);
-  if (!layout_type) {
-    result.error = layout_type.error;
-    return result;
-  }
-
-  if (remove_whitespace(layout_type.remainder)) {
-    result.error = UNEXPECTED_ADDITIONAL_ARGUMENTS;
-    return result;
-  }
-
-  //result.type = hstring(layout_type);
-
-  //Token parsed_layout_type = layout_type_lookup(string_table, hstring(layout_type));
-
+  HANDLE_ARG_LOOKUP(type, layout_type);
+  HANDLE_EXTRA_ARGS();
   return result;
 }
 
-// TODO this needs to return some sort of general result or something...
-static Token parse_command(lstring line) {
-  line = remove_whitespace(line);
-  if (!line) return Token().set(NONE);
-  if (line[0] == '#') return Token().set(NONE);
+static AnimationArgs parse_animation_args(lstring args) {
+  AnimationArgs result = {};
+  HANDLE_ARG_LOOKUP(type, animation_type);
+  HANDLE_ARG_INT(frames);
+  HANDLE_ARG_FLOAT(duration);
+  HANDLE_ARG_LOOKUP(direction, direction);
+  HANDLE_EXTRA_ARGS();
+  return result;
+}
 
-  Token keyword = pop_hash(line);
-  if (!keyword) return keyword;
+static SetArgs parse_set_args(lstring args) {
+  SetArgs result = {};
+  HANDLE_ARG_LOOKUP(attribute, attribute);
 
-  SpecKeyword keyword_num = keyword_lookup(string_table, hstring(keyword));
-  switch (keyword_num) {
-    case NONE    : break;
-    case VERSION : break; 
-    case LAYOUT  : break; 
+  switch (attribute) {
+    case ATTRIBUTE_LAYOUT : {
+      HANDLE_ARG_LOOKUP(layout, layout_type);
+    } break;
+
+    case ATTRIBUTE_HAS_NORMAL_MAP : {
+      HANDLE_ARG_INT(has_normal_map);
+    } break;
+
+    case ATTRIBUTE_MIN_BLEND : {
+      HANDLE_ARG_LOOKUP(blend_mode, blend_mode);
+    } break;
+
+    // NOTE : Although there is currently no difference between MIN and MAX
+    // blend modes, there will be once we add mip mapping.
+    case ATTRIBUTE_MAX_BLEND : {
+      HANDLE_ARG_LOOKUP(blend_mode, blend_mode);
+    } break;
+
+    case ATTRIBUTE_S_CLAMP :
+    case ATTRIBUTE_T_CLAMP : {
+      HANDLE_ARG_LOOKUP(clamp_mode, clamp_mode);
+    } break;
+
+    case ATTRIBUTE_OFFSET : {
+      PARSE_ARG_FLOAT(offset_x);
+      PARSE_ARG_FLOAT(offset_y);
+      PARSE_ARG_FLOAT(offset_z);
+      result.offset = vec3(offset_x, offset_y, offset_z);
+    } break;
+
+    case ATTRIBUTE_SPRITE_DEPTH : {
+      HANDLE_ARG_FLOAT(sprite_depth);
+    } break;
 
     default : {
-      keyword_num = UNHANDLED_COMMAND;
+      assert(!"Unhandled attribute type error.");
     } break;
   }
 
-  return Token().set(keyword_num, keyword.remainder);
+  HANDLE_EXTRA_ARGS();
+
+  return result;
+}
+
+static BitmapArgs parse_bitmap_args(lstring args) {
+  BitmapArgs result = {};
+  HANDLE_ARG_QUOTE(filename);
+  HANDLE_ARG_LOOKUP(id, group_id);
+  HANDLE_ARG_UINT16(sprite_count);
+  HANDLE_ARG_UINT16(sprite_width);
+  HANDLE_ARG_UINT16(sprite_height);
+  HANDLE_EXTRA_ARGS();
+  return result;
+}
+
+static Token parse_command(lstring line) {
+  line = remove_whitespace(line);
+  if (!line) return Token().set(COMMAND_NONE);
+  if (line[0] == '#') return Token().set(COMMAND_NONE);
+
+  Token command = pop_hash(line);
+  if (!command) return command;
+
+  CommandKeyword command_num = command_lookup(string_table, hstring(command));
+  return Token().set(command_num, command.remainder);
 }
 
 
@@ -524,6 +697,7 @@ int main(int argc, char *argv[]) {
   File *build_file = &build_file_;
 
   int error = read_entire_file(build_file, allocator);
+  assert(!error);
 
   auto build_stream_ = get_stream(build_file->buffer, build_file->size);
   auto build_stream = &build_stream_;
@@ -535,7 +709,7 @@ int main(int argc, char *argv[]) {
 
   Token command = parse_command(version_ln);
   if (!command) print_error(command.error, build_filename, line_number);
-  if (SpecKeyword(command) != VERSION) {
+  if (CommandKeyword(command) != COMMAND_VERSION) {
     print_error("VERSION not specified", build_filename, line_number);
   }
   auto args = parse_version_args(command.remainder);
@@ -548,19 +722,31 @@ int main(int argc, char *argv[]) {
     Token command = parse_command(next_line);
     if (!command) print_error(command.error, build_filename, line_number);
 
-    SpecKeyword command_num = SpecKeyword(command);
+    CommandKeyword command_num = CommandKeyword(command);
     switch (command_num) {
-      case NONE    : { // Comment or newline, do nothing
+      case COMMAND_NONE    : { // Comment or newline, do nothing
       } break;
-      case VERSION : {
+      case COMMAND_VERSION : {
         print_error("VERSION repeated", build_filename, line_number);
       } break; 
-      case LAYOUT  : {
+      case COMMAND_LAYOUT  : {
         auto args = parse_layout_args(command.remainder);
         if (args.error) print_error(args.error, build_filename, line_number);
       } break; 
-      case UNHANDLED_COMMAND : {
-        //print_error(INVALID_COMMAND_NAME, build_filename, line_number);
+      case COMMAND_ANIMATION : {
+        auto args = parse_animation_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number);
+      } break;
+      case COMMAND_SET : {
+        auto args = parse_set_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number);
+      } break;
+      case COMMAND_BITMAP : {
+        auto args = parse_bitmap_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number);
+      } break;
+      case COMMAND_INVALID : {
+        print_error(INVALID_COMMAND_NAME, build_filename, line_number);
       } break;
 
       default : {
@@ -573,45 +759,11 @@ int main(int argc, char *argv[]) {
   close_file(build_file);
 #endif
 
-  // TODO - load_png on sprite sheet
-  //      - hard code the dimensions and other stats to put in Packed structs
-  //      - write structs to pack_file
   PixelBuffer buffer = load_image_file("assets/lttp_link.png");
   assert(is_initialized(&buffer));
-  /*
-  struct PackedTextureLayout {
-    uint32_t layout_type;
-    uint32_t animation_count;
-    PackedAnimation animations[0];
-  };
-  struct PackedAnimation {
-    uint16_t animation_type;
-    uint16_t frame_count;
-    float duration;
-    uint16_t animation_start_index[4]; // DIRECTION_COUNT
-  };
-  struct PackedTextureGroup {
-    uint64_t bitmap_offset; // In bytes from start of data
-    uint32_t width; // In pixels
-    uint32_t height; 
-    uint16_t texture_group_id;
-    int16_t sprite_count; // Negative value indicates it has a normal map
-    uint16_t sprite_width; // In pixels
-    uint16_t sprite_height;
-    float offset_x;
-    float offset_y;
-    float offset_z;
-    float sprite_depth; // TODO I'd like to be able to specify this more generally
-  };
-  struct PackedAssetHeader {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t total_size; // ??
-    uint32_t layout_count;
-    uint32_t texture_group_count;
-    uint32_t data_offset;
-  };
-  */
+
+  // TODO replace all this with values from the spec file
+  
   uint32_t layout_count = 1;
   uint32_t animation_count = 1;
   uint32_t group_count = 1;
