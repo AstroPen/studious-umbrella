@@ -132,7 +132,7 @@ void main() {
   vec3 light_contributions = vec3(0);
   light_contributions += point_light(diffuse_color, specular_color, N, V, LIGHT_P, light_color, abc, shininess);
 
-  vec3 other_light_color = vec3(1, 1, 1) * 8;
+  vec3 other_light_color = vec3(1, 1, 1) * 3;
   //light_contributions += point_light(diffuse_color, specular_color, N, V, vec3(6,8,4), other_light_color, abc / 2, shininess);
   light_contributions += directional_light(diffuse_color, specular_color, N, V, vec3(0.2,1,1), other_light_color, shininess);
   light_contributions += directional_light(diffuse_color, specular_color, N, V, vec3(0.9,0.1,-0.1), vec3(9,0,0), shininess);

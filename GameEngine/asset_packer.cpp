@@ -230,8 +230,9 @@ enum TokenError : u32 {
   // NUMBERS :
   NON_NUMERIC_CHARACTER,
   UNEXPECTED_FLOATING_POINT,
-  INTEGER_TOO_LARGE,
+  INTEGER_TOO_LARGE, // TODO Rename overflows to match?
   FLOAT_TOO_LARGE,
+  OVERFLOW_16_BIT_INTEGER,
   SINGLETON_MINUS,
 
   // KEYWORDS :
@@ -256,6 +257,7 @@ static char *to_string(TokenError error) {
     case UNEXPECTED_FLOATING_POINT : return "Received unexpected decimal point";
     case INTEGER_TOO_LARGE : return "Integer argument was too large";
     case FLOAT_TOO_LARGE : return "Floating point argument was too large";
+    case OVERFLOW_16_BIT_INTEGER : return "16 bit integer argument was too large";
     case SINGLETON_MINUS : return "Received a minus sign with no number following it";
     case INVALID_ATTRIBUTE_NAME : return "Received an unrecognized attribute name";
     case INVALID_COMMAND_NAME : return "Received an invalid command name";
@@ -557,11 +559,14 @@ inline TokenError error_of(TextureFormatSpecifier spec) {
   HANDLE_TOKEN_ERROR(name); \
   result.name = int(name);
 
-// TODO better checking
 #define HANDLE_ARG_UINT16(name) \
   Token name = pop_int(args); \
   args = name.remainder; \
   HANDLE_TOKEN_ERROR(name); \
+  if (int(name) > UINT16_MAX) { \
+    result.error = OVERFLOW_16_BIT_INTEGER; \
+    return result; \
+  } \
   result.name = int(name);
 
 #define PARSE_ARG_FLOAT(name) \
@@ -825,7 +830,6 @@ int main(int argc, char *argv[]) {
         animation->duration = args.duration;
         animation->direction = args.direction;
         animation->start_index = current_animation_index;
-        //animation->animation_start_index[args.direction] = current_animation_index;
         current_animation_index += args.frames;
       } break;
 

@@ -398,6 +398,8 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
   gl_check_error();
 }
 
+// FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
+// it will probably break stuff.
 static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id, uint32_t normal_map_id, bool is_hud = false) {
   TIMED_FUNCTION();
   auto prev = buffer->tail;
@@ -740,6 +742,57 @@ static void draw_frame_records(RenderBuffer *buffer) {
 #undef TAB
 }
 
+static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float width) {
+  /*
+  GameCamera *camera = buffer->camera;
+
+  V3 Z = camera->forward;
+  V3 X = camera->right;
+  V3 Y = camera->up;
+  */
+
+  Rectangle r;
+  r.center = (p1 + p2) / 2;
+  r.offsets[0] = p2 - r.center;
+  // TODO Do some fancy crap here with the camera/cross product to make r face the camera
+  r.offsets[1] = vec3(width, 0, 0);
+  auto quad = to_quad4(r);
+
+  Rectangle r2 = r;
+  r2.offsets[1] = vec3(0, 0, width);
+  auto quad2 = to_quad4(r2);
+
+  u32 bitmap_id = get_texture_id(buffer->assets, BITMAP_WHITE);
+  u32 normal_map_id = 0;
+
+  V2 uv4[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  auto c = color;
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
+  
+  V4 c4[4] = {c,c,c,c};
+
+  V3 n = {0,0,1};
+  V3 n4[4] = {n,n,n,n};
+
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = quad.verts;
+  verts.uv = uv4;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
+  append_quads(buffer, 1, bitmap_id, normal_map_id);
+
+  verts.p = quad2.verts;
+  push_quad_vertices(buffer, verts);
+  append_quads(buffer, 1, bitmap_id, normal_map_id);
+}
+
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e);
 
 // TODO switch everthing to use the same path
@@ -747,32 +800,10 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
 #define DEBUG_CUBES 0
   TIMED_FUNCTION();
 
-#if 0
-struct RenderingInfo {
-  // NOTE : {0,0,0,0} means no texture or normal_map
-  V4 texture_uv; 
-  V4 normal_map_uv;
-  V4 color;
-  V3 offset;
-  float sprite_depth; // TODO This should maybe become a V4 or something
-  float scale;
-  uint32_t width;
-  uint32_t height;
-
-  uint32_t bitmap_id; // NOTE : This is an OpenGL texture id
-};
-#endif 
   RenderingInfo info = get_render_info(buffer->assets, e);
   if (info.texture_uv == vec4(0)) return;
-  //assert(info.texture_uv == vec4(0,0,1,1));
   //PRINT_V4(info.texture_uv);
   assert(info.normal_map_uv == vec4(0,0,0,0));
-  assert(info.color == vec4(1,1,1,1));
-  //assert(info.offset == vec3(0, 0.4, 0.06));
-  assert(info.sprite_depth == 0.3f);
-  assert(info.scale == 4.0);
-  //assert(info.width == 16);
-  //assert(info.height == 22);
   assert(info.bitmap_id);
 
 
@@ -815,7 +846,7 @@ struct RenderingInfo {
   
   V4 c4[4] = {c,c,c,c};
 
-  V3 n = -Z;
+  V3 n = normalize(Z + vec3(0,-2,0)); // TODO Figure this out for real
   V3 n4[4] = {n,n,n,n};
 
   /*
@@ -842,13 +873,16 @@ struct RenderingInfo {
   verts.n = n4;
   verts.t = t4;
 
+  // DELETEME
+  render_arrow(buffer, r.center, r.center + n, vec4(0.1,0,0,1), 0.1);
+  render_arrow(buffer, r.center, r.center + t, vec4(0,0,0.3,1), 0.1);
 
   push_quad_vertices(buffer, verts);
 
   append_quads(buffer, 1, bitmap_id, normal_map_id);
 
 #if DEBUG_CUBES
-  push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
+  push_box(buffer, box, vec4(0.9, 1, 0, 0.2), BITMAP_WHITE, 1);
 #endif
 #undef DEBUG_CUBES
 }

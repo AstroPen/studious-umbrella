@@ -335,6 +335,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto cursor_a_rect = aligned_rect(g->pointer_position, cursor_size, cursor_size);
   auto cursor_rect = rectangle(cursor_a_rect, 0);
   //g->cursor_color.rgb /= 2;
+  //render_line(render_buffer, vec3(0), vec3(2), vec4(0,0,0,1), 0.5);
   push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id); //, circle_normal_map->texture_id);
 
 
@@ -343,7 +344,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   V2 text_p = {0.5,11};
   char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
   sprintf(frame_rate_text, "%d ms", (int)(game_input.delta_t * 1000.0f));
-  push_hud_text(render_buffer, text_p, frame_rate_text, V4{1,1,1,1}, FONT_COURIER_NEW_BOLD);
+  push_hud_text(render_buffer, text_p, frame_rate_text, vec4(1), FONT_COURIER_NEW_BOLD);
   //push_hud(render_buffer, rectangle(aligned_rect(text_p, 0.1, 0.1)), V4{0,0,1,1}, white_texture->texture_id);
 
   // TODO move this out to platform layer, texture downloads should be handled asynchronously
