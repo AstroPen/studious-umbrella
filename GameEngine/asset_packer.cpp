@@ -4,6 +4,7 @@
 #include <unix_file_io.h>
 #include <vector_math.h>
 #include <lstring.h>
+#include <dynamic_array.h>
 #include "pixel.h"
 #include "custom_stb.h"
 #include "asset_interface.h"
@@ -43,6 +44,7 @@ enum AttributeKeyword {
   ATTRIBUTE_T_CLAMP,
   ATTRIBUTE_OFFSET,
   ATTRIBUTE_SPRITE_DEPTH,
+  ATTRIBUTE_SPRITE_INDEX,
 
   ATTRIBUTE_COUNT,
   ATTRIBUTE_INVALID,
@@ -92,6 +94,7 @@ static void init_string_table() {
     ADD_ATTRIBUTE_HASH(T_CLAMP);
     ADD_ATTRIBUTE_HASH(OFFSET);
     ADD_ATTRIBUTE_HASH(SPRITE_DEPTH);
+    ADD_ATTRIBUTE_HASH(SPRITE_INDEX);
     assert(i == ATTRIBUTE_COUNT);
 #undef ADD_ATTRIBUTE_HASH
   }
@@ -240,6 +243,8 @@ enum TokenError : u32 {
   INVALID_BLEND_MODE,
   INVALID_CLAMP_MODE,
   INVALID_DIRECTION,
+  ANIMATION_BEFORE_LAYOUT_SPECIFIED,
+  BITMAP_BEFORE_LAYOUT_SPECIFIED,
 };
 
 static char *to_string(TokenError error) {
@@ -260,6 +265,8 @@ static char *to_string(TokenError error) {
     case INVALID_BLEND_MODE : return "Received an invalid blend mode";
     case INVALID_CLAMP_MODE : return "Received an invalid clamp mode";
     case INVALID_DIRECTION : return "Received an direction name";
+    case ANIMATION_BEFORE_LAYOUT_SPECIFIED : return "ANIMATION command cannot be called before LAYOUT";
+    case BITMAP_BEFORE_LAYOUT_SPECIFIED : return "BITMAP command cannot be called before LAYOUT";
     default : return "Unspecified error";
   }
 }
@@ -477,6 +484,7 @@ struct SetArgs {
     TextureFormatSpecifier clamp_mode;
     V3 offset;
     float sprite_depth;
+    u16 sprite_index;
   };
 
   TokenError error;
@@ -637,11 +645,16 @@ static SetArgs parse_set_args(lstring args) {
       PARSE_ARG_FLOAT(offset_x);
       PARSE_ARG_FLOAT(offset_y);
       PARSE_ARG_FLOAT(offset_z);
-      result.offset = vec3(offset_x, offset_y, offset_z);
+      result.offset = vec3(float(offset_x), float(offset_y), float(offset_z));
+      print_vector(result.offset);
     } break;
 
     case ATTRIBUTE_SPRITE_DEPTH : {
       HANDLE_ARG_FLOAT(sprite_depth);
+    } break;
+
+    case ATTRIBUTE_SPRITE_INDEX : {
+      HANDLE_ARG_UINT16(sprite_index);
     } break;
 
     default : {
@@ -673,10 +686,29 @@ static Token parse_command(lstring line) {
   Token command = pop_hash(line);
   if (!command) return command;
 
+  // TODO consider checking for COMMAND_INVALID here instead of later
   CommandKeyword command_num = command_lookup(string_table, hstring(command));
   return Token().set(command_num, command.remainder);
 }
 
+#define DIRECTORY_BUFFER_SIZE 512
+
+static void write_pack_file(PushAllocator *header, darray<PixelBuffer> bitmaps) {
+  // TODO I might want to make my own version of this, but this is fine for now
+  FILE *pack_file = fopen("assets/packed_assets.pack", "wb");
+  //if (!pack_file) printf("Failed to open pack file for writing"); // TODO handle error better
+  assert(pack_file);
+  auto written = fwrite(header->memory, 1, header->bytes_allocated, pack_file);
+  assert(written == header->bytes_allocated); // TODO handle error
+  for (u32 i = 0; i < count(bitmaps); i++) {
+    auto bitmap = bitmaps + i;
+    u64 bitmap_size = u64(bitmap->width) * bitmap->height * 4;
+    written = fwrite(bitmap->buffer, 1, bitmap_size, pack_file);
+    assert(written == bitmap_size); // TODO handle error
+  }
+  printf("Packed in %ld bytes\n", ftell(pack_file));
+  fclose(pack_file);
+}
 
 int main(int argc, char *argv[]) {
   if (argc > 2) usage(argv[0]);
@@ -688,9 +720,20 @@ int main(int argc, char *argv[]) {
 
 #if 1
   init_string_table();
+  char directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
+  lstring directory_name = length_string(directory_buffer);
 
   auto allocator_ = new_push_allocator(2048 * 4);
   auto allocator = &allocator_;
+
+  PackedAssetHeader packed_header = {};
+  packed_header.magic = 'PACK';
+  packed_header.version = 0;
+
+  darray<PackedTextureLayout> packed_layouts;
+  darray<PackedAnimation> packed_animations;
+  darray<PackedTextureGroup> packed_groups;
+  darray<PixelBuffer> loaded_bitmaps;
 
   // TODO read build file for info about what files to read and what to do with them
   File build_file_ = open_file(build_filename);
@@ -698,11 +741,16 @@ int main(int argc, char *argv[]) {
 
   int error = read_entire_file(build_file, allocator);
   assert(!error);
+  close_file(build_file);
 
   auto build_stream_ = get_stream(build_file->buffer, build_file->size);
   auto build_stream = &build_stream_;
 
   u32 line_number = 0;
+
+  //
+  // Parse the first line, which must be the version number :
+  //
 
   lstring version_ln = pop_line(build_stream);
   line_number++;
@@ -715,7 +763,32 @@ int main(int argc, char *argv[]) {
   auto args = parse_version_args(command.remainder);
   if (args.error) print_error(args.error, build_filename, line_number);
 
+  if (args.version_number != 0) {
+    print_error("Only version number 0 is currently accepted", build_filename, line_number);
+  }
+
+  //
+  // Set up attributes to their default values :
+  //
+
+  uint16_t current_animation_index = 0;
+  TextureLayoutType current_layout_type = LAYOUT_INVALID;
+  uint16_t current_group_flags = 0;
+  uint8_t current_min_blend = LINEAR_BLEND;
+  uint8_t current_max_blend = LINEAR_BLEND;
+  uint8_t current_s_clamp = CLAMP_TO_EDGE;
+  uint8_t current_t_clamp = CLAMP_TO_EDGE;
+  V3 current_offset = vec3(0);
+  float current_sprite_depth = 0;
+
+  u64 current_data_offset = 0;
+
   while (has_remaining(build_stream)) {
+
+    //
+    // Parse each command, then its arguments, then push the result to a dynamic array
+    //
+
     lstring next_line = pop_line(build_stream);
     line_number++;
 
@@ -726,25 +799,103 @@ int main(int argc, char *argv[]) {
     switch (command_num) {
       case COMMAND_NONE    : { // Comment or newline, do nothing
       } break;
+
       case COMMAND_VERSION : {
-        print_error("VERSION repeated", build_filename, line_number);
+        print_error("VERSION command repeated", build_filename, line_number);
       } break; 
+
       case COMMAND_LAYOUT  : {
         auto args = parse_layout_args(command.remainder);
         if (args.error) print_error(args.error, build_filename, line_number);
+        auto layout = push(packed_layouts);
+        layout->layout_type = args.type;
+        layout->animation_count = 0;
       } break; 
+
       case COMMAND_ANIMATION : {
         auto args = parse_animation_args(command.remainder);
         if (args.error) print_error(args.error, build_filename, line_number);
+        auto layout = peek(packed_layouts);
+        if (!layout) print_error(ANIMATION_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number);
+        auto animation = push(packed_animations);
+        *animation = {};
+        layout->animation_count++;
+        animation->animation_type = args.type;
+        animation->frame_count = args.frames;
+        animation->duration = args.duration;
+        animation->animation_start_index[args.direction] = current_animation_index;
+        current_animation_index += args.frames;
       } break;
+
       case COMMAND_SET : {
         auto args = parse_set_args(command.remainder);
         if (args.error) print_error(args.error, build_filename, line_number);
+
+        switch (args.attribute) {
+          case ATTRIBUTE_LAYOUT : 
+            current_layout_type = args.layout; break;
+          case ATTRIBUTE_HAS_NORMAL_MAP :
+            if (args.has_normal_map)
+              current_group_flags |= GROUP_HAS_NORMAL_MAP;
+            else
+              current_group_flags &= ~GROUP_HAS_NORMAL_MAP; break;
+          case ATTRIBUTE_MIN_BLEND : 
+            current_min_blend = args.blend_mode; break;
+          case ATTRIBUTE_MAX_BLEND :
+            current_max_blend = args.blend_mode; break;
+          case ATTRIBUTE_S_CLAMP :
+            current_s_clamp = args.clamp_mode; break;
+          case ATTRIBUTE_T_CLAMP :
+            current_t_clamp = args.clamp_mode; break;
+          case ATTRIBUTE_OFFSET :
+            current_offset = args.offset; break;
+          case ATTRIBUTE_SPRITE_DEPTH :
+            current_sprite_depth = args.sprite_depth; break;
+          case ATTRIBUTE_SPRITE_INDEX :
+            current_animation_index = args.sprite_index; break;
+          default : assert(!"Unknown attribute.");
+        }
       } break;
+
       case COMMAND_BITMAP : {
         auto args = parse_bitmap_args(command.remainder);
         if (args.error) print_error(args.error, build_filename, line_number);
+        if (current_layout_type == LAYOUT_INVALID)
+          print_error(BITMAP_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number);
+        
+        auto group = push(packed_groups);
+        group->bitmap_offset = current_data_offset;
+        group->texture_group_id = args.id;
+        group->layout_type = current_layout_type;
+        group->sprite_count = args.sprite_count;
+        group->sprite_width = args.sprite_width;
+        group->sprite_height = args.sprite_height;
+
+        group->flags = current_group_flags;
+        group->min_blend = current_min_blend;
+        group->max_blend = current_max_blend;
+        group->s_clamp = current_s_clamp;
+        group->t_clamp = current_t_clamp;
+        group->offset_x = current_offset.x;
+        group->offset_y = current_offset.y;
+        group->offset_z = current_offset.z;
+        group->sprite_depth = current_sprite_depth;
+
+        // TODO TODO Actually read the bitmap
+        lstring bitmap_filename = append(directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
+        zero_terminate(bitmap_filename);
+        print_lstring(bitmap_filename); // TODO DELETE ME
+        printf("%s\n", bitmap_filename.str);
+        PixelBuffer bitmap = load_image_file(bitmap_filename.str);
+        if (!is_initialized(&bitmap)) 
+          print_error("Failed to load bitmap", build_filename, line_number);
+        group->width = bitmap.width;
+        group->height = bitmap.height;
+        current_data_offset += bitmap.width * bitmap.height * 4;
+        push(loaded_bitmaps, bitmap);
+
       } break;
+
       case COMMAND_INVALID : {
         print_error(INVALID_COMMAND_NAME, build_filename, line_number);
       } break;
@@ -756,17 +907,60 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  close_file(build_file);
+#if 1
+  {
+    u32 pre_data_size = sizeof(PackedAssetHeader);
+    pre_data_size += count(packed_layouts) * sizeof(PackedTextureLayout);
+    pre_data_size += count(packed_animations) * sizeof(PackedAnimation);
+    pre_data_size += count(packed_groups) * sizeof(PackedTextureGroup);
+    packed_header.data_offset = pre_data_size;
+    packed_header.layout_count = count(packed_layouts);
+    packed_header.texture_group_count = count(packed_groups);
+
+    packed_header.total_size = pre_data_size + current_data_offset;
+
+    PushAllocator dest_allocator_ = new_push_allocator(pre_data_size);
+    auto dest_allocator = &dest_allocator_;
+
+    PackedAssetHeader *asset_header = alloc_struct(dest_allocator, PackedAssetHeader);
+    assert(asset_header);
+    *asset_header = packed_header;
+
+    u32 current_animation_index = 0;
+    for (u32 i = 0; i < packed_header.layout_count; i++) {
+      auto layout = alloc_struct(dest_allocator, PackedTextureLayout);
+      assert(layout);
+      *layout = packed_layouts[i];
+      u32 animation_count = layout->animation_count;
+      auto animations = alloc_array(dest_allocator, PackedAnimation, animation_count);
+      assert(animations);
+      assert(animations == layout->animations); // Check alignment
+      assert(current_animation_index + animation_count <= count(packed_animations));
+      array_copy(packed_animations + current_animation_index, animations, animation_count);
+      current_animation_index += animation_count;
+    }
+
+    auto groups = alloc_array(dest_allocator, PackedTextureGroup, packed_header.texture_group_count);
+    assert(groups);
+    array_copy(packed_groups.p, groups, packed_header.texture_group_count);
+    assert(dest_allocator->bytes_allocated == pre_data_size);
+
+    write_pack_file(dest_allocator, loaded_bitmaps);
+  }
+
+
 #endif
+
+#else
 
   PixelBuffer buffer = load_image_file("assets/lttp_link.png");
   assert(is_initialized(&buffer));
 
   // TODO replace all this with values from the spec file
   
-  uint32_t layout_count = 1;
-  uint32_t animation_count = 1;
-  uint32_t group_count = 1;
+  uint32_t layout_count = 1; // LAYOUT_COUNT
+  uint32_t animation_count = 1; // ANIM_COUNT
+  uint32_t group_count = 1; // TEXTURE_GROUP_COUNT
   uint64_t pre_data_size = 
     sizeof(PackedAssetHeader) + 
     sizeof(PackedTextureLayout) * layout_count + 
@@ -828,6 +1022,7 @@ int main(int argc, char *argv[]) {
   printf("Packed in %ld bytes\n", ftell(pack_file));
   printf("Calculated size is %u bytes\n", asset_header->total_size);
   fclose(pack_file);
+#endif
 
 
   printf("Packing successful.\n");

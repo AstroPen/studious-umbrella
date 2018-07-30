@@ -31,6 +31,38 @@ inline lstring length_string(char *cstr) {
   return {cstr, len};
 }
 
+inline lstring append(lstring a, lstring b, u32 max_len) {
+  assert(max_len >= a.len);
+  lstring result = a;
+  result.len = min(max_len, a.len + b.len);
+  for (u32 i = 0; i < b.len && (i + a.len) < result.len; i++) {
+    result[i + a.len] = b[i];
+  }
+  return result;
+}
+
+inline lstring copy_string(lstring source, char *buffer, u32 buf_len) {
+  assert(buffer != source.str);
+  u32 length = min(source.len, buf_len);
+  lstring result = {buffer, length};
+  for (u32 i = 0; i < length; i++) {
+    result[i] = source[i];
+  }
+  return result;
+}
+
+inline lstring append(lstring a, lstring b, char *buffer, u32 buf_len) {
+  assert(buffer != b.str);
+  if (buffer == a.str) return append(a, b, buf_len);
+  lstring result = copy_string(a, buffer, buf_len);
+  return append(result, b, buf_len);
+}
+
+inline void zero_terminate(lstring s, u32 buf_len = 0) {
+  if (buf_len) assert(s.len < buf_len);
+  else s.str[s.len] = '\0';
+}
+
 struct hstring {
   union {
     struct {

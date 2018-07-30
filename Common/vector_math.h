@@ -119,6 +119,8 @@ union V4 {
   float elements[4];
 };
 
+#define PRINT_V4(name) printf(#name " : (%f,%f,%f,%f)\n", name.x, name.y, name.z, name.w);
+
 static inline V4 vec4(float f) {
   return {f,f,f,f};
 }

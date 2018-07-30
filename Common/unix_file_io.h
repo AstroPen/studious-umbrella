@@ -26,9 +26,10 @@ struct File {
   char *filename;
   uint8_t *buffer;
   PushAllocator error_stream;
-  uint32_t error_count;
+  u32 error_count;
   int descriptor;
-  uint32_t size;
+  u32 size;
+  u32 loaded_size;
   int last_error;
   bool assert_on_error;
 };
@@ -81,7 +82,18 @@ static File open_file(char *filename, PushAllocator error_stream = {}) {
   result.descriptor = fd;
   if (!is_initialized(&result.error_stream)) result.assert_on_error = true; // TODO allow this to not happen?
 
-  if (fd < 0) log_error(&result, FILE_NOT_FOUND);
+  if (fd < 0) {
+    log_error(&result, FILE_NOT_FOUND);
+    return result;
+  }
+
+  struct stat stat_buf;
+  int stat_error = fstat(fd, &stat_buf);
+  if (stat_error < 0) { 
+    log_error(&result, FILE_STAT_NOT_FOUND);
+    return result;
+  }
+  result.size = stat_buf.st_size;
   return result;
 }
 
@@ -100,14 +112,12 @@ static int read_entire_file(File *file, PushAllocator *allocator, int alignment 
     return FILE_NOT_FOUND; 
   }
 
-  struct stat stat_buf;
-  int stat_error = fstat(fd, &stat_buf);
-  if (stat_error < 0) { 
-    log_error(file, FILE_STAT_NOT_FOUND);
-    return FILE_STAT_NOT_FOUND;
+  auto size = file->size; 
+  if (!size) {
+    log_error(file, FILE_STAT_NOT_FOUND); 
+    return FILE_STAT_NOT_FOUND; 
   }
 
-  auto size = stat_buf.st_size;
   auto buffer = alloc_size(allocator, size, alignment);
   if (!buffer) {
     log_error(file, FAILED_TO_ALLOCATE_FILE);
@@ -115,13 +125,14 @@ static int read_entire_file(File *file, PushAllocator *allocator, int alignment 
   }
   file->buffer = (uint8_t *)buffer;
   file->size = size;
+  file->loaded_size = size;
 
   size_t bytes_read = 0;
   while (bytes_read < size) {
     auto read_result = read(fd, buffer, size - bytes_read);
     if (read_result <= 0) {
       log_error(file, ERROR_ON_READ);
-      file->size = bytes_read;
+      file->loaded_size = bytes_read;
       // NOTE : The memory is lost here, so only use temporary allocators 
       // to store file data from this function
       return ERROR_ON_READ;

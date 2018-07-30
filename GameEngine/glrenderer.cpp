@@ -764,14 +764,15 @@ struct RenderingInfo {
 #endif 
   RenderingInfo info = get_render_info(buffer->assets, e);
   if (info.texture_uv == vec4(0)) return;
-  assert(info.texture_uv == vec4(0,0,1,1));
+  //assert(info.texture_uv == vec4(0,0,1,1));
+  //PRINT_V4(info.texture_uv);
   assert(info.normal_map_uv == vec4(0,0,0,0));
   assert(info.color == vec4(1,1,1,1));
   assert(info.offset == vec3(0, 0.4, 0.06));
   assert(info.sprite_depth == 0.3f);
   assert(info.scale == 4.0);
-  assert(info.width == 16);
-  assert(info.height == 22);
+  //assert(info.width == 16);
+  //assert(info.height == 22);
   assert(info.bitmap_id);
 
 

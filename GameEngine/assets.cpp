@@ -70,7 +70,7 @@ static AnimationType get_current_animation(Entity *e) {
 
 static int get_sprite_index(TextureLayout *layout, AnimationType animation, Direction dir, float dt) {
   // TODO handle left/right reflection somehow
-  
+ 
   auto frame_count = layout->animation_frame_counts[animation];
   if (!frame_count) return -1;
 
@@ -222,9 +222,13 @@ static void unpack_assets(GameAssets *assets) {
       auto animation_type = packed_animation->animation_type;
       auto frame_count = packed_animation->frame_count;
       auto duration = packed_animation->duration;
+      auto animation_start_indices = packed_animation->animation_start_index;
       
       layout->animation_frame_counts[animation_type] = frame_count;
       layout->animation_times[animation_type] = duration;
+      for (u32 i = 0; i < DIRECTION_COUNT; i++) {
+        layout->animation_start_index[animation_type][i] = animation_start_indices[i];
+      }
 
       file_buffer += sizeof(PackedAnimation);
     }

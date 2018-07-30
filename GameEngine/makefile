@@ -30,7 +30,7 @@ asset_packer : asset_packer.cpp pixel.h asset_interface.h ../Common/* stb_image.
 	-I/usr/local/include/GL -I../Common
 	$(link) asset_packer asset_packer.o stb_image.o stb_truetype.o
 
-assets/packed_assets.pack : asset_packer assets/*.png
+assets/packed_assets.pack : asset_packer assets/*.png assets/*.spec
 	./asset_packer
 
 object_files = stb_image.o stb_truetype.o

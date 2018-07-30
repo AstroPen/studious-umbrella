@@ -4,7 +4,7 @@
 struct PackedAssetHeader {
   uint32_t magic;
   uint32_t version;
-  uint32_t total_size; // ??
+  uint32_t total_size; // TODO make this and data_offset u64s
   uint32_t layout_count;
   uint32_t texture_group_count;
   uint32_t data_offset;

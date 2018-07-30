@@ -126,6 +126,13 @@ inline T pop(darray<T> &arr) {
   return arr[head->count];
 }
 
+template <typename T>
+inline T *peek(darray<T> &arr) {
+  auto c = count(arr);
+  if (!c) return NULL;
+  return arr + c - 1;
+}
+
 // TODO move this to the test file
 static void dynamic_array_test() {
   printf("Dynamic array test begin.\n");

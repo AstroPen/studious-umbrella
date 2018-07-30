@@ -269,6 +269,13 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
     float jerk = e->accel_max / e->time_to_max_accel;
     float dejerk = e->accel_max / e->time_to_zero_accel;
     if (g->player_direction != vec2(0)) {
+      if (g->player_direction.y) {
+        if (g->player_direction.y > 0) e->facing_direction = UP;
+        else e->facing_direction = DOWN;
+      } else {
+        if (g->player_direction.x > 0) e->facing_direction = RIGHT;
+        else e->facing_direction = LEFT;
+      }
       if (length_sq(e->acc) < squared(e->accel_max)) {
         acc_scale += jerk * dt;
       }
@@ -278,6 +285,9 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
 
     acc_scale = clamp(acc_scale, 0.0f, e->accel_max);
     e->acc.xy = g->player_direction * acc_scale;
+
+    e->animation_dt += dt; // TODO figure out how to loop properly
+    if (e->animation_dt > 1.0) e->animation_dt -= 1.0;
   }
 
   if(e->flags & ENTITY_TEMPORARY) {

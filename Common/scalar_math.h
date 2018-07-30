@@ -2,35 +2,43 @@
 #ifndef _SCALAR_MATH_H_
 #define _SCALAR_MATH_H_
 
-static inline uint32_t max(uint32_t a, uint32_t b) {
+inline u32 max(uint32_t a, uint32_t b) {
   return (a < b) ? b : a;
 }
 
-static inline int max(int a, int b) {
+inline u64 max(u64 a, u64 b) {
   return (a < b) ? b : a;
 }
 
-static inline float max(float a, float b) {
+inline int max(int a, int b) {
   return (a < b) ? b : a;
 }
 
-static inline uint32_t min(uint32_t a, uint32_t b) {
+inline float max(float a, float b) {
+  return (a < b) ? b : a;
+}
+
+inline u32 min(u32 a, u32 b) {
   return (a > b) ? b : a;
 }
 
-static inline int min(int a, int b) {
+inline u64 min(u64 a, u64 b) {
   return (a > b) ? b : a;
 }
 
-static inline float min(float a, float b) {
+inline int min(int a, int b) {
   return (a > b) ? b : a;
 }
 
-static inline float squared(float f) {
+inline float min(float a, float b) {
+  return (a > b) ? b : a;
+}
+
+inline float squared(float f) {
   return f * f;
 }
 
-static inline float abs(float a) {
+inline float abs(float a) {
   return (a >= 0) ? a : -a;
 }
 
