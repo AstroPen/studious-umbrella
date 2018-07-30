@@ -105,6 +105,18 @@ enum Direction {
   DIRECTION_INVALID,
 };
 
+static Direction flip_direction(Direction dir) {
+  switch (dir) {
+    case LEFT : return RIGHT;
+    case RIGHT : return LEFT;
+    case UP : return DOWN;
+    case DOWN : return UP;
+    default : assert(!"Invalid direction.");
+  }
+  
+  return DIRECTION_INVALID;
+}
+
 enum AnimationType {
   ANIM_IDLE,
   ANIM_MOVE,
@@ -114,9 +126,9 @@ enum AnimationType {
 };
 
 struct TextureLayout {
-  uint16_t animation_frame_counts[ANIM_COUNT];
+  uint16_t animation_frame_counts[ANIM_COUNT][DIRECTION_COUNT];
   uint16_t animation_start_index[ANIM_COUNT][DIRECTION_COUNT];
-  float animation_times[ANIM_COUNT];
+  float animation_times[ANIM_COUNT][DIRECTION_COUNT];
 };
 
 enum FontID {

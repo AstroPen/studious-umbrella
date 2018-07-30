@@ -25,7 +25,7 @@ create_normal_map : create_normal_map.cpp custom_stb.h pixel.h stb_image.o makef
 	-I/usr/local/include/GL -I../Common
 	$(link) create_normal_map create_normal_map.o stb_image.o
 
-asset_packer : asset_packer.cpp pixel.h asset_interface.h ../Common/* stb_image.o stb_truetype.o makefile
+asset_packer : asset_packer.cpp pixel.h packed_assets.h asset_interface.h ../Common/* stb_image.o stb_truetype.o makefile
 	$(compile) asset_packer.cpp -o asset_packer.o \
 	-I/usr/local/include/GL -I../Common
 	$(link) asset_packer asset_packer.o stb_image.o stb_truetype.o

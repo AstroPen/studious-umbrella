@@ -38,7 +38,7 @@ static inline TextureLayout *get_layout(GameAssets *assets, TextureLayoutType id
   return result;
 }
 
-static V4 get_sprite_uv(TextureGroup *group, int sprite_index) {
+static V4 get_sprite_uv(TextureGroup *group, int sprite_index, bool reversed) {
   if (sprite_index < 0) return {};
 
   uint32_t h_count = group->bitmap.width / group->sprite_width;
@@ -57,6 +57,7 @@ static V4 get_sprite_uv(TextureGroup *group, int sprite_index) {
   float vmax = float(row_idx + 1) / float(v_count);
   assert(vmax >= 0 && vmax <= 1);
 
+  if (reversed) return vec4(umax, vmin, umin, vmax);
   return vec4(umin, vmin, umax, vmax);
 }
 
@@ -67,20 +68,48 @@ static AnimationType get_current_animation(Entity *e) {
   return ANIM_IDLE;
 }
 
+enum AnimationFlags {
+  ANIMATION_LOOPING = 1,
+  ANIMATION_REVERSABLE = (1 << 1),
+};
 
-static int get_sprite_index(TextureLayout *layout, AnimationType animation, Direction dir, float dt) {
+struct AnimationState {
+  AnimationType type;
+  Direction direction;
+  float t;
+  u32 flags;
+};
+
+static AnimationState get_current_animation_state(Entity *e) {
+  AnimationState result = {};
+  result.type = ANIM_IDLE;
+  result.direction = e->facing_direction;
+  if (result.direction == RIGHT || result.direction == LEFT) result.flags |= ANIMATION_REVERSABLE;
+
+  if (non_zero(e->vel)) {
+    result.type = ANIM_MOVE;
+    result.flags |= ANIMATION_LOOPING;
+  }
+  result.t = e->animation_dt;
+
+  return result;
+}
+
+
+static int get_sprite_index(TextureLayout *layout, AnimationState anim) {
   // TODO handle left/right reflection somehow
  
-  auto frame_count = layout->animation_frame_counts[animation];
+  auto frame_count = layout->animation_frame_counts[anim.type][anim.direction];
   if (!frame_count) return -1;
 
-  float animation_time = layout->animation_times[animation];
+  float duration = layout->animation_times[anim.type][anim.direction];
+  if (anim.flags | ANIMATION_LOOPING && duration < anim.t) anim.t -= duration;
 
-  float normalized_dt = dt / animation_time;
+  float normalized_dt = anim.t / duration;
   uint16_t frame_index = lroundf(normalized_dt * frame_count);
   if (frame_index >= frame_count) frame_index = frame_count - 1;
 
-  auto start_index = layout->animation_start_index[animation][dir];
+  auto start_index = layout->animation_start_index[anim.type][anim.direction];
   
   return start_index + frame_index;
 }
@@ -110,18 +139,22 @@ static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
     case LAYOUT_CHARACTER : {
       TextureLayout *layout = get_layout(assets, group->layout);
 
-      Direction dir = e->facing_direction; //get_facing_direction(e);
-      AnimationType animation = get_current_animation(e);
-      float t = e->animation_dt; //get_current_animation_time(e);
+      auto anim_state = get_current_animation_state(e);
 
-      int sprite_index = get_sprite_index(layout, animation, dir, t);
+      bool reversed = false;
+      int sprite_index = get_sprite_index(layout, anim_state);
+      if (sprite_index < 0 && anim_state.flags | ANIMATION_REVERSABLE) {
+        anim_state.direction = flip_direction(anim_state.direction);
+        sprite_index = get_sprite_index(layout, anim_state);
+        if (sprite_index >= 0) reversed = true;
+      }
       if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
 
       RenderingInfo result = {};
       result.bitmap_id = group->render_id;
-      result.texture_uv = get_sprite_uv(group, sprite_index);
+      result.texture_uv = get_sprite_uv(group, sprite_index, reversed);
       if (has_normal_map(group)) 
-        result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2);
+        result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2, reversed);
       result.color = get_color(e);
       result.offset = get_sprite_offset(group);
       result.sprite_depth = get_sprite_depth(group, sprite_index);
@@ -222,13 +255,12 @@ static void unpack_assets(GameAssets *assets) {
       auto animation_type = packed_animation->animation_type;
       auto frame_count = packed_animation->frame_count;
       auto duration = packed_animation->duration;
-      auto animation_start_indices = packed_animation->animation_start_index;
-      
-      layout->animation_frame_counts[animation_type] = frame_count;
-      layout->animation_times[animation_type] = duration;
-      for (u32 i = 0; i < DIRECTION_COUNT; i++) {
-        layout->animation_start_index[animation_type][i] = animation_start_indices[i];
-      }
+      auto direction = packed_animation->direction;
+      auto start_index = packed_animation->start_index;
+
+      layout->animation_frame_counts[animation_type][direction] = frame_count;
+      layout->animation_times[animation_type][direction] = duration;
+      layout->animation_start_index[animation_type][direction] = start_index;
 
       file_buffer += sizeof(PackedAnimation);
     }

@@ -823,7 +823,9 @@ int main(int argc, char *argv[]) {
         animation->animation_type = args.type;
         animation->frame_count = args.frames;
         animation->duration = args.duration;
-        animation->animation_start_index[args.direction] = current_animation_index;
+        animation->direction = args.direction;
+        animation->start_index = current_animation_index;
+        //animation->animation_start_index[args.direction] = current_animation_index;
         current_animation_index += args.frames;
       } break;
 

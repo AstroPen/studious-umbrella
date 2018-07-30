@@ -14,7 +14,10 @@ struct PackedAnimation {
   uint16_t animation_type;
   uint16_t frame_count;
   float duration;
-  uint16_t animation_start_index[4]; // DIRECTION_COUNT
+
+  u16 start_index;
+  u16 direction;
+  u32 flags;
 };
 
 struct PackedTextureLayout {

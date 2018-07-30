@@ -768,7 +768,7 @@ struct RenderingInfo {
   //PRINT_V4(info.texture_uv);
   assert(info.normal_map_uv == vec4(0,0,0,0));
   assert(info.color == vec4(1,1,1,1));
-  assert(info.offset == vec3(0, 0.4, 0.06));
+  //assert(info.offset == vec3(0, 0.4, 0.06));
   assert(info.sprite_depth == 0.3f);
   assert(info.scale == 4.0);
   //assert(info.width == 16);
