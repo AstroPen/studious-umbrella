@@ -112,24 +112,13 @@ static void display_buffer(RenderInfo render_info) {
 static RenderInfo init_screen(RenderBuffer *buffer, int width, int height) {
 
   RenderInfo result = {};
+
+  //
+  // INIT RENDER BUFFER
+  //
+
   result.render_buffer = buffer;
-  buffer->screen_width = width;
-  buffer->screen_height = height;
-
-  // TODO maybe pass in the memory from outside?
-  buffer->max_vertices = 4096 * 8;
-  buffer->vertex_count = 0;
-  int vertex_buffer_size = buffer->max_vertices * sizeof(Vertex);
-  int total_buffer_size = vertex_buffer_size + 4096 * 64;
-
-  printf("Total buffer size : %d\n", total_buffer_size);
-  auto temp = new_push_allocator(total_buffer_size);
-  buffer->vertices = alloc_array(&temp, Vertex, buffer->max_vertices);
-  assert(buffer->vertices);
-  buffer->allocator = new_push_allocator(&temp, remaining_size(&temp));
-  assert(is_initialized(&buffer->allocator));
-
-  clear(buffer);
+  init_render_buffer(buffer, width, height);
 
 
 

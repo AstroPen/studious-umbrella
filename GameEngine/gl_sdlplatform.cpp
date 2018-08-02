@@ -169,7 +169,7 @@ int main(int argc, char ** argv){
   thread_ids[0] = SDL_ThreadID();
 
   GameMemory game_memory = {};
-  RenderBuffer render_buffer;
+  RenderBuffer render_buffer = {};
 
   // TODO just use PushAllocators and new_push_allocator?
   game_memory.permanent_size = 4096 * 2048;

@@ -173,6 +173,42 @@ struct Vertex {
   V3 tangent;
 };
 
+struct RenderStage {
+  enum Flags : u16 {
+    ENABLE_DEPTH_TEST = 1,
+    CLEAR_DEPTH = (1 << 1),
+    CLEAR_COLOR = (1 << 2),
+    HAS_LIGHTING = (1 << 3),
+  };
+
+  enum ProjectionType : u8 {
+    ORTHOGRAPHIC,
+    PERSPECTIVE,
+    INFINITE_FAR_PLANE,
+  };
+
+  enum ViewType : u8 {
+    CAMERA_VIEW,
+    IDENTITY,
+  };
+
+  RenderElement *first;
+  RenderElement *tail;
+  u32 count;
+  ProjectionType projection;
+  ViewType view;
+  Flags flags;
+};
+
+static void init_render_stage(RenderStage *stage, RenderStage::ProjectionType projection, RenderStage::ViewType view, u16 flags) {
+  *stage = {};
+  stage->projection = projection;
+  stage->view = view;
+  stage->flags = RenderStage::Flags(flags);
+}
+
+#define RENDER_STAGE_COUNT 2
+
 struct RenderBuffer {
   PushAllocator allocator;
   GameAssets *assets;
@@ -191,10 +227,54 @@ struct RenderBuffer {
   int screen_height;
 
   float z_bias_accum;
+
+  RenderStage stages[RENDER_STAGE_COUNT];
 };
 
 #define Z_BIAS_EPSILON 0.000001f
 #define Z_BIAS_HUD_BASE 0.01
+
+static inline void clear(RenderBuffer *buffer) {
+  clear(&buffer->allocator);
+  buffer->first_element = NULL;
+  buffer->first_hud_element = NULL;
+  buffer->tail = NULL;
+  buffer->hud_tail = NULL;
+  buffer->element_count = 0;
+  buffer->hud_element_count = 0;
+  buffer->vertex_count = 0;
+  buffer->z_bias_accum = Z_BIAS_HUD_BASE;
+}
+
+static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
+  assert(buffer);
+  *buffer = {};
+  buffer->screen_width = width;
+  buffer->screen_height = height;
+
+  // TODO maybe pass in the memory from outside?
+  buffer->max_vertices = 4096 * 8;
+  buffer->vertex_count = 0;
+  int vertex_buffer_size = buffer->max_vertices * sizeof(Vertex);
+  int total_buffer_size = vertex_buffer_size + 4096 * 64;
+  printf("Total render buffer size : %d\n", total_buffer_size);
+
+  auto temp = new_push_allocator(total_buffer_size);
+  buffer->vertices = alloc_array(&temp, Vertex, buffer->max_vertices);
+  assert(buffer->vertices);
+  buffer->allocator = new_push_allocator(&temp, remaining_size(&temp));
+  assert(is_initialized(&buffer->allocator));
+
+  init_render_stage(buffer->stages + 0, 
+      RenderStage::PERSPECTIVE, RenderStage::CAMERA_VIEW, 
+      RenderStage::CLEAR_DEPTH | RenderStage::ENABLE_DEPTH_TEST | RenderStage::HAS_LIGHTING);
+
+  init_render_stage(buffer->stages + 1, 
+      RenderStage::ORTHOGRAPHIC, RenderStage::IDENTITY, 
+      0);
+
+  clear(buffer);
+}
 
 #if 0
 static void print_render_buffer(RenderBuffer *buffer) {
@@ -279,18 +359,6 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, bool 
   }
 
   return elem;
-}
-
-static inline void clear(RenderBuffer *buffer) {
-  clear(&buffer->allocator);
-  buffer->first_element = NULL;
-  buffer->first_hud_element = NULL;
-  buffer->tail = NULL;
-  buffer->hud_tail = NULL;
-  buffer->element_count = 0;
-  buffer->hud_element_count = 0;
-  buffer->vertex_count = 0;
-  buffer->z_bias_accum = Z_BIAS_HUD_BASE;
 }
 
 static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
@@ -617,8 +685,8 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
       float char_width  = (b->x1 - b->x0) * METERS_PER_PIXEL;
       float char_height = (b->y1 - b->y0) * METERS_PER_PIXEL;
 
-      float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
-      buffer->z_bias_accum += Z_BIAS_EPSILON;
+      //float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
+      //buffer->z_bias_accum += Z_BIAS_EPSILON;
       auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0); //z_bias);
 
       V2 uv[4] = {
@@ -1107,7 +1175,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       } break;
 
       case RenderType_RenderElementClear : {
-        auto e = (RenderElementClear *) elem;
+        //auto e = (RenderElementClear *) elem;
         // TODO
 
       } break;
@@ -1158,7 +1226,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       } break;
 
       case RenderType_RenderElementClear : {
-        auto e = (RenderElementClear *) elem;
+        //auto e = (RenderElementClear *) elem;
         // TODO
 
       } break;
@@ -1179,6 +1247,88 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   }
   if (buffer->hud_element_count) assert(!elem->next);
 #endif
+
+  for (u32 i = 0; i < RENDER_STAGE_COUNT; i++) {
+    auto stage = buffer->stages + i;
+    if (!stage->count) continue;
+    assert(stage->first);
+    assert(stage->tail);
+
+    if (stage->flags & RenderStage::ENABLE_DEPTH_TEST) {
+      glEnable(GL_DEPTH_TEST);
+    } else {
+      glDisable(GL_DEPTH_TEST);
+    }
+
+    bool has_lighting = (stage->flags & RenderStage::HAS_LIGHTING) != 0;
+    glUniform1i(glGetUniformLocation(program_id, "HAS_LIGHTING"), has_lighting);
+
+    u32 clear_bits = 0;
+    if (stage->flags & RenderStage::CLEAR_COLOR) clear_bits |= GL_COLOR_BUFFER_BIT;
+    if (stage->flags & RenderStage::CLEAR_DEPTH) clear_bits |= GL_DEPTH_BUFFER_BIT;
+    if (clear_bits) glClear(clear_bits);
+
+    switch (stage->projection) {
+      case RenderStage::ORTHOGRAPHIC :
+        glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, orthographic_proj); break;
+      case RenderStage::PERSPECTIVE :
+        glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, perspective_proj); break;
+      case RenderStage::INFINITE_FAR_PLANE :
+        glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, infinite_proj); break;
+      default :
+        assert(!"Invalid stage projection.");
+    }
+
+    switch (stage->view) {
+      case RenderStage::IDENTITY :
+        glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, identity_mat); break;
+      case RenderStage::CAMERA_VIEW :
+        glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, view_mat); break;
+      default :
+        assert(!"Invalid stage view.");
+    }
+
+    elem = stage->first;
+
+    for (int i = 0; i < stage->count; i++) {
+      assert(elem);
+      gl_check_error();
+
+      uint32_t texture_id = default_texture_id;
+
+      switch (elem->type) {
+
+        case RenderType_RenderElementHud : {
+          auto e = (RenderElementHud *) elem;
+
+          set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
+          if (e->texture_id) texture_id = e->texture_id;
+
+          draw_vertices(0, e->quad_count * 6, texture_id, 0);
+        } break;
+
+        case RenderType_RenderElementClear : {
+          //auto e = (RenderElementClear *) elem;
+          // TODO
+
+        } break;
+
+        default : {
+          printf("Invalid element : %d, index : %d\n", elem->type, i);
+
+          assert(!"Invalid element.");
+        };
+      }
+
+      // TODO figure out why this crashes when I don't check first?
+      if (elem->next) {
+        elem = elem->next;
+      } else {
+        break;
+      }
+    }
+    if (buffer->hud_element_count) assert(!elem->next);
+  }
 }
 
 
