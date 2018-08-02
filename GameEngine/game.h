@@ -167,7 +167,10 @@ struct Entity {
 
   TextureGroupID texture_group_id;
   Direction facing_direction;
+  Direction pressed_direction;
   float animation_dt;
+  float animation_duration;
+  AnimationType current_animation;
 
   float mass;
   float accel_max;

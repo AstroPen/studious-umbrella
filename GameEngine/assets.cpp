@@ -82,11 +82,28 @@ struct AnimationState {
 
 static AnimationState get_current_animation_state(Entity *e) {
   AnimationState result = {};
+  result.type = e->current_animation;
+  result.flags |= ANIMATION_LOOPING;
+  result.direction = e->facing_direction;
+  result.t = e->animation_dt;
+
+  return result;
+}
+
+#if 0
+// TODO Figure out how I want the animation state machine to work.
+// Right now, I'm thinking that there should be many state machines : one for 
+// each property I care about. In other words, one for the pressed direction, 
+// one for the moving direction, and more for others. On top of that, I want 
+// to record a speed value as a float. 
+
+static AnimationState get_current_animation_state(Entity *e) {
+  AnimationState result = {};
   result.type = ANIM_IDLE;
   result.direction = e->facing_direction;
   if (result.direction == RIGHT || result.direction == LEFT) result.flags |= ANIMATION_REVERSABLE;
 
-  if (non_zero(e->vel)) {
+  if (length_sq(e->vel) > 1.0) {
     result.type = ANIM_MOVE;
     result.flags |= ANIMATION_LOOPING;
   }
@@ -95,6 +112,97 @@ static AnimationState get_current_animation_state(Entity *e) {
   return result;
 }
 
+namespace Animator {
+  enum StateTransition {
+    NO_TRANSITION,
+    STOP_MOVING,
+    START_MOVING,
+    FULL_SPEED,
+    TURN_AROUND,
+    HALF_TURN,
+    COLLIDED,
+    PUSH_WALL,
+  };
+
+  enum PressState {
+    IDLE,
+    ,
+    RUNNING,
+    SLOWING,
+  };
+
+}
+
+// TODO replace facing direction with this under the name "pressed"
+enum class DirectionState : u8 {
+  NONE,
+  LEFT, RIGHT,
+  UP, DOWN
+};
+
+struct AnimationState {
+};
+
+
+struct StateTransition {
+  V3 da, dv;
+  Collision collision;
+  float dt;
+  u32 flags; // ???
+};
+
+static DirectionState to_direction_state(V2 velocity) {
+  if (length_sq(velocity) < 0.5) return DirectionState::NONE;
+
+  float dirs[4];
+  dirs[DirectionState::LEFT - 1] = -velocity.x;
+  dirs[DirectionState::RIGHT - 1] = velocity.x;
+  dirs[DirectionState::UP - 1] = velocity.y;
+  dirs[DirectionState::DOWN - 1] = -velocity.y;
+
+  u8 result = 0;
+  if (dirs[1] > dirs[result]) result = 1;
+  if (dirs[2] > dirs[result]) result = 2;
+  if (dirs[3] > dirs[result]) result = 3;
+
+  return DirectionState(result);
+}
+
+static void update_state(Entity *e, StateTransition *transition) {
+  auto old_pressed = e->pressed;
+  auto old_moving = to_direction_state(e->vel);
+  float speed = length(e->vel);
+}
+
+static void update_animation(Entity *e, V3 da, V3 dv, float dt) {
+  //e->animation_state; // Old state
+  //update_animation_state(graph, animation, transition);
+
+  auto transition = animator::NO_TRANSITION;
+  auto a = e->acc;
+  auto v = e->vel;
+  bool was_moving;
+  bool is_moving;
+  bool was_accelerating;
+  bool is_accelerating;
+  bool collided;
+  if (length_sq(a)) 
+  if ()
+  e->animation_dt += dt;
+}
+#endif
+
+static float get_animation_duration(GameAssets *assets, Entity *e) {
+  auto group_id = e->texture_group_id;
+  auto group = get_texture_group(assets, group_id);
+  auto layout_type = group->layout;
+  auto layout = get_layout(assets, layout_type);
+  auto animation = e->current_animation;
+  auto dir = e->facing_direction;
+  float duration = layout->animation_times[animation][dir];
+  if (!duration) duration = layout->animation_times[animation][flip_direction(dir)];
+  return duration;
+}
 
 static int get_sprite_index(TextureLayout *layout, AnimationState anim) {
   // TODO handle left/right reflection somehow
@@ -103,7 +211,8 @@ static int get_sprite_index(TextureLayout *layout, AnimationState anim) {
   if (!frame_count) return -1;
 
   float duration = layout->animation_times[anim.type][anim.direction];
-  if (anim.flags | ANIMATION_LOOPING && duration < anim.t) anim.t -= duration;
+  assert(duration >= 0);
+  if (anim.flags & ANIMATION_LOOPING && duration < anim.t) anim.t -= duration;
 
   float normalized_dt = anim.t / duration;
   uint16_t frame_index = lroundf(normalized_dt * frame_count);
@@ -130,6 +239,8 @@ static V3 get_sprite_offset(TextureGroup *group) {
 static float get_sprite_depth(TextureGroup *group, int sprite_index) {
   return group->sprite_depth;
 }
+
+#define LINK_RUN_SPEED 19.0f
 
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
   TextureGroup *group = get_texture_group(assets, e->texture_group_id);
@@ -215,6 +326,7 @@ static void unpack_assets(GameAssets *assets) {
   // TODO pass in allocator probably
   PushAllocator temporary_ = new_push_allocator(2048*128);
   auto temporary = &temporary_;
+  assert(is_initialized(temporary));
   // TODO once files get large, this needs to be a stream
   auto file_buffer = read_entire_file("assets/packed_assets.pack", temporary, 64);
   assert(file_buffer);

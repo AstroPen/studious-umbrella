@@ -256,6 +256,55 @@ static inline Collision2 find_intersect(Entity *a, Entity *b, float dt) {
 }
 #endif
 
+inline Direction to_direction(V2 v) {
+  if (!non_zero(v)) return DIRECTION_INVALID;
+  if (v.y) {
+    if (v.y > 0) return UP;
+    else return DOWN;
+  } else {
+    if (v.x > 0) return RIGHT;
+    else return LEFT;
+  }
+}
+
+// TODO this should also handle translation and other changes
+static void update_entity(GameState *g, Entity *e, V3 dp, float dt) {
+#define DEBUG_ANIMAIONS 0
+  translate(&e->collision_box, dp);
+
+  if (e->flags & ENTITY_PLAYER_CONTROLLED) {
+    // TODO This should maybe be handled by a separate animation system.
+    float vel_multiplier = length(e->vel.xy) / LINK_RUN_SPEED;
+    assert(vel_multiplier >= 0);
+    e->animation_dt += dt * vel_multiplier;
+    if (e->animation_dt > e->animation_duration) e->animation_dt -= e->animation_duration;
+
+    bool is_moving = vel_multiplier > (0.7 / LINK_RUN_SPEED);
+    bool is_pushing = e->pressed_direction != DIRECTION_INVALID;
+
+    if (is_moving && is_pushing) e->current_animation = ANIM_MOVE;
+    else if (is_moving) e->current_animation = ANIM_SLIDE;
+    else e->current_animation = ANIM_IDLE;
+
+    e->animation_duration = get_animation_duration(&g->assets, e);
+#if DEBUG_ANIMAIONS
+    switch (e->current_animation) {
+      case ANIM_IDLE : e->visual.color  = vec4(1.1, 1.1, 0.5, 1); break;
+      case ANIM_MOVE : e->visual.color  = vec4(0.6, 0.6, 1.8, 1); break;
+      case ANIM_SLIDE : e->visual.color = vec4(1.8, 0.6, 0.6, 1); break;
+
+      case ANIM_COUNT : e->visual.color   = vec4(2.0, 2.0, 2.0, 1); break;
+      case ANIM_INVALID : e->visual.color = vec4(0.1, 0.1, 0.1, 1); break;
+    }
+#endif  
+  }
+
+  if(e->flags & ENTITY_TEMPORARY) {
+    e->lifetime -= dt;
+  }
+#undef DEBUG_ANIMAIONS
+}
+
 // TODO consider renaming/inlining this
 static void process_entity(GameState *g, Entity *e, Entity *collider_list, int num_colliders, float dt) {
   TIMED_FUNCTION();
@@ -268,14 +317,12 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
     float acc_scale = length(e->acc);
     float jerk = e->accel_max / e->time_to_max_accel;
     float dejerk = e->accel_max / e->time_to_zero_accel;
-    if (g->player_direction != vec2(0)) {
-      if (g->player_direction.y) {
-        if (g->player_direction.y > 0) e->facing_direction = UP;
-        else e->facing_direction = DOWN;
-      } else {
-        if (g->player_direction.x > 0) e->facing_direction = RIGHT;
-        else e->facing_direction = LEFT;
-      }
+    auto dir = to_direction(g->player_direction);
+    e->pressed_direction = dir;
+
+    if (dir != DIRECTION_INVALID) {
+      e->facing_direction = dir;
+
       if (length_sq(e->acc) < squared(e->accel_max)) {
         acc_scale += jerk * dt;
       }
@@ -286,13 +333,8 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
     acc_scale = clamp(acc_scale, 0.0f, e->accel_max);
     e->acc.xy = g->player_direction * acc_scale;
 
-    e->animation_dt += dt; // TODO figure out how to loop properly
-    if (e->animation_dt > 1.0) e->animation_dt -= 1.0;
   }
 
-  if(e->flags & ENTITY_TEMPORARY) {
-    e->lifetime -= dt;
-  }
 
   assert(e->friction_multiplier);
   e->vel *= e->friction_multiplier;
@@ -354,35 +396,24 @@ static void process_entity(GameState *g, Entity *e, Entity *collider_list, int n
         // TODO use a second divsior here instead of just 5
         //e->acc += accel_projection / 5;
       }
+
+      auto dp = vec3(p - p_start, 0);
+      update_entity(g, e, dp, dt);
         
       dt -= collision.t;
       if (e->flags & ENTITY_PLAYER_CONTROLLED) g->collision_normal = collision.normal;
-      auto dp = p - p_start;
-      translate(&e->collision_box, vec3(dp,0));
 
     } else {
       auto dp = e->vel * dt + 0.5f * e->acc * dt * dt;
       e->vel += e->acc * dt;
-      translate(&e->collision_box, dp);
+
+      update_entity(g, e, dp, dt);
+
       dt = 0;
       break;
     }
   }
 
-  /*
-  if(e->flags & ENTITY_TEMPORARY && e->lifetime <= 0) {
-    e->flags = 0;
-    e->collision_box = {};
-  }
-  */
-
-  //assert(dt < PHYSICS_FRAME_TIME);
-
-  //auto dp = e->vel * dt + 0.5f * e->acc * dt * dt;
-  //e->vel += e->acc * dt;
-
-  //e->collision_box.min_pos += dp;
-  //e->collision_box.max_pos += dp;
 }
 
 #endif // _NAR_ENTITY_CPP_

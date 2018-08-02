@@ -247,6 +247,8 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   player->texture_group_id = TEXTURE_GROUP_LINK;
   player->facing_direction = DOWN;
   player->animation_dt = 0;
+  player->current_animation = ANIM_IDLE;
+  player->animation_duration = get_animation_duration(&g->assets, player);
 
   //
   // INIT WALLS

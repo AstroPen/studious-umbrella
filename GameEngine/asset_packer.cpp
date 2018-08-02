@@ -33,6 +33,8 @@ enum CommandKeyword {
   COMMAND_COUNT,
   COMMAND_INVALID,
   COMMAND_NONE,
+  COMMAND_COMMENT_BEGIN,
+  COMMAND_COMMENT_END,
 };
 
 enum AttributeKeyword {
@@ -105,6 +107,7 @@ static void init_string_table() {
     uint32_t i = 0;
     ADD_ANIM_HASH(IDLE);
     ADD_ANIM_HASH(MOVE);
+    ADD_ANIM_HASH(SLIDE);
     assert(i == ANIM_COUNT);
 #undef ADD_ANIM_HASH
   }
@@ -246,6 +249,7 @@ enum TokenError : u32 {
   INVALID_DIRECTION,
   ANIMATION_BEFORE_LAYOUT_SPECIFIED,
   BITMAP_BEFORE_LAYOUT_SPECIFIED,
+  COMMENT_NEVER_ENDED,
 };
 
 static char *to_string(TokenError error) {
@@ -269,6 +273,7 @@ static char *to_string(TokenError error) {
     case INVALID_DIRECTION : return "Received an direction name";
     case ANIMATION_BEFORE_LAYOUT_SPECIFIED : return "ANIMATION command cannot be called before LAYOUT";
     case BITMAP_BEFORE_LAYOUT_SPECIFIED : return "BITMAP command cannot be called before LAYOUT";
+    case COMMENT_NEVER_ENDED : return "A comment block was opened but never closed";
     default : return "Unspecified error";
   }
 }
@@ -686,7 +691,12 @@ static BitmapArgs parse_bitmap_args(lstring args) {
 static Token parse_command(lstring line) {
   line = remove_whitespace(line);
   if (!line) return Token().set(COMMAND_NONE);
-  if (line[0] == '#') return Token().set(COMMAND_NONE);
+  if (line[0] == '#') {
+    if (line.len >= 3) {
+      if (line[1] == '#' && line[2] == '/') return Token().set(COMMAND_COMMENT_BEGIN);
+    }
+    return Token().set(COMMAND_NONE);
+  }
 
   Token command = pop_hash(line);
   if (!command) return command;
@@ -694,6 +704,14 @@ static Token parse_command(lstring line) {
   // TODO consider checking for COMMAND_INVALID here instead of later
   CommandKeyword command_num = command_lookup(string_table, hstring(command));
   return Token().set(command_num, command.remainder);
+}
+
+static Token parse_comment_end(lstring line) {
+  line = remove_whitespace(line);
+  if (!line) return Token().set(COMMAND_NONE);
+  if (line.len < 3) return Token().set(COMMAND_NONE);
+  if (line[0] == '/' && line[1] == '#' && line[2] == '#') return Token().set(COMMAND_COMMENT_END);
+  return Token().set(COMMAND_NONE);
 }
 
 #define DIRECTORY_BUFFER_SIZE 512
@@ -803,6 +821,19 @@ int main(int argc, char *argv[]) {
     CommandKeyword command_num = CommandKeyword(command);
     switch (command_num) {
       case COMMAND_NONE    : { // Comment or newline, do nothing
+      } break;
+      case COMMAND_COMMENT_BEGIN : {
+        while (has_remaining(build_stream)) {
+          lstring next_line = pop_line(build_stream);
+          line_number++;
+
+          Token comment_token = parse_comment_end(next_line);
+          if (!comment_token) assert(!"Error during comment.");
+          auto comment_command = CommandKeyword(comment_token);
+          if (comment_command == COMMAND_NONE) continue;
+          if (comment_command == COMMAND_COMMENT_END) break;
+          assert(!"Invalid command from parse_comment_end.");
+        }
       } break;
 
       case COMMAND_VERSION : {

@@ -120,6 +120,7 @@ static Direction flip_direction(Direction dir) {
 enum AnimationType {
   ANIM_IDLE,
   ANIM_MOVE,
+  ANIM_SLIDE,
 
   ANIM_COUNT,
   ANIM_INVALID

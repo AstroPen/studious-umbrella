@@ -874,8 +874,8 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
   verts.t = t4;
 
   // DELETEME
-  render_arrow(buffer, r.center, r.center + n, vec4(0.1,0,0,1), 0.1);
-  render_arrow(buffer, r.center, r.center + t, vec4(0,0,0.3,1), 0.1);
+  //render_arrow(buffer, r.center, r.center + n, vec4(0.1,0,0,1), 0.1);
+  //render_arrow(buffer, r.center, r.center + t, vec4(0,0,0.3,1), 0.1);
 
   push_quad_vertices(buffer, verts);
 
