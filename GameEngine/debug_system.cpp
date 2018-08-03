@@ -354,13 +354,13 @@ static void clear_frame_records() {
   }
 }
 
-static void draw_frame_records(RenderBuffer *buffer);
+static void render_frame_records(RenderBuffer *buffer);
 
 static void push_debug_records() {
   RenderBuffer *buffer = debug_global_memory.render_buffer;
   aggregate_debug_events();
   //print_frame_records();
-  if (debug_global_memory.display_records) draw_frame_records(buffer);
+  if (debug_global_memory.display_records) render_frame_records(buffer);
 
   debug_global_memory.current_frame++;
   clear_frame_records();

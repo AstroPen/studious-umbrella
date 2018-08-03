@@ -198,6 +198,8 @@ struct GameCamera {
   float aspect_ratio; // height/width
   float focal_length;
   float near_dist, far_dist;
+  int screen_height;
+  int screen_width;
 };
 
 // TODO maybe move these to another file
@@ -216,13 +218,15 @@ static inline void look_at(GameCamera *camera, V3 target, V3 up = {0,1,0}) {
   camera->forward = Z;
 }
 
-static inline void look_at_target(GameCamera *camera, V3 up = {0,1,0}) {
+inline void look_at_target(GameCamera *camera, V3 up = {0,1,0}) {
   look_at(camera, camera->target, up);
 }
+
 
 struct GameState {
   GameAssets assets;
   GameCamera camera;
+  RenderBuffer *render_buffer;
   Entity *entities;
   ControllerState *controller;
   PushAllocator temp_allocator;

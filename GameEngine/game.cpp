@@ -67,7 +67,14 @@ static bool apply_input(GameState *g, ControllerState controller) {
   // because of screenspace/worldspace conversions
   if (controller.pointer_moved) {
     V2 pointer_p = controller.pointer;
-    g->pointer_position = to_game_coordinate(pointer_p, g->height);
+    pointer_p.y = g->camera.screen_height - pointer_p.y;
+    pointer_p += vec2(0.5);
+
+    pointer_p.x /= g->camera.screen_width;
+    pointer_p.y /= g->camera.screen_height;
+
+    g->pointer_position = pointer_p;
+    //g->pointer_position = to_game_coordinate(pointer_p, g->height);
   }
 
   b = buttons + BUTTON_MOUSE_LEFT;
@@ -154,14 +161,20 @@ static bool apply_input(GameState *g, ControllerState controller) {
 }
 
 static void update_physics(GameState *g) {
-  //TIMED_FUNCTION();
   PRIORITY_TIMED_FUNCTION(1);
 
-  // TODO this is obviously a janky way to do shooting, figure out something better?
+  // TODO this is obviously a pretty janky way to do shooting, figure out something better?
   if (g->shooting) {
-    auto player_p = center(g->entities->collision_box).xy;
-    auto cursor_dir = normalize(g->pointer_position - player_p);
-    add_particle(g, player_p, 25 * cursor_dir, 1, 0.2, 1, V4{0.3, 0.3, 0.2, 1});
+    auto player_p = center(g->entities->collision_box);
+    auto pointer_off = g->pointer_position; // * vec2(g->camera.screen_width,g->camera.screen_width);
+    pointer_off -= vec2(0.5);
+    pointer_off *= vec2(g->camera.screen_width,g->camera.screen_height) * METERS_PER_PIXEL;
+
+    // TODO FIXME camera.forward is backwards, fix that
+    auto pointer_p = g->camera.p - g->camera.forward * 10 + g->camera.right * pointer_off.x + g->camera.up * pointer_off.y;
+
+    auto cursor_dir = normalize((pointer_p - player_p).xy);
+    add_particle(g, player_p.xy, 25 * cursor_dir, 1, 0.2, 1, V4{0.3, 0.3, 0.2, 1});
     g->shooting--;
   }
   
@@ -195,6 +208,8 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   g->width  = render_buffer->screen_width / float(PIXELS_PER_METER);
   g->height = render_buffer->screen_height / float(PIXELS_PER_METER);
 
+  g->camera.screen_width = render_buffer->screen_width;
+  g->camera.screen_height = render_buffer->screen_height;
   g->camera.p = V3{g->width / 2, g->height / 2, 10};
   g->camera.target = V3{g->width / 2, g->height / 2, 0.2};
   g->camera.aspect_ratio = g->height / g->width;
@@ -275,6 +290,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto controller = game_input.controller;
 
   GameState *g = (GameState *) memory.permanent_store;
+  g->render_buffer = render_buffer;
 
   clear(&g->temp_allocator);
 
@@ -331,22 +347,16 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   //auto circ = Circle{g->pointer_position, cursor_size / 2.0f};
   //draw_circle(pixel_buffer, circ, cursor_color);
 
-  auto circle_texture = get_bitmap(&g->assets, BITMAP_CIRCLE);
-  //auto circle_normal_map = get_bitmap(&g->assets, BITMAP_SPHERE_NORMAL_MAP);
-  float cursor_size = 10.f / PIXELS_PER_METER;
-  auto cursor_a_rect = aligned_rect(g->pointer_position, cursor_size, cursor_size);
-  auto cursor_rect = rectangle(cursor_a_rect, 0);
-  //g->cursor_color.rgb /= 2;
-  //render_line(render_buffer, vec3(0), vec3(2), vec4(0,0,0,1), 0.5);
-  push_hud(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id); //, circle_normal_map->texture_id);
+  render_circle_screen_space(render_buffer, g->pointer_position, 10, vec4(1));
+
 
 
   //push_rectangle(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id, circle_normal_map->texture_id);
 
-  V2 text_p = {0.5,11};
+  V2 text_p = {1.f/16,15.f/16};
   char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
   sprintf(frame_rate_text, "%d ms", (int)(game_input.delta_t * 1000.0f));
-  push_hud_text(render_buffer, text_p, frame_rate_text, vec4(1), FONT_COURIER_NEW_BOLD);
+  render_shadowed_text_screen_space(render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD);
   //push_hud(render_buffer, rectangle(aligned_rect(text_p, 0.1, 0.1)), V4{0,0,1,1}, white_texture->texture_id);
 
   // TODO move this out to platform layer, texture downloads should be handled asynchronously

@@ -262,7 +262,8 @@ static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
 
   init_render_stage(buffer->stages + 0, 
       RenderStage::PERSPECTIVE, RenderStage::CAMERA_VIEW, 
-      RenderStage::CLEAR_DEPTH | RenderStage::ENABLE_DEPTH_TEST | RenderStage::HAS_LIGHTING);
+      RenderStage::CLEAR_DEPTH | RenderStage::CLEAR_COLOR | 
+      RenderStage::ENABLE_DEPTH_TEST | RenderStage::HAS_LIGHTING);
 
   init_render_stage(buffer->stages + 1, 
       RenderStage::ORTHOGRAPHIC, RenderStage::IDENTITY, 
@@ -474,6 +475,7 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
 
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
 // it will probably break stuff.
+// UPDATE : This might be fixed now, should test it soon.
 static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id, uint32_t normal_map_id, u32 render_stage = 0) {
   TIMED_FUNCTION();
   auto stage = buffer->stages + render_stage;
@@ -486,7 +488,7 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
     }
   }
 
-  // TODO Clean this up
+  // TODO Clean this up, I think we should have a separate Element type for having no normal map and use it whenever normal_map_id is 0.
   if (render_stage == 1) {
     auto elem = push_hud_element(buffer, RenderElementHud);
 
@@ -636,12 +638,13 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint3
   append_quads(buffer, 1, texture_id, normal_map_id);
 }
 
-static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id) {
+static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id) {
   TIMED_FUNCTION();
 
   //float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
   //buffer->z_bias_accum += Z_BIAS_EPSILON;
 
+  auto texture_id = get_texture_id(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
@@ -669,15 +672,61 @@ static void push_hud(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t te
   append_quads(buffer, 1, texture_id, 0, true);
 }
 
+inline void render_pixel_space(RenderBuffer *buffer, AlignedRect rect, V4 color, BitmapID bitmap_id) {
+  render_pixel_space(buffer, rectangle(rect), color, bitmap_id);
+}
 
-static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, uint32_t font_id) { 
+inline void render_screen_space(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id) {
+  V2 to_pixel = vec2(buffer->screen_width, buffer->screen_height);
+  rect.center.xy *= to_pixel;
+  render_pixel_space(buffer, rect, color, bitmap_id);
+}
+
+inline void render_screen_space(RenderBuffer *buffer, AlignedRect rect, V4 color, BitmapID bitmap_id) {
+  render_screen_space(buffer, rectangle(rect), color, bitmap_id);
+}
+
+inline void render_circle_screen_space(RenderBuffer *buffer, V2 p, float width, V4 color) {
+  render_screen_space(buffer, aligned_rect(p, width, width), color, BITMAP_CIRCLE);
+}
+
+// Expand on these functions and use them throughout the file
+inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V4 color) {
+  auto c = color;
+  assert(uv);
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
+  
+  V4 c4[4] = {c,c,c,c};
+
+  V3 n = {0,0,1};
+  V3 n4[4] = {n,n,n,n};
+
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = quad->verts;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
+}
+
+static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, uint32_t font_id) { 
   // TODO figure out a way to time this that doesn't interfere with drawing debug text
   //TIMED_FUNCTION();
 
+  bool is_shadowed = shadow_color.a > 0;
+  V3 shadow_offset;
+  if (is_shadowed) shadow_offset = vec3(shadow_depth, -shadow_depth, 0);
+  // TODO get rid of all the unnecessary variables from when this was in world space
   auto assets = buffer->assets;
   int num_quads = 0;
   V2 current_p = text_p; // Upper left corner
-  V2 pixel_p = current_p * PIXELS_PER_METER;
+  V2 pixel_p = current_p;
 
   auto font_info = get_font(assets, font_id);
   assert(font_info);
@@ -688,14 +737,12 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
   while (*text) {
     if (*text >= ' ' && *text <= '~') {
       auto b = get_baked_char(font_info, *text);
-      auto p = round(pixel_p + V2{b->xoff, -b->yoff}) * METERS_PER_PIXEL;
+      auto p = round(pixel_p + V2{b->xoff, -b->yoff});
 
-      float char_width  = (b->x1 - b->x0) * METERS_PER_PIXEL;
-      float char_height = (b->y1 - b->y0) * METERS_PER_PIXEL;
+      float char_width  = (b->x1 - b->x0);
+      float char_height = (b->y1 - b->y0);
 
-      //float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
-      //buffer->z_bias_accum += Z_BIAS_EPSILON;
-      auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0); //z_bias);
+      auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0);
 
       V2 uv[4] = {
                  {b->x0 / font_width, b->y1 / font_height}, 
@@ -704,28 +751,17 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
                  {b->x0 / font_width, b->y0 / font_height},
       };
 
-      auto c = color;
-      // NOTE for gamma correction :
-      //c.rgb *= c.rgb;
-      
-      V4 c4[4] = {c,c,c,c};
+      if (is_shadowed) {
+        translate(&quad, shadow_offset);
+        push_quad_vert_helper(buffer, &quad, uv, shadow_color);
+        num_quads++;
+        translate(&quad, -shadow_offset);
+      }
 
-      V3 n = {0,0,1};
-      V3 n4[4] = {n,n,n,n};
+      push_quad_vert_helper(buffer, &quad, uv, color);
 
-      V3 t = {1,0,0};
-      V3 t4[4] = {t,t,t,t};
-
-      VertexSOA verts;
-      verts.p = quad.verts;
-      verts.uv = uv;
-      verts.c = c4;
-      verts.n = n4;
-      verts.t = t4;
-
-      push_quad_vertices(buffer, verts);
       num_quads++;
-      pixel_p.x += b->xadvance; // * METERS_PER_PIXEL;
+      pixel_p.x += b->xadvance;
 
     } else {
       assert(!"Text character not in range.");
@@ -735,9 +771,24 @@ static void push_hud_text(RenderBuffer *buffer, V2 text_p, const char *text, V4 
   append_quads(buffer, num_quads, font_info->bitmap.texture_id, 0, true);
 }
 
+inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, uint32_t font_id) {
+  render_shadowed_text_pixel_space(buffer, text_p, text, color, vec4(0), 0, font_id);
+}
+
+inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, uint32_t font_id) { 
+  V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
+  render_shadowed_text_pixel_space(buffer, text_p_pixel_space, text, color, shadow_color, shadow_depth, font_id);
+}
+
+inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, uint32_t font_id) { 
+  V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
+  render_text_pixel_space(buffer, text_p_pixel_space, text, color, font_id);
+}
+
+
 // TODO I would like this to work with multiple colors...
 // Idea : Choose a symbol that can't be drawn with push_hud_text use it to indicate a color change.
-static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *format...) {
+static void render_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *format...) {
   char dest[1024 * 16];
 
   va_list args;
@@ -745,17 +796,20 @@ static void push_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *for
   vsnprintf(dest, sizeof(dest), format, args);
   va_end(args);
 
-  float const shadow_depth = 0.02;
-  push_hud_text(buffer, cursor_p + V2{shadow_depth, -shadow_depth * 2}, dest, V4{0,0,0,1}, FONT_DEBUG);
-  push_hud_text(buffer, cursor_p, dest, V4{1,1,1,1}, FONT_DEBUG);
+  render_shadowed_text_screen_space(buffer, cursor_p, dest, vec4(1), vec4(0,0,0,1), 2, FONT_DEBUG);
 }
 
 // TODO This is a weird place to put this, but right now it is inconvenient to put it anywhere else.
-static void draw_frame_records(RenderBuffer *buffer) {
+static void render_frame_records(RenderBuffer *buffer) {
   // NOTE : This is basically copied from print_frame_records.
 #define TAB "   "
-  V2 cursor_p = { 1.2, 11 };
-  float const newline_height = 0.5f;
+ 
+  u32 const screen_lines = 28;
+  float const newline_height = 1.0f / screen_lines;
+  float left_margin = 1.f/12;
+  u32 const max_lines = 26;
+
+  V2 cursor_p = { left_margin, 1 - newline_height * (screen_lines - max_lines) };
 
   static darray<uint32_t> block_ids;
 
@@ -766,14 +820,13 @@ static void draw_frame_records(RenderBuffer *buffer) {
   quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
 
   uint32_t lines = 0;
-  uint32_t const max_lines = 26;
 
   uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
-  push_debug_string(buffer, cursor_p + V2{8, 0} , "Total Frames : %llu", debug_global_memory.current_frame);
+  render_debug_string(buffer, cursor_p + V2{7.f/12, 0} , "Total Frames : %llu", debug_global_memory.current_frame);
   cursor_p.y -= newline_height;
   lines++;
 
-  push_debug_string(buffer, cursor_p, TAB "Thread |    Cycles |  Internal | Hits | Cycles/Hit |     Average");
+  render_debug_string(buffer, cursor_p, TAB "Thread |    Cycles |  Internal | Hits | Cycles/Hit |     Average");
   cursor_p.y -= newline_height;
   lines++;
 
@@ -789,10 +842,10 @@ static void draw_frame_records(RenderBuffer *buffer) {
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
     }
 
-    push_debug_string(buffer, cursor_p, "%-24s in %-24s (line %4u) : ",
-                      info->function_name, 
-                      info->filename, 
-                      info->line_number);
+    render_debug_string(buffer, cursor_p, "%-24s in %-24s (line %4u) : ",
+                        info->function_name, 
+                        info->filename, 
+                        info->line_number);
     cursor_p.y -= newline_height;
     lines++;
 
@@ -801,19 +854,20 @@ static void draw_frame_records(RenderBuffer *buffer) {
       auto record = records[thread_idx];
       if (!frame->hit_count) continue;
 
-      push_debug_string(buffer, cursor_p, 
-                        TAB "%6u | %9u | %9u | %4u | %10u | %11.1lf",
-                        thread_idx,
-                        frame->total_cycles, 
-                        frame->internal_cycles,
-                        frame->hit_count,
-                        frame->total_cycles / frame->hit_count,
-                        record->average_internal_cycles);
+      render_debug_string(buffer, cursor_p, 
+                          TAB "%6u | %9u | %9u | %4u | %10u | %11.1lf",
+                          thread_idx,
+                          frame->total_cycles, 
+                          frame->internal_cycles,
+                          frame->hit_count,
+                          frame->total_cycles / frame->hit_count,
+                          record->average_internal_cycles);
       cursor_p.y -= newline_height;
       lines++;
     }
     lines++;
-    cursor_p.y -= newline_height / 2;
+    cursor_p.y -= newline_height;
+    //cursor_p.y -= newline_height / 2;
   }
 #undef TAB
 }
@@ -1053,7 +1107,9 @@ static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_co
 static void gl_draw_buffer(RenderBuffer *buffer) {
   TIMED_FUNCTION();
 
-  glViewport(-4, -4, buffer->screen_width + 4, buffer->screen_height + 4);
+  // NOTE : Setting the viewport with no margin may cause things to be culled 
+  // unexpectedly. However, adding a margin means that the matrices need to be adjusted.
+  glViewport(0, 0, buffer->screen_width, buffer->screen_height);
   gl_check_error();
 
   // NOTE : Due to the way arrays work in C, these matrices are
@@ -1086,18 +1142,11 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     0, 0, (0.001f-2)*near_d,  0,
   };
 
-  // TODO clean up this mess.
-  // Dividing by camera z gives me zoom, but I don't want that for the hud!
-
-  //e /= camera->p.z;
-  e /= 10;
-  q = e / camera->aspect_ratio;
-
   float orthographic_proj[] = {
-    e, 0, 0,  0,
-    0, q, 0,  0,
-    0, 0, -2/(far_d-near_d),  0,
-    0, 0, p,  1,
+    2.0f/buffer->screen_width, 0, 0,  0,
+    0, 2.0f/buffer->screen_height, 0,  0,
+    0, 0, 1,  0,
+    -1, -1, 0,  1,
   };
 
 
@@ -1123,7 +1172,8 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
-    -8, -6, -10, 1,
+    0, 0, 0, 1,
+    //-8, -6, -10, 1,
   };
 
   glClearColor(1,1,0,1);

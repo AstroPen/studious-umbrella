@@ -571,6 +571,17 @@ static inline Quad4 to_quad4(AlignedRect r, float w = 0) {
 }
 
 //
+// Quad4 accessors ---
+//
+
+inline void translate(Quad4 *quad, V3 dp) {
+  quad->verts[0].xyz += dp;
+  quad->verts[1].xyz += dp;
+  quad->verts[2].xyz += dp;
+  quad->verts[3].xyz += dp;
+}
+
+//
 // VerticalLine accessors ---
 //
 
@@ -598,7 +609,16 @@ static inline HorizontalLine bottom_side(AlignedRect r) {
   return HorizontalLine{min_xy(r), width};
 }
 
+//
+// AlignedBox constructors
+//
 
+static inline AlignedBox aligned_box(V3 center, float size) {
+  AlignedBox result;
+  result.center = center;
+  result.offset = vec3(size / 2);
+  return result;
+}
 
 static inline AlignedBox aligned_box(AlignedRect r, float z, float height) {
   AlignedBox result;
