@@ -2,38 +2,44 @@
 #ifndef _PIXEL_H_
 #define _PIXEL_H_
 
+typedef double float64;
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
 union Color {
-  uint32_t value;
+  u32 value;
   struct {
-    uint8_t b;
-    uint8_t g;
-    uint8_t r;
-    uint8_t a;
+    u8 b;
+    u8 g;
+    u8 r;
+    u8 a;
   };
   struct {
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-    uint8_t a;
+    u8 r;
+    u8 g;
+    u8 b;
+    u8 a;
   } rgba;
 
   inline Color() { value = 0; }
-  inline Color(uint32_t v) { value = v; }
-  inline operator uint32_t() { return value; }
+  inline Color(u32 v) { value = v; }
+  inline operator u32() { return value; }
 };
 
 struct PixelBuffer {
-  uint8_t *buffer;
+  u8 *buffer;
   int width;
   int height;
-  uint32_t texture_id;
+  u32 texture_id;
 };
 
-static inline uint32_t *get_pixel(PixelBuffer *buf, int x, int y) {
+static inline u32 *get_pixel(PixelBuffer *buf, int x, int y) {
   int pitch = buf->width;
   int row = y * pitch;
   int index = row + x;
-  return (uint32_t *)buf->buffer + index;
+  return (u32 *)buf->buffer + index;
 }
 
 static inline bool is_initialized(PixelBuffer *buf) {
@@ -49,7 +55,7 @@ static PixelBuffer alloc_texture(int width, int height, int pixel_bytes = 4) {
   result.height = height;
 
   int buffer_size = pixel_bytes * width * height;
-  result.buffer = (uint8_t *) malloc(buffer_size);
+  result.buffer = (u8 *) malloc(buffer_size);
 
   return result;
 }
@@ -63,7 +69,7 @@ static PixelBuffer alloc_texture(PushAllocator *allocator, int width, int height
 
   int buffer_size = pixel_bytes * width * height;
   // TODO test different alignments
-  result.buffer = (uint8_t *) alloc_size(allocator, buffer_size, 64);
+  result.buffer = (u8 *) alloc_size(allocator, buffer_size, 64);
 
   return result;
 }
@@ -130,17 +136,17 @@ static void draw_texture(PixelBuffer buf, V2 p, PixelBuffer texture) {
 
   for (int screen_y = min_y; screen_y < max_y; screen_y++) {
 
-    uint8_t *screen_row = buf.buffer + screen_y * screen_pitch;
+    u8 *screen_row = buf.buffer + screen_y * screen_pitch;
 
     int texture_y = screen_y - tex_origin_y;
-    uint8_t *texture_row = texture.buffer + texture_y * tex_pitch; 
+    u8 *texture_row = texture.buffer + texture_y * tex_pitch; 
 
     for (int screen_x = min_x; screen_x < max_x; screen_x++) {
 
-      uint32_t *screen_pixel = (uint32_t *) (screen_row + screen_x * pixel_bytes);
+      u32 *screen_pixel = (u32 *) (screen_row + screen_x * pixel_bytes);
 
       int texture_x = screen_x - tex_origin_x;
-      uint32_t tex_pixel = * (uint32_t *) (texture_row + texture_x * pixel_bytes);
+      u32 tex_pixel = * (u32 *) (texture_row + texture_x * pixel_bytes);
 
       *screen_pixel = tex_pixel;
     }

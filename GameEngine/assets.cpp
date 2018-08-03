@@ -7,7 +7,7 @@ static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id) {
   return result;
 }
 
-static inline uint32_t get_texture_id(GameAssets *assets, BitmapID id) {
+static inline u32 get_texture_id(GameAssets *assets, BitmapID id) {
   assert(id);
   assert(id < BITMAP_COUNT);
   auto texture = assets->bitmaps + id;
@@ -41,11 +41,11 @@ static inline TextureLayout *get_layout(GameAssets *assets, TextureLayoutType id
 static V4 get_sprite_uv(TextureGroup *group, int sprite_index, bool reversed) {
   if (sprite_index < 0) return {};
 
-  uint32_t h_count = group->bitmap.width / group->sprite_width;
-  uint32_t v_count = group->bitmap.height / group->sprite_height;
-  uint32_t row_idx = sprite_index / h_count;
+  u32 h_count = group->bitmap.width / group->sprite_width;
+  u32 v_count = group->bitmap.height / group->sprite_height;
+  u32 row_idx = sprite_index / h_count;
   assert(row_idx < v_count);
-  uint32_t col_idx = sprite_index % h_count;
+  u32 col_idx = sprite_index % h_count;
 
   float umin = float(col_idx) / float(h_count);
   assert(umin >= 0 && umin <= 1);
@@ -215,7 +215,7 @@ static int get_sprite_index(TextureLayout *layout, AnimationState anim) {
   if (anim.flags & ANIMATION_LOOPING && duration < anim.t) anim.t -= duration;
 
   float normalized_dt = anim.t / duration;
-  uint16_t frame_index = lroundf(normalized_dt * frame_count);
+  u16 frame_index = lroundf(normalized_dt * frame_count);
   if (frame_index >= frame_count) frame_index = frame_count - 1;
 
   auto start_index = layout->animation_start_index[anim.type][anim.direction];
@@ -286,14 +286,14 @@ static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
 struct TextureGroup {
   PixelBuffer bitmap; // TODO remove the texture_id from PixelBuffer
   TextureLayoutType layout;
-  uint32_t sprite_width; // TODO Should maybe be column count, row count
-  uint32_t sprite_height;
+  u32 sprite_width; // TODO Should maybe be column count, row count
+  u32 sprite_height;
   union {
     float sprite_depth;
-    uint32_t sprite_depth_index; // used to index an array of sprite_depths
+    u32 sprite_depth_index; // used to index an array of sprite_depths
   };
-  uint32_t render_id;
-  uint32_t sprite_count; // TODO I'd like to get rid of this
+  u32 render_id;
+  u32 sprite_count; // TODO I'd like to get rid of this
   V3 sprite_offset;
   bool has_normal_map;
 };
@@ -313,8 +313,8 @@ enum AnimationType {
 };
 
 struct TextureLayout {
-  uint16_t animation_frame_counts[ANIM_COUNT];
-  uint16_t animation_start_index[ANIM_COUNT][4]; // 4 is for direction count
+  u16 animation_frame_counts[ANIM_COUNT];
+  u16 animation_start_index[ANIM_COUNT][4]; // 4 is for direction count
   float animation_times[ANIM_COUNT];
 };
 #endif
@@ -337,8 +337,8 @@ static void unpack_assets(GameAssets *assets) {
   assert(header->version == 0);
   assert(header->total_size <= temporary->bytes_allocated);
 
-  uint32_t layout_count = header->layout_count;
-  uint32_t texture_group_count = header->texture_group_count;
+  u32 layout_count = header->layout_count;
+  u32 texture_group_count = header->texture_group_count;
   uint8_t *data = file_buffer + header->data_offset;
 
   assert(file_buffer == temporary->memory); // TODO delete these :
@@ -350,19 +350,19 @@ static void unpack_assets(GameAssets *assets) {
   file_buffer += sizeof(PackedAssetHeader);
 
   // For each layout type :
-  for (uint32_t lt = 0; lt < layout_count; lt++) {
+  for (u32 lt = 0; lt < layout_count; lt++) {
     auto packed_layout = (PackedTextureLayout *) file_buffer;
-    uint32_t layout_type = packed_layout->layout_type;
+    u32 layout_type = packed_layout->layout_type;
 
     assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
     assert(layout_type = LAYOUT_CHARACTER); // TODO delete this
     TextureLayout *layout = assets->texture_layouts + layout_type;
-    uint32_t animation_count = packed_layout->animation_count;
+    u32 animation_count = packed_layout->animation_count;
 
     file_buffer += sizeof(PackedTextureLayout);
 
     // For each animation :
-    for (uint32_t an = 0; an < animation_count; an++) {
+    for (u32 an = 0; an < animation_count; an++) {
       auto packed_animation = packed_layout->animations + an;
       auto animation_type = packed_animation->animation_type;
       auto frame_count = packed_animation->frame_count;
@@ -379,7 +379,7 @@ static void unpack_assets(GameAssets *assets) {
   }
 
   // For each texture group :
-  for (uint32_t tg = 0; tg < texture_group_count; tg++) {
+  for (u32 tg = 0; tg < texture_group_count; tg++) {
     auto packed_group = (PackedTextureGroup *) file_buffer;
     TextureGroupID group_id = (TextureGroupID) packed_group->texture_group_id;
 
@@ -480,14 +480,14 @@ static inline void load_bitmap(GameAssets *assets, BitmapID id) {
   push_work(assets->work_queue, work, (work_queue_callback *) do_load_bitmap_work);
 }
 
-static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id) {
+static inline FontInfo *get_font(GameAssets *assets, u32 font_id) {
   auto font = assets->fonts + font_id;
   if (font->baked_chars) return font;
   //assert(!"Font not loaded.");
   return NULL;
 }
 
-static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id) {
+static inline FontInfo *get_font_location(GameAssets *assets, u32 font_id) {
   auto font = assets->fonts + font_id;
   return font;
 }
@@ -503,7 +503,7 @@ static inline BakedChar *get_baked_char(FontInfo *font, char c) {
 // TODO Baking text should happen offline, or before the first frame during developement.
 // Additionally, the temporary storeage needed on the cpu should use a SwapAllocator 
 // to handle all asset loading concurrently.
-static FontInfo load_font_file(const char* filename, uint32_t text_height, 
+static FontInfo load_font_file(const char* filename, u32 text_height, 
                                PushAllocator *perm_allocator, PushAllocator *temp_allocator) {
 
   // TODO test for different alignments and speed gains/losses
@@ -514,7 +514,7 @@ static FontInfo load_font_file(const char* filename, uint32_t text_height,
   // NOTE : We want space to ~, which is 32 to 126
   // 126 - 32 = 95 glyphs
   // sqrt(94) ~ 10
-  uint32_t bitmap_dim = next_power_2(10 * text_height);
+  u32 bitmap_dim = next_power_2(10 * text_height);
   int first_glyph = ' ';
   int num_glyphs = 95;
   // TODO test for different alignments and speed gains/losses
@@ -542,7 +542,7 @@ static FontInfo load_font_file(const char* filename, uint32_t text_height,
   } else {
     int first_unused_row = result;
     if (first_unused_row < bitmap_dim / 2) {
-      uint32_t new_height = next_power_2(first_unused_row);
+      u32 new_height = next_power_2(first_unused_row);
       assert(new_height <= bitmap_dim);
       if (new_height < bitmap_dim) {
         bitmap.height = new_height;
@@ -552,7 +552,7 @@ static FontInfo load_font_file(const char* filename, uint32_t text_height,
   }
 
   // TODO separate this out to a "init font" call
-  uint32_t font_id;
+  u32 font_id;
   glGenTextures(1, &font_id);
   assert(font_id);
   glBindTexture(GL_TEXTURE_2D, font_id);
@@ -646,17 +646,17 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
 #endif
 
 // TODO move this somewhere reasonable
-static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_t diameter) {
+static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, u32 diameter) {
   float radius = diameter / 2.0f;
   V2 center = vec2(radius);
   float radius_sq = radius * radius;
 
-  uint32_t pixel_bytes = 4;
-  uint32_t pitch = pixel_bytes * diameter;
+  u32 pixel_bytes = 4;
+  u32 pitch = pixel_bytes * diameter;
 
-  for (uint32_t y = 0; y < diameter; y++) {
-    uint32_t row = pitch * y;
-    for (uint32_t x = 0; x < diameter; x++) {
+  for (u32 y = 0; y < diameter; y++) {
+    u32 row = pitch * y;
+    for (u32 x = 0; x < diameter; x++) {
       Color color = 0;
       Color ncolor = 0;
 
@@ -679,9 +679,9 @@ static void draw_circle_asset(uint8_t *texture_buf, uint8_t *normal_buf, uint32_
         ncolor = to_color(vec4(normal, 1));
       }
 
-      uint32_t index = row + x * pixel_bytes;
-      uint32_t *pixel = (uint32_t *) (texture_buf + index);
-      uint32_t *normal_pixel = (uint32_t *) (normal_buf + index);
+      u32 index = row + x * pixel_bytes;
+      u32 *pixel = (u32 *) (texture_buf + index);
+      u32 *normal_pixel = (u32 *) (normal_buf + index);
       *pixel = color;
       *normal_pixel = ncolor;
     }
@@ -718,11 +718,11 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
 
   auto white_texture = get_bitmap_location(assets, BITMAP_WHITE);
   *white_texture = alloc_texture(&g->perm_allocator, 1, 1);
-  auto white_pixel = (uint32_t *) white_texture->buffer;
+  auto white_pixel = (u32 *) white_texture->buffer;
   *white_pixel = 0xffffffff;
   init_texture(assets, BITMAP_WHITE);
 
-  uint32_t circle_diameter = 128;
+  u32 circle_diameter = 128;
   auto circle_texture = get_bitmap_location(assets, BITMAP_CIRCLE);
   *circle_texture = alloc_texture(&g->perm_allocator, circle_diameter, circle_diameter);
   auto sphere_normal_map = get_bitmap_location(assets, BITMAP_SPHERE_NORMAL_MAP);

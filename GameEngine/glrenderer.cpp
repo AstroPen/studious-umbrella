@@ -42,7 +42,7 @@ GLint to_gl_format_specifier(TextureFormatSpecifier spec) {
   };
 }
 
-static void draw_grad_bg_internal(PixelBuffer buf, uint32_t game_ticks, int y_start, int y_end) {
+static void draw_grad_bg_internal(PixelBuffer buf, u32 game_ticks, int y_start, int y_end) {
   TIMED_FUNCTION();
 
   assert(buf.buffer);
@@ -62,7 +62,7 @@ static void draw_grad_bg_internal(PixelBuffer buf, uint32_t game_ticks, int y_st
   for(int y = y_start; y < y_end; y++) {
     uint8_t *row = buffer + (y * pitch);
     for(int x = 0; x < width; x++) {
-      uint32_t *pixel = (uint32_t *) (row + (x * pixel_bytes));
+      u32 *pixel = (u32 *) (row + (x * pixel_bytes));
 
       if(x % 16 && y % 16) {
         Color color = 0;
@@ -89,7 +89,7 @@ static void draw_grad_bg_internal(PixelBuffer buf, uint32_t game_ticks, int y_st
 
 struct DrawGradientBackgroundWork {
   PixelBuffer pixel_buffer;
-  uint32_t game_ticks;
+  u32 game_ticks;
   int y_start;
   int y_end;
 };
@@ -129,7 +129,7 @@ static inline void draw_gradient_background(GameState *g, WorkQueue *queue) {
   push_work(queue, bg_args + i, (work_queue_callback *) do_draw_gradient_background_work);
 }
 
-enum RenderType : uint32_t {
+enum RenderType : u32 {
   // TODO switch to RenderElementTextureTris
   RenderType_RenderElementTextureQuads,
   RenderType_RenderElementClear,
@@ -145,15 +145,15 @@ struct RenderElement {
 
 struct RenderElementTextureQuads {
   RenderElement head;
-  uint32_t texture_id;
-  uint32_t normal_map_id;
+  u32 texture_id;
+  u32 normal_map_id;
   int vertex_index;
   int quad_count;
 };
 
 struct RenderElementHud {
   RenderElement head;
-  uint32_t texture_id;
+  u32 texture_id;
   int vertex_index;
   int quad_count;
 };
@@ -384,7 +384,7 @@ struct VertexSOA {
   V3 *n, *t;
 };
 
-static inline Vertex get(VertexSOA verts, uint32_t index) {
+static inline Vertex get(VertexSOA verts, u32 index) {
   Vertex vert;
   vert.position = verts.p[index];
   vert.color = verts.c[index];
@@ -406,7 +406,7 @@ static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
   }
 }
 
-static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32_t normal_map_id) {
+static void draw_vertices(int vertex_idx, int count, u32 texture_id, u32 normal_map_id) {
   TIMED_FUNCTION();
 
   assert(texture_id);
@@ -476,7 +476,7 @@ static void draw_vertices(int vertex_idx, int count, uint32_t texture_id, uint32
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
 // it will probably break stuff.
 // UPDATE : This might be fixed now, should test it soon.
-static inline void append_quads(RenderBuffer *buffer, int count, uint32_t texture_id, uint32_t normal_map_id, u32 render_stage = 0) {
+static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, u32 normal_map_id, u32 render_stage = 0) {
   TIMED_FUNCTION();
   auto stage = buffer->stages + render_stage;
   auto prev = stage->tail;
@@ -509,7 +509,7 @@ static inline void append_quads(RenderBuffer *buffer, int count, uint32_t textur
 
 #if 0
 // TODO maybe combine this with the other function
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
+static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, u32 texture_id, u32 normal_map_id = 0) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
 #if DEBUG_COLORS
@@ -544,7 +544,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, uint32_t te
 #endif
 
 
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID texture_asset_id, float scale, uint32_t normal_map_id = 0) {
+static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID texture_asset_id, float scale, u32 normal_map_id = 0) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
 #if DEBUG_COLORS
@@ -607,7 +607,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
 #undef DEBUG_COLORS
 }
 
-static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, uint32_t texture_id, uint32_t normal_map_id = 0) {
+static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, u32 texture_id, u32 normal_map_id = 0) {
   TIMED_FUNCTION();
 
   auto quad = to_quad4(rect);
@@ -715,7 +715,7 @@ inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V4 
   push_quad_vertices(buffer, verts);
 }
 
-static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, uint32_t font_id) { 
+static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, u32 font_id) { 
   // TODO figure out a way to time this that doesn't interfere with drawing debug text
   //TIMED_FUNCTION();
 
@@ -771,16 +771,16 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
   append_quads(buffer, num_quads, font_info->bitmap.texture_id, 0, true);
 }
 
-inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, uint32_t font_id) {
+inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) {
   render_shadowed_text_pixel_space(buffer, text_p, text, color, vec4(0), 0, font_id);
 }
 
-inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, uint32_t font_id) { 
+inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, u32 font_id) { 
   V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
   render_shadowed_text_pixel_space(buffer, text_p_pixel_space, text, color, shadow_color, shadow_depth, font_id);
 }
 
-inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, uint32_t font_id) { 
+inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) { 
   V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
   render_text_pixel_space(buffer, text_p_pixel_space, text, color, font_id);
 }
@@ -811,17 +811,17 @@ static void render_frame_records(RenderBuffer *buffer) {
 
   V2 cursor_p = { left_margin, 1 - newline_height * (screen_lines - max_lines) };
 
-  static darray<uint32_t> block_ids;
+  static darray<u32> block_ids;
 
-  if (!block_ids) for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
+  if (!block_ids) for (u32 block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
     push(block_ids, block_id);
   }
 
-  quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
+  quick_sort<u32, block_id_compare>(block_ids, count(block_ids));
 
-  uint32_t lines = 0;
+  u32 lines = 0;
 
-  uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
+  u32 current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
   render_debug_string(buffer, cursor_p + V2{7.f/12, 0} , "Total Frames : %llu", debug_global_memory.current_frame);
   cursor_p.y -= newline_height;
   lines++;
@@ -830,14 +830,14 @@ static void render_frame_records(RenderBuffer *buffer) {
   cursor_p.y -= newline_height;
   lines++;
 
-  for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
-    uint32_t block_id = block_ids[i];
+  for (u32 i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
+    u32 block_id = block_ids[i];
     FunctionInfo *info = debug_global_memory.function_infos + block_id;
     if (!info->filename) continue;
     DebugRecord *records[NUM_THREADS];
     FrameRecord *frames[NUM_THREADS];
 
-    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+    for (u32 thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
       records[thread_idx] = debug_global_memory.debug_logs[thread_idx].records + block_id;
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
     }
@@ -849,7 +849,7 @@ static void render_frame_records(RenderBuffer *buffer) {
     cursor_p.y -= newline_height;
     lines++;
 
-    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS && lines < max_lines; thread_idx++) {
+    for (u32 thread_idx = 0; thread_idx < NUM_THREADS && lines < max_lines; thread_idx++) {
       auto frame = frames[thread_idx];
       auto record = records[thread_idx];
       if (!frame->hit_count) continue;
@@ -937,8 +937,8 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
   assert(info.bitmap_id);
 
 
-  uint32_t bitmap_id = info.bitmap_id;
-  uint32_t normal_map_id = 0;
+  u32 bitmap_id = info.bitmap_id;
+  u32 normal_map_id = 0;
 
   GameCamera *camera = buffer->camera;
 
@@ -1100,7 +1100,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 
 static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_count) {
   auto vertices = buffer->vertices + start_idx;
-  uint32_t size = sizeof(Vertex) * vertex_count;
+  u32 size = sizeof(Vertex) * vertex_count;
   glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STREAM_DRAW);
 }
 
@@ -1251,7 +1251,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       assert(elem);
       gl_check_error();
 
-      uint32_t texture_id = default_texture_id;
+      u32 texture_id = default_texture_id;
 
       switch (elem->type) {
 
@@ -1402,7 +1402,7 @@ static void update_texture(GameAssets *assets, TextureGroupID id, TextureFormatS
 static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParameters param = default_texture_parameters) {
   auto texture = get_bitmap(assets, bitmap_id);
   if (!texture) return;
-  uint32_t texture_id;
+  u32 texture_id;
   glGenTextures(1, &texture_id);
   assert(texture_id);
   //assert(texture->texture_id < BITMAP_COUNT);
@@ -1419,7 +1419,7 @@ static void init_texture(GameAssets *assets, BitmapID bitmap_id, TextureParamete
 static void init_texture(GameAssets *assets, TextureGroupID id, TextureParameters param = default_texture_parameters) {
   auto texture = get_texture_group(assets, id);
   if (!texture) return;
-  uint32_t texture_id;
+  u32 texture_id;
   glGenTextures(1, &texture_id);
   assert(texture_id);
   //assert(texture->texture_id < BITMAP_COUNT);

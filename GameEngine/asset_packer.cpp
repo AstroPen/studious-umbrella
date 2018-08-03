@@ -74,7 +74,7 @@ static void init_string_table() {
   {
 #define ADD_COMMAND_HASH(name) \
     string_table->command_hstrings[COMMAND_##name] = hash_string(#name); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_COMMAND_HASH(VERSION);
     ADD_COMMAND_HASH(LAYOUT);
     ADD_COMMAND_HASH(ANIMATION);
@@ -87,7 +87,7 @@ static void init_string_table() {
   {
 #define ADD_ATTRIBUTE_HASH(name) \
     string_table->attribute_hstrings[ATTRIBUTE_##name] = hash_string(#name); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_ATTRIBUTE_HASH(LAYOUT);
     ADD_ATTRIBUTE_HASH(HAS_NORMAL_MAP);
     ADD_ATTRIBUTE_HASH(MIN_BLEND);
@@ -104,7 +104,7 @@ static void init_string_table() {
   {
 #define ADD_ANIM_HASH(type) \
     string_table->animation_type_hstrings[ANIM_##type] = hash_string(#type); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_ANIM_HASH(IDLE);
     ADD_ANIM_HASH(MOVE);
     ADD_ANIM_HASH(SLIDE);
@@ -115,7 +115,7 @@ static void init_string_table() {
   {
 #define ADD_LAYOUT_HASH(type) \
     string_table->layout_type_hstrings[LAYOUT_##type] = hash_string(#type); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_LAYOUT_HASH(CHARACTER);
     ADD_LAYOUT_HASH(TERRAIN);
     ADD_LAYOUT_HASH(SINGLETON);
@@ -126,7 +126,7 @@ static void init_string_table() {
   {
 #define ADD_GROUP_HASH(type) \
     string_table->group_id_hstrings[TEXTURE_GROUP_##type] = hash_string(#type); i++;
-    uint32_t i = 1; // NOTE : Texture groups start at 1
+    u32 i = 1; // NOTE : Texture groups start at 1
     ADD_GROUP_HASH(LINK);
     ADD_GROUP_HASH(WALL);
     assert(i == TEXTURE_GROUP_COUNT);
@@ -137,7 +137,7 @@ static void init_string_table() {
 #define ADD_BLEND_HASH(type) \
     string_table->blend_mode_hstrings[type##_BLEND - BLEND_FIRST] \
         = hash_string(#type); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_BLEND_HASH(LINEAR);
     ADD_BLEND_HASH(NEAREST);
     assert(i == BLEND_COUNT);
@@ -147,7 +147,7 @@ static void init_string_table() {
   {
 #define ADD_CLAMP_HASH(type) \
     string_table->clamp_mode_hstrings[type - CLAMP_FIRST] = hash_string(#type); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_CLAMP_HASH(CLAMP_TO_EDGE);
     ADD_CLAMP_HASH(REPEAT_CLAMPING);
     assert(i == CLAMP_COUNT);
@@ -157,7 +157,7 @@ static void init_string_table() {
   {
 #define ADD_DIRECTION_HASH(dir) \
     string_table->direction_hstrings[dir] = hash_string(#dir); i++;
-    uint32_t i = 0;
+    u32 i = 0;
     ADD_DIRECTION_HASH(UP);
     ADD_DIRECTION_HASH(DOWN);
     ADD_DIRECTION_HASH(LEFT);
@@ -167,23 +167,23 @@ static void init_string_table() {
   }
 
 #if 0
-  for (uint32_t i = 0; i < ANIM_COUNT; i++) {
+  for (u32 i = 0; i < ANIM_COUNT; i++) {
     print_hstring(string_table->animation_type_hstrings[i]);
   }
 
-  for (uint32_t i = 0; i < LAYOUT_COUNT; i++) {
+  for (u32 i = 0; i < LAYOUT_COUNT; i++) {
     print_hstring(string_table->layout_type_hstrings[i]);
   }
 
-  for (uint32_t i = 1; i < TEXTURE_GROUP_COUNT; i++) {
+  for (u32 i = 1; i < TEXTURE_GROUP_COUNT; i++) {
     print_hstring(string_table->group_id_hstrings[i]);
   }
 
-  for (uint32_t i = 0; i < BLEND_COUNT; i++) {
+  for (u32 i = 0; i < BLEND_COUNT; i++) {
     print_hstring(string_table->blend_mode_hstrings[i]);
   }
 
-  for (uint32_t i = 0; i < CLAMP_COUNT; i++) {
+  for (u32 i = 0; i < CLAMP_COUNT; i++) {
     print_hstring(string_table->clamp_mode_hstrings[i]);
   }
 
@@ -319,7 +319,7 @@ struct Token {
 };
 
 static Token parse_string(lstring line) {
-  uint32_t i;
+  u32 i;
   for (i = 0; i < line.len; i++) {
     if (line[i] == ' ' || line[i] == '\t' || line[i] == '\n') break;
   }
@@ -340,7 +340,7 @@ static Token pop_quote(lstring line) {
 
   if (line[0] == '\"') {
     line = line + 1;
-    uint32_t i;
+    u32 i;
     for (i = 0; i < line.len; i++) {
       if (line[i] == '\"') {
         lstring str = {line.str, i};
@@ -380,7 +380,7 @@ static Token parse_int(lstring line) {
   if (!line) return Token().set(SINGLETON_MINUS);
 
   int result = 0;
-  for (uint32_t i = 0; i < line.len; i++) {
+  for (u32 i = 0; i < line.len; i++) {
 
     if (line[i] == '.') return Token().set(UNEXPECTED_FLOATING_POINT);
     if (line[i] > '9' || line[i] < '0') return Token().set(NON_NUMERIC_CHARACTER);
@@ -460,7 +460,7 @@ static Token pop_float(lstring line) {
 //
 
 struct VersionArgs {
-  uint32_t version_number;
+  u32 version_number;
 
   TokenError error;
 };
@@ -475,7 +475,7 @@ struct LayoutArgs {
 
 struct AnimationArgs {
   AnimationType type;
-  uint16_t frames;
+  u16 frames;
   float duration;
   Direction direction;
 
@@ -501,9 +501,9 @@ struct SetArgs {
 struct BitmapArgs {
   lstring filename;
   TextureGroupID id;
-  uint16_t sprite_count;
-  uint16_t sprite_width;
-  uint16_t sprite_height;
+  u16 sprite_count;
+  u16 sprite_width;
+  u16 sprite_height;
 
   TokenError error;
 };
@@ -794,13 +794,13 @@ int main(int argc, char *argv[]) {
   // Set up attributes to their default values :
   //
 
-  uint16_t current_animation_index = 0;
+  u16 current_animation_index = 0;
   TextureLayoutType current_layout_type = LAYOUT_INVALID;
-  uint16_t current_group_flags = 0;
-  uint8_t current_min_blend = LINEAR_BLEND;
-  uint8_t current_max_blend = LINEAR_BLEND;
-  uint8_t current_s_clamp = CLAMP_TO_EDGE;
-  uint8_t current_t_clamp = CLAMP_TO_EDGE;
+  u16 current_group_flags = 0;
+  u8 current_min_blend = LINEAR_BLEND;
+  u8 current_max_blend = LINEAR_BLEND;
+  u8 current_s_clamp = CLAMP_TO_EDGE;
+  u8 current_t_clamp = CLAMP_TO_EDGE;
   V3 current_offset = vec3(0);
   float current_sprite_depth = 0;
 
@@ -995,10 +995,10 @@ int main(int argc, char *argv[]) {
 
   // TODO replace all this with values from the spec file
   
-  uint32_t layout_count = 1; // LAYOUT_COUNT
-  uint32_t animation_count = 1; // ANIM_COUNT
-  uint32_t group_count = 1; // TEXTURE_GROUP_COUNT
-  uint64_t pre_data_size = 
+  u32 layout_count = 1; // LAYOUT_COUNT
+  u32 animation_count = 1; // ANIM_COUNT
+  u32 group_count = 1; // TEXTURE_GROUP_COUNT
+  u64 pre_data_size = 
     sizeof(PackedAssetHeader) + 
     sizeof(PackedTextureLayout) * layout_count + 
     sizeof(PackedAnimation) * animation_count +
@@ -1045,7 +1045,7 @@ int main(int argc, char *argv[]) {
   link_group->sprite_depth = 0.3;
   link_group->bitmap_offset = 0; //dest_allocator->bytes_allocated; // TODO maybe consider alignment
   
-  uint64_t bitmap_size = uint64_t(buffer.width) * buffer.height * 4;
+  u64 bitmap_size = u64(buffer.width) * buffer.height * 4;
   asset_header->total_size += bitmap_size;
 
 

@@ -1,6 +1,7 @@
-// TODO guards
+#ifndef _ASSET_INTERFACE_H_
+#define _ASSET_INTERFACE_H_
 
-enum BitmapID : uint32_t {
+enum BitmapID : u32 {
   BITMAP_INVALID,
 
   BITMAP_FACE,
@@ -64,14 +65,14 @@ struct RenderingInfo {
   V3 offset;
   float sprite_depth; // TODO This should maybe become a V4 or something
   float scale;
-  uint32_t width;
-  uint32_t height;
+  u32 width;
+  u32 height;
 
-  uint32_t bitmap_id; // NOTE : This is an OpenGL texture id
+  u32 bitmap_id; // NOTE : This is an OpenGL texture id
 };
 
 // Specifies how to enumerate a texture into different sprites
-enum TextureLayoutType : uint32_t {
+enum TextureLayoutType : u32 {
   LAYOUT_SINGLETON,
   LAYOUT_CHARACTER,
   LAYOUT_TERRAIN,
@@ -83,14 +84,14 @@ enum TextureLayoutType : uint32_t {
 struct TextureGroup {
   PixelBuffer bitmap; // TODO remove the texture_id from PixelBuffer
   TextureLayoutType layout;
-  uint32_t sprite_width; // TODO Should maybe be column count, row count
-  uint32_t sprite_height;
+  u32 sprite_width; // TODO Should maybe be column count, row count
+  u32 sprite_height;
   union {
     float sprite_depth;
-    uint32_t sprite_depth_index; // used to index an array of sprite_depths
+    u32 sprite_depth_index; // used to index an array of sprite_depths
   };
-  uint32_t render_id;
-  uint32_t sprite_count; // TODO I'd like to get rid of this
+  u32 render_id;
+  u32 sprite_count; // TODO I'd like to get rid of this
   V3 sprite_offset;
   bool has_normal_map;
 };
@@ -127,8 +128,8 @@ enum AnimationType {
 };
 
 struct TextureLayout {
-  uint16_t animation_frame_counts[ANIM_COUNT][DIRECTION_COUNT];
-  uint16_t animation_start_index[ANIM_COUNT][DIRECTION_COUNT];
+  u16 animation_frame_counts[ANIM_COUNT][DIRECTION_COUNT];
+  u16 animation_start_index[ANIM_COUNT][DIRECTION_COUNT];
   float animation_times[ANIM_COUNT][DIRECTION_COUNT];
 };
 
@@ -148,7 +149,7 @@ struct FontInfo {
 };
 
 // NOTE : WARNING : Clamping and blending values must be contiguous for the packer to work.
-enum TextureFormatSpecifier : uint32_t {
+enum TextureFormatSpecifier : u32 {
   RGBA, BGRA,
 
   CLAMP_FIRST,
@@ -167,4 +168,5 @@ enum TextureFormatSpecifier : uint32_t {
   BLEND_INVALID,
 };
 
+#endif
 

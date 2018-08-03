@@ -163,7 +163,7 @@ int main(int argc, char ** argv){
   WorkQueue work_queue;
   auto queue = &work_queue;
   int num_threads_total = NUM_THREADS;
-  uint32_t thread_ids[4];
+  u32 thread_ids[4];
   int count = init_worker_threads(queue, num_threads_total - 1, thread_ids + 1);
   assert(count == num_threads_total - 1);
   thread_ids[0] = SDL_ThreadID();
@@ -197,7 +197,7 @@ int main(int argc, char ** argv){
   uint8_t ticks = 0;
 
   ControllerState old_controller_state = {};
-  uint32_t previous_time = SDL_GetTicks();
+  u32 previous_time = SDL_GetTicks();
 
   init_game_state(game_memory, queue, &render_buffer);
 
@@ -298,8 +298,8 @@ int main(int argc, char ** argv){
     game_input.delta_t /= 1000.0f;
     game_input.delta_t = min(game_input.delta_t, 1.0f); // Caps to 1 second
     game_input.ticks = ticks;
-    uint32_t current_time = SDL_GetTicks();
-    //uint32_t time_passed = current_time - previous_time;
+    u32 current_time = SDL_GetTicks();
+    //u32 time_passed = current_time - previous_time;
     previous_time = current_time;
 
     game_input.render_buffer = &render_buffer;
@@ -327,7 +327,7 @@ int main(int argc, char ** argv){
 
 // NOTE: This must happen after all TIMED_ calls and includes :
 
-static inline uint32_t get_max_counter() {
+static inline u32 get_max_counter() {
   return __COUNTER__;
 }
 

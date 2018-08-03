@@ -136,7 +136,7 @@ static RenderInfo init_screen(RenderBuffer *buffer, int width, int height) {
 
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-  uint32_t window_flags = SDL_WINDOW_OPENGL;
+  u32 window_flags = SDL_WINDOW_OPENGL;
   result.window = SDL_CreateWindow("Box World",
                                     SDL_WINDOWPOS_UNDEFINED,
                                     SDL_WINDOWPOS_UNDEFINED,

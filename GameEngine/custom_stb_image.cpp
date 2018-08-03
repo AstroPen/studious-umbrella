@@ -60,10 +60,10 @@
 
 static inline void pre_multiply_alpha(PixelBuffer image) {
   int num_pixels = image.width * image.height;
-  auto pixels = (uint32_t *) image.buffer;
+  auto pixels = (u32 *) image.buffer;
 
   for (int i = 0; i < num_pixels; i++) {
-    uint32_t *pixel = pixels + i;
+    u32 *pixel = pixels + i;
     // NOTE since a is still last, we don't have to reverse the bytes
     Color color;
     color.value = *pixel;

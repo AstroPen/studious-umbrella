@@ -41,7 +41,7 @@ struct atomic_int {
     return SDL_AtomicAdd(&i, -1);
   }
 
-  inline uint32_t operator--(int) {
+  inline u32 operator--(int) {
     return SDL_AtomicAdd(&i, -1) - 1;
   }
 
@@ -60,42 +60,42 @@ bool atomic_compare_exchange(atomic_int *a, int expected_val, int new_val) {
 struct atomic_uint {
   SDL_atomic_t i;
 
-  inline uint32_t operator=(uint32_t val) {
+  inline u32 operator=(u32 val) {
     return bit32(SDL_AtomicSet(&i, bit32(val)));
   }
 
-  inline operator uint32_t() {
+  inline operator u32() {
     return bit32(SDL_AtomicGet(&i));
   }
 
-  inline uint32_t operator+=(uint32_t b) {
+  inline u32 operator+=(u32 b) {
     return bit32(SDL_AtomicAdd(&i, bit32(b)));
   }
 
-  inline uint32_t operator++() {
+  inline u32 operator++() {
     return bit32(SDL_AtomicAdd(&i, 1));
   }
 
-  inline uint32_t operator++(int) {
+  inline u32 operator++(int) {
     return bit32(SDL_AtomicAdd(&i, 1)).u + 1;
   }
 
-  inline uint32_t operator-=(uint32_t b) {
+  inline u32 operator-=(u32 b) {
     return *this += -b;
   }
 
-  inline uint32_t operator--() {
+  inline u32 operator--() {
     return bit32(SDL_AtomicAdd(&i, -1));
   }
 
-  inline uint32_t operator--(int) {
+  inline u32 operator--(int) {
     return bit32(SDL_AtomicAdd(&i, -1)).u - 1;
   }
 
 };
 
 static inline
-bool atomic_compare_exchange(atomic_uint *a, uint32_t expected_val, uint32_t new_val) {
+bool atomic_compare_exchange(atomic_uint *a, u32 expected_val, u32 new_val) {
   return SDL_AtomicCAS(&a->i, bit32(expected_val), bit32(new_val));
 }
 
@@ -130,7 +130,7 @@ struct WorkQueue {
 
 struct ThreadInfo {
   WorkQueue *queue;
-  // TODO make this just a uint32_t?
+  // TODO make this just a u32?
   SDL_threadID thread_id;
   int volatile received;
 };
@@ -217,7 +217,7 @@ int worker_thread_proc(ThreadInfo *info) {
 //
 
 // NOTE : This also inits the queue and must be called before push_work. Returns the number created.
-static inline int init_worker_threads(WorkQueue *queue, int count, uint32_t *thread_ids = NULL) {
+static inline int init_worker_threads(WorkQueue *queue, int count, u32 *thread_ids = NULL) {
   printf("Main thread is : %lu\n", SDL_ThreadID());
   auto semaphore = SDL_CreateSemaphore(0);
   *queue = {};

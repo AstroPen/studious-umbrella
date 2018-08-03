@@ -167,12 +167,12 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
     return;
   }
 
-  uint32_t normal_map_id = 0;
+  u32 normal_map_id = 0;
   if (e->flags & ENTITY_NORMAL_MAP) {
     auto normal_map = get_bitmap(&g->assets, e->visual.normal_map_id);
     if (normal_map) normal_map_id = normal_map->texture_id;
   }
-  uint32_t texture_id;
+  u32 texture_id;
   BitmapID texture_asset_id = BITMAP_WHITE;
   PixelBuffer *texture = NULL;
 

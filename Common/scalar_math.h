@@ -2,7 +2,7 @@
 #ifndef _SCALAR_MATH_H_
 #define _SCALAR_MATH_H_
 
-inline u32 max(uint32_t a, uint32_t b) {
+inline u32 max(u32 a, u32 b) {
   return (a < b) ? b : a;
 }
 
@@ -88,12 +88,12 @@ static inline float lerp(float f1, float f2, float dt) {
 }
 
 // TODO I apparently copied this from somewhere... Maybe double-check it?
-static inline uint32_t next_power_2(uint32_t v) {
-  uint32_t r;
+static inline u32 next_power_2(u32 v) {
+  u32 r;
 
   if (v > 1) {
     float f = (float)v;
-    uint32_t t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
+    u32 t = 1U << ((*(u32 *)&f >> 23) - 0x7f);
     r = t << (t < v);
   }
   else {

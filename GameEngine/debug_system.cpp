@@ -26,37 +26,37 @@ enum DebugEventType : uint8_t {
 
 struct DebugEvent {
   DebugEventType type;
-  uint16_t block_id;
-  uint32_t thread_id;
-  uint64_t cycle_count;
+  u16 block_id;
+  u32 thread_id;
+  u64 cycle_count;
 };
 
 
-static inline uint32_t get_max_counter(); 
+static inline u32 get_max_counter(); 
 
 #define NUM_FRAMES_RECORDED 60
 
 struct FrameRecord {
-  uint32_t total_cycles;
-  uint32_t internal_cycles;
-  uint32_t hit_count;
+  u32 total_cycles;
+  u32 internal_cycles;
+  u32 hit_count;
 };
 
 struct FunctionInfo {
   char const *filename;
   char const *function_name;
-  uint32_t line_number;
-  uint32_t priority;
+  u32 line_number;
+  u32 priority;
 };
 
 struct DebugRecord {
 
   float64 average_internal_cycles;
-  uint64_t total_cumulative_hits;
+  u64 total_cumulative_hits;
 
-  uint32_t max_cycle_count;
-  uint32_t max_internal_cycle_count;
-  uint32_t max_hit_count;
+  u32 max_cycle_count;
+  u32 max_internal_cycle_count;
+  u32 max_hit_count;
 
   FrameRecord frames[NUM_FRAMES_RECORDED];
 };
@@ -76,15 +76,15 @@ struct DebugState {
   GameState *game_state;
   RenderBuffer *render_buffer;
   FunctionInfo *function_infos;
-  uint64_t current_frame;
+  u64 current_frame;
   DebugLog debug_logs[NUM_THREADS];
-  uint32_t thread_ids[NUM_THREADS];
-  uint32_t record_count;
+  u32 thread_ids[NUM_THREADS];
+  u32 record_count;
   bool display_records;
   bool camera_mode;
 } debug_global_memory;
 
-static void init_debug_global_memory(uint32_t *thread_ids, GameMemory *game_memory, RenderBuffer *render_buffer) {
+static void init_debug_global_memory(u32 *thread_ids, GameMemory *game_memory, RenderBuffer *render_buffer) {
   auto max_count = get_max_counter();
   assert(max_count < DEBUG_RECORD_MAX);
   debug_global_memory.game_state = (GameState *) game_memory->permanent_store;
@@ -98,8 +98,8 @@ static void init_debug_global_memory(uint32_t *thread_ids, GameMemory *game_memo
   debug_global_memory.function_infos = _debug_global_function_infos;
 }
 
-inline uint32_t get_thread_index(uint32_t thread_id) {
-  for (uint32_t i = 0; i < NUM_THREADS; i++) {
+inline u32 get_thread_index(u32 thread_id) {
+  for (u32 i = 0; i < NUM_THREADS; i++) {
     if (thread_id == debug_global_memory.thread_ids[i]) return i;
   }
   assert(!"Invalid thread id.");
@@ -108,12 +108,12 @@ inline uint32_t get_thread_index(uint32_t thread_id) {
 
 struct TimedBlock {
   DebugLog *log;
-  uint32_t thread_id;
-  uint32_t block_id;
+  u32 thread_id;
+  u32 block_id;
 
-  inline TimedBlock(uint32_t block_id_, char const *filename, 
-                    uint32_t line_number, char const *function_name,
-                    bool *initialized, uint32_t priority) {
+  inline TimedBlock(u32 block_id_, char const *filename, 
+                    u32 line_number, char const *function_name,
+                    bool *initialized, u32 priority) {
 
     block_id = block_id_;
 
@@ -132,7 +132,7 @@ struct TimedBlock {
     }
 
     thread_id = SDL_ThreadID();
-    uint32_t thread_idx = get_thread_index(thread_id);
+    u32 thread_idx = get_thread_index(thread_id);
     log = debug_global_memory.debug_logs + thread_idx;
 
     auto event = push(log->events);
@@ -145,7 +145,7 @@ struct TimedBlock {
 
   inline void force_end() {
     assert(log);
-    uint64_t end_cycles = SDL_GetPerformanceCounter();
+    u64 end_cycles = SDL_GetPerformanceCounter();
     auto event = push(log->events);
     event->type = BLOCK_END;
     event->block_id = block_id;
@@ -178,15 +178,15 @@ struct TimedBlock {
 
 static void aggregate_debug_events() {
   static darray <DebugEvent *> event_stack; 
-  static darray <uint64_t> cycle_stack;
+  static darray <u64> cycle_stack;
 
-  uint64_t total_frames = debug_global_memory.current_frame;
+  u64 total_frames = debug_global_memory.current_frame;
 
   for (int thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
     auto log = debug_global_memory.debug_logs + thread_idx;
-    uint32_t thread_id = debug_global_memory.thread_ids[thread_idx];
-    uint64_t total_sibling_cycles = 0;
-    uint64_t total_child_cycles = 0;
+    u32 thread_id = debug_global_memory.thread_ids[thread_idx];
+    u64 total_sibling_cycles = 0;
+    u64 total_child_cycles = 0;
 
     for (int i = 0; i < count(log->events); i++) {
       auto event = log->events + i;
@@ -199,9 +199,9 @@ static void aggregate_debug_events() {
       } else {
         assert(event->type == BLOCK_END);
         auto start_event = pop(event_stack);
-        uint64_t total_cycles = event->cycle_count - start_event->cycle_count;
+        u64 total_cycles = event->cycle_count - start_event->cycle_count;
         total_sibling_cycles += total_cycles;
-        uint64_t internal_cycles = total_cycles - total_child_cycles;
+        u64 internal_cycles = total_cycles - total_child_cycles;
 
         assert(event->block_id == start_event->block_id);
         assert(event->thread_id == thread_id);
@@ -237,9 +237,9 @@ static void aggregate_debug_events() {
 
 #define BLOCK_ID_COMPARE_AVERAGE 1
 
-inline int block_id_compare(uint32_t *a, uint32_t *b) {
-  uint32_t bid_a = *a;
-  uint32_t bid_b = *b;
+inline int block_id_compare(u32 *a, u32 *b) {
+  u32 bid_a = *a;
+  u32 bid_b = *b;
   FunctionInfo *info_a = debug_global_memory.function_infos + bid_a;
   FunctionInfo *info_b = debug_global_memory.function_infos + bid_b;
 
@@ -256,7 +256,7 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
   float64 internal_cycles_a = 0;
   float64 internal_cycles_b = 0;
 
-  for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+  for (u32 thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
     auto record_a = debug_global_memory.debug_logs[thread_idx].records + bid_a;
     auto record_b = debug_global_memory.debug_logs[thread_idx].records + bid_b;
 
@@ -266,12 +266,12 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
 
   return compare(&internal_cycles_b, &internal_cycles_a);
 #else
-  uint32_t current_frame = (debug_global_memory.current_frame % NUM_FRAMES_RECORDED);
+  u32 current_frame = (debug_global_memory.current_frame % NUM_FRAMES_RECORDED);
 
-  uint64_t internal_cycles_a = 0;
-  uint64_t internal_cycles_b = 0;
+  u64 internal_cycles_a = 0;
+  u64 internal_cycles_b = 0;
 
-  for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+  for (u32 thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
     auto record_a = debug_global_memory.debug_logs[thread_idx].records + bid_a;
     auto record_b = debug_global_memory.debug_logs[thread_idx].records + bid_b;
 
@@ -287,28 +287,28 @@ inline int block_id_compare(uint32_t *a, uint32_t *b) {
 }
 
 static void print_frame_records() {
-  static darray<uint32_t> block_ids;
+  static darray<u32> block_ids;
 
-  if (!block_ids) for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
+  if (!block_ids) for (u32 block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
     push(block_ids, block_id);
   }
 
-  quick_sort<uint32_t, block_id_compare>(block_ids, count(block_ids));
+  quick_sort<u32, block_id_compare>(block_ids, count(block_ids));
 
-  uint32_t lines = 0;
-  uint32_t const max_lines = 40;
+  u32 lines = 0;
+  u32 const max_lines = 40;
 
-  uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
+  u32 current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
   printf("Total Frames : %llu\n", debug_global_memory.current_frame);
 
-  for (uint32_t i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
-    uint32_t block_id = block_ids[i];
+  for (u32 i = 0; i < count(block_ids) && lines < max_lines - 1; i++) {
+    u32 block_id = block_ids[i];
     FunctionInfo *info = debug_global_memory.function_infos + block_id;
     if (!info->filename) continue;
     DebugRecord *records[NUM_THREADS];
     FrameRecord *frames[NUM_THREADS];
 
-    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+    for (u32 thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
       records[thread_idx] = debug_global_memory.debug_logs[thread_idx].records + block_id;
       frames[thread_idx] = &records[thread_idx]->frames[current_frame];
     }
@@ -319,7 +319,7 @@ static void print_frame_records() {
            info->line_number);
     lines++;
 
-    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS && lines < max_lines; thread_idx++) {
+    for (u32 thread_idx = 0; thread_idx < NUM_THREADS && lines < max_lines; thread_idx++) {
       auto frame = frames[thread_idx];
       auto record = records[thread_idx];
       if (!frame->hit_count) continue;
@@ -340,13 +340,13 @@ static void print_frame_records() {
 }
 
 static void clear_frame_records() {
-  uint32_t current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
+  u32 current_frame = debug_global_memory.current_frame % NUM_FRAMES_RECORDED;
 
-  for (uint32_t block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
+  for (u32 block_id = 0; block_id < debug_global_memory.record_count; block_id++) {
     FunctionInfo *info = debug_global_memory.function_infos + block_id;
     if (!info->filename) continue;
 
-    for (uint32_t thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
+    for (u32 thread_idx = 0; thread_idx < NUM_THREADS; thread_idx++) {
       auto record = debug_global_memory.debug_logs[thread_idx].records + block_id;
       auto frame = record->frames + current_frame;
       *frame = {};

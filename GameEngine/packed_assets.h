@@ -2,17 +2,17 @@
 #define _PACKED_ASSETS_H_
 
 struct PackedAssetHeader {
-  uint32_t magic;
-  uint32_t version;
-  uint32_t total_size; // TODO make this and data_offset u64s
-  uint32_t layout_count;
-  uint32_t texture_group_count;
-  uint32_t data_offset;
+  u32 magic;
+  u32 version;
+  u32 total_size; // TODO make this and data_offset u64s
+  u32 layout_count;
+  u32 texture_group_count;
+  u32 data_offset;
 };
 
 struct PackedAnimation {
-  uint16_t animation_type;
-  uint16_t frame_count;
+  u16 animation_type;
+  u16 frame_count;
   float duration;
 
   u16 start_index;
@@ -21,8 +21,8 @@ struct PackedAnimation {
 };
 
 struct PackedTextureLayout {
-  uint32_t layout_type;
-  uint32_t animation_count;
+  u32 layout_type;
+  u32 animation_count;
   PackedAnimation animations[0];
 };
 
@@ -31,22 +31,22 @@ enum PackedGroupFlags {
 };
 
 struct PackedTextureGroup {
-  uint64_t bitmap_offset; // In bytes from start of data
+  u64 bitmap_offset; // In bytes from start of data
 
-  uint32_t width; // In pixels
-  uint32_t height; 
+  u32 width; // In pixels
+  u32 height; 
 
-  uint16_t texture_group_id;
-  uint16_t layout_type;
-  uint16_t sprite_count;
-  uint16_t sprite_width; // In pixels
-  uint16_t sprite_height;
+  u16 texture_group_id;
+  u16 layout_type;
+  u16 sprite_count;
+  u16 sprite_width; // In pixels
+  u16 sprite_height;
 
-  uint16_t flags;
-  uint8_t min_blend;
-  uint8_t max_blend;
-  uint8_t s_clamp;
-  uint8_t t_clamp;
+  u16 flags;
+  u8 min_blend;
+  u8 max_blend;
+  u8 s_clamp;
+  u8 t_clamp;
 
   float offset_x;
   float offset_y;

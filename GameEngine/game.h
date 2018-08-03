@@ -22,7 +22,7 @@
 // Platform interface ---
 //
 
-enum ButtonType : uint8_t {
+enum ButtonType : u8 {
   BUTTON_LEFT,
   BUTTON_RIGHT,
   BUTTON_UP,
@@ -50,7 +50,7 @@ enum ButtonType : uint8_t {
   BUTTON_NONE  = 0xff
 };
 
-enum ButtonEventType : uint8_t {
+enum ButtonEventType : u8 {
   NO_EVENTS = 0,
   PRESS_EVENT = 1,
   RELEASE_EVENT = 2
@@ -60,7 +60,7 @@ struct ButtonState {
   // NOTE this is a little redundant, but it makes things less complicated
   ButtonEventType first_press;
   ButtonEventType last_press;
-  uint8_t num_transitions;
+  u8 num_transitions;
   bool held;
 };
 
@@ -74,9 +74,9 @@ struct ControllerState {
 
 struct GameMemory {
   void *permanent_store;
-  uint64_t permanent_size;
+  u64 permanent_size;
   void *temporary_store;
-  uint64_t temporary_size;
+  u64 temporary_size;
 };
 
 struct RenderBuffer;
@@ -86,7 +86,7 @@ struct GameInput {
   RenderBuffer *render_buffer;
   WorkQueue *work_queue;
   float delta_t;
-  uint8_t ticks;
+  u8 ticks;
 };
 
 //
@@ -107,12 +107,12 @@ struct GameAssets {
 
 static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
 static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id);
-static inline uint32_t get_texture_id(GameAssets *assets, BitmapID id);
-static inline FontInfo *get_font(GameAssets *assets, uint32_t font_id);
-static inline FontInfo *get_font_location(GameAssets *assets, uint32_t font_id);
+static inline u32 get_texture_id(GameAssets *assets, BitmapID id);
+static inline FontInfo *get_font(GameAssets *assets, u32 font_id);
+static inline FontInfo *get_font_location(GameAssets *assets, u32 font_id);
 static inline BakedChar *get_baked_char(FontInfo *font, char c);
 
-//static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, uint32_t frame);
+//static BitmapID get_keyframe(GameAssets *assets, TextureGroupID group_id, AnimationType animation, Direction dir, u32 frame);
 static inline TextureGroup *get_texture_group(GameAssets * assets, TextureGroupID id);
 
 //
@@ -157,7 +157,7 @@ enum EntityFlag {
 // Option 5 : Break entities into components, SOA with indirection, no hashing
 //    - Can iterate over array of each component for separate proccessing, Entity size is a bit large though
 struct Entity {
-  uint64_t flags;
+  u64 flags;
   // TODO make collsion more general, and 3D
   //Shape collision_box;
   AlignedBox collision_box;
@@ -239,12 +239,12 @@ struct GameState {
   float width;
   float height;
   float time_remaining;
-  uint32_t game_ticks;
-  uint32_t num_entities;
-  uint32_t max_entities;
+  u32 game_ticks;
+  u32 num_entities;
+  u32 max_entities;
   V4 player_color;
   V4 cursor_color;
-  uint32_t shooting;
+  u32 shooting;
 };
 
 
