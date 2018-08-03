@@ -104,6 +104,11 @@ static bool apply_input(GameState *g, ControllerState controller) {
     debug_global_memory.camera_mode = !debug_global_memory.camera_mode;
   } 
 
+  b = buttons + BUTTON_DEBUG_ANIMATION_TOGGLE;
+  if (b->first_press == PRESS_EVENT) {
+    debug_global_memory.animation_mode = !debug_global_memory.animation_mode;
+  } 
+
 
   if (debug_global_memory.camera_mode) {
     float camera_speed = 0.2;
@@ -159,6 +164,7 @@ static bool apply_input(GameState *g, ControllerState controller) {
   g->player_color = player_color;
   return true;
 }
+
 
 static void update_physics(GameState *g) {
   PRIORITY_TIMED_FUNCTION(1);
@@ -231,44 +237,14 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   //
   // INIT PLAYER ---
   //
-  
-  float player_size = 80.0f * METERS_PER_PIXEL;
-  auto start_pos = V3{5, 5, 0};
 
-  Entity *player = alloc_entity(g);
-  assert(player);
-  player->collision_box = aligned_box(aligned_rect(start_pos.xy, player_size, player_size / 1.5), 0, 1.3);
-  player->flags |= 
-    ENTITY_COLLIDES | 
-    ENTITY_PLAYER_CONTROLLED | 
-    ENTITY_SOLID;
-
-  make_sprite(player);
-  set_texture(player, BITMAP_LINK);
-  set_normal_map(player, BITMAP_LINK_NORMAL_MAP);
-  player->visual.offset = vec3(0, 0.40, 0.06);
-  player->visual.scale = 4.0;
-  player->visual.sprite_depth = 0.3;
-
-  set_friction_multiplier(player, 0.87);
-  set_bounce_factor(player, 0.1);
-  set_slip_factor(player, 0.95);
-
-  player->mass = 1.0f;
-  player->accel_max = 300.0f;
-  player->time_to_max_accel = 0.2f;
-  player->time_to_zero_accel = 0.1f;
-
-  player->texture_group_id = TEXTURE_GROUP_LINK;
-  player->facing_direction = DOWN;
-  player->animation_dt = 0;
-  player->current_animation = ANIM_IDLE;
-  player->animation_duration = get_animation_duration(&g->assets, player);
+  Entity *player = add_player(g, vec3(5,5,0), ANIM_IDLE, DOWN);
 
   //
   // INIT WALLS
   //
 
+#if 0
   auto center_square_pos = vec3(g->width - player_size, g->height - player_size, 0) / 2.0f;
   auto center_corner_pos = center_square_pos + vec3(player_size, player_size, 0);
   auto rect = aligned_rect(center_square_pos.xy, center_corner_pos.xy);
@@ -276,8 +252,72 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   auto rect2 = aligned_rect((center_square_pos + vec3(0.1,0,0)).xy, 
                            (center_corner_pos + vec3(0.2,0.3,0)).xy);
   add_wall(g, rect2, vec4(0.5,0.1,0.1, 0.5));
+#endif
 
   add_room(g, aligned_rect(vec2(1,1), vec2(15,11)));
+}
+
+static void render_frame_rate_text(GameState *g, float dt) {
+  V2 text_p = {1.f/16,15.f/16};
+  char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
+  sprintf(frame_rate_text, "%d ms", (int)(dt * 1000.0f));
+  render_shadowed_text_screen_space(g->render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD);
+}
+
+static void update_entity_animations(GameState *g) {
+  float dt = PHYSICS_FRAME_TIME;
+  assert(g->num_entities);
+  for (u32 i = 0; i < g->num_entities; i++) {
+    auto e = g->entities + i;
+    float vel_multiplier = length(e->vel.xy) / LINK_RUN_SPEED;
+    assert(vel_multiplier >= 0);
+    //e->animation_dt += dt * vel_multiplier;
+    e->animation_dt += dt;
+    if (e->animation_dt > e->animation_duration) e->animation_dt -= e->animation_duration;
+  }
+}
+
+static void do_animation_mode(GameState *g, GameMemory memory, GameInput game_input) {
+  GameState animation_entity_state = *g;
+  auto ag = &animation_entity_state;
+  int const num_animations = 12;
+  static Entity entities[num_animations];
+  static int num_entities = 0;
+
+  ag->entities = entities;
+  ag->num_entities = num_entities;
+  ag->max_entities = num_animations;
+
+  if (!num_entities) {
+    V3 line_start = vec3(2,9,0);
+    V3 cursor = line_start;
+    V3 x_offset = vec3(2,0,0);
+    V3 y_offset = vec3(0,-2,0);
+    add_player(ag, cursor, ANIM_IDLE, DOWN); cursor += x_offset;
+    add_player(ag, cursor, ANIM_IDLE, RIGHT); cursor += x_offset;
+    add_player(ag, cursor, ANIM_IDLE, UP); cursor += x_offset;
+    line_start += y_offset; cursor = line_start;
+    add_player(ag, cursor, ANIM_MOVE, DOWN); cursor += x_offset;
+    add_player(ag, cursor, ANIM_MOVE, RIGHT); cursor += x_offset;
+    add_player(ag, cursor, ANIM_MOVE, UP); cursor += x_offset;
+
+    num_entities = ag->num_entities;
+  }
+
+  float delta_t = game_input.delta_t; // in seconds
+  if (delta_t == 0) delta_t = 1.0f / 60.0f;
+
+  ag->time_remaining += delta_t;
+  while (ag->time_remaining > (PHYSICS_FRAME_TIME / 2.0)) {
+    update_entity_animations(ag);
+    ag->time_remaining -= PHYSICS_FRAME_TIME;
+    ag->game_ticks++;
+  }
+
+  auto render_buffer = game_input.render_buffer;
+  push_entities(render_buffer, ag);
+
+  render_frame_rate_text(g, game_input.delta_t);
 }
 
 // TODO make the main thread only handle opengl stuff and the other threads handle input, physics, filling the RenderBuffer, etc
@@ -299,6 +339,11 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto assets = &g->assets;
   auto background_texture = get_bitmap(assets, BITMAP_BACKGROUND);
   assert(background_texture);
+
+  if (debug_global_memory.animation_mode) {
+    do_animation_mode(g, memory, game_input);
+    return true;
+  }
 
   draw_gradient_background(g, queue);
 
@@ -353,10 +398,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
 
   //push_rectangle(render_buffer, cursor_rect, g->cursor_color, circle_texture->texture_id, circle_normal_map->texture_id);
 
-  V2 text_p = {1.f/16,15.f/16};
-  char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
-  sprintf(frame_rate_text, "%d ms", (int)(game_input.delta_t * 1000.0f));
-  render_shadowed_text_screen_space(render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD);
+  render_frame_rate_text(g, game_input.delta_t);
   //push_hud(render_buffer, rectangle(aligned_rect(text_p, 0.1, 0.1)), V4{0,0,1,1}, white_texture->texture_id);
 
   // TODO move this out to platform layer, texture downloads should be handled asynchronously

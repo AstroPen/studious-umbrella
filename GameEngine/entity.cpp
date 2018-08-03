@@ -127,6 +127,41 @@ static bool add_room(GameState *g, AlignedRect tile_bounds) {
   return true;
 }
 
+static Entity *add_player(GameState *g, V3 start_p, AnimationType start_animation, Direction facing_direction) {
+  float player_size = 80.0f * METERS_PER_PIXEL;
+
+  Entity *player = alloc_entity(g);
+  assert(player);
+  player->collision_box = aligned_box(aligned_rect(start_p.xy, player_size, player_size / 1.5), 0, 1.3);
+  player->flags |= 
+    ENTITY_COLLIDES | 
+    ENTITY_PLAYER_CONTROLLED | 
+    ENTITY_SOLID;
+
+  make_sprite(player);
+  set_texture(player, BITMAP_LINK);
+  set_normal_map(player, BITMAP_LINK_NORMAL_MAP);
+  player->visual.offset = vec3(0, 0.40, 0.06);
+  player->visual.scale = 4.0;
+  player->visual.sprite_depth = 0.3;
+
+  set_friction_multiplier(player, 0.87);
+  set_bounce_factor(player, 0.1);
+  set_slip_factor(player, 0.95);
+
+  player->mass = 1.0f;
+  player->accel_max = 300.0f;
+  player->time_to_max_accel = 0.2f;
+  player->time_to_zero_accel = 0.1f;
+
+  player->texture_group_id = TEXTURE_GROUP_LINK;
+  player->facing_direction = facing_direction;
+  player->animation_dt = 0;
+  player->current_animation = start_animation;
+  player->animation_duration = get_animation_duration(&g->assets, player);
+  return player;
+}
+
 #if 0
 static inline void push_cuboid_entity(RenderBuffer *render_buffer, Entity *e) {
   auto elem = push_element(render_buffer, RenderElementBox);

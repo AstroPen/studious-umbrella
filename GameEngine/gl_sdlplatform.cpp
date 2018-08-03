@@ -70,6 +70,8 @@ static inline ButtonType keycode_to_button_type(SDL_Keycode keycode) {
       return BUTTON_DEBUG_DISPLAY_TOGGLE;
     case SDLK_2 :
       return BUTTON_DEBUG_CAMERA_TOGGLE;
+    case SDLK_3 :
+      return BUTTON_DEBUG_ANIMATION_TOGGLE;
     case SDLK_MINUS :
       return BUTTON_DEBUG_CAMERA_OUT;
     case SDLK_EQUALS :

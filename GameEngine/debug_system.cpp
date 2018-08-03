@@ -82,6 +82,7 @@ struct DebugState {
   u32 record_count;
   bool display_records;
   bool camera_mode;
+  bool animation_mode;
 } debug_global_memory;
 
 static void init_debug_global_memory(u32 *thread_ids, GameMemory *game_memory, RenderBuffer *render_buffer) {
