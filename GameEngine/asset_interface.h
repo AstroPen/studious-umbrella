@@ -67,6 +67,8 @@ struct RenderingInfo {
   float scale;
   u32 width;
   u32 height;
+  float texture_width;
+  float texture_height;
 
   u32 bitmap_id; // NOTE : This is an OpenGL texture id
 };

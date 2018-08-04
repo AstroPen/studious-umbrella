@@ -8,6 +8,7 @@ in VertexData {
   smooth in vec3 bitangent;
   smooth in vec3 p;
   smooth in vec3 camera_p;
+  smooth in vec2 scaled_uv;
 } v_in;
 
 out vec4 pixel_color;
@@ -17,6 +18,9 @@ uniform bool HAS_LIGHTING;
 uniform sampler2D TEXTURE_SAMPLER;
 uniform sampler2D NORMAL_SAMPLER;
 uniform vec3 LIGHT_P;
+uniform float TEXTURE_WIDTH;
+uniform float TEXTURE_HEIGHT;
+uniform bool USE_LOW_RES_UV_FILTER;
 
 const mediump vec3 perception = vec3(0.299, 0.587, 0.114);
 
@@ -44,6 +48,19 @@ vec3 directional_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, 
 	vec3 specular = specular_shade * specular_color * light_color;
 
 	return diffuse + specular;
+}
+
+// Found here : https://csantosbh.wordpress.com/2014/01/25/manual-texture-filtering-for-pixelated-games-in-webgl/
+vec2 get_custom_uv() {
+  if (!USE_LOW_RES_UV_FILTER) return v_in.uv;
+
+  vec2 alpha = vec2(0.07);
+  vec2 x = fract(v_in.scaled_uv);
+  vec2 x_ = clamp(0.5 / alpha * x, 0.0, 0.5) +
+            clamp(0.5 / alpha * (x - 1.0) + 0.5,
+                  0.0, 0.5);
+ 
+  return (floor(v_in.scaled_uv) + x_) / vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
 }
 
 vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 light_p, vec3 light_color, vec3 abc, float shininess) {
@@ -93,7 +110,8 @@ vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 l
 }
 
 void main() {
-  vec4 textured_color = v_in.color * texture(TEXTURE_SAMPLER, v_in.uv);
+  vec2 custom_uv = get_custom_uv();
+  vec4 textured_color = v_in.color * texture(TEXTURE_SAMPLER, custom_uv);
   if (textured_color.a < 0.001) discard;
 
   if (!HAS_LIGHTING) {
@@ -104,7 +122,7 @@ void main() {
   vec3 N;
   if (HAS_NORMAL_MAP) {
 
-    vec3 offset_normal = texture(NORMAL_SAMPLER, v_in.uv).xyz;
+    vec3 offset_normal = texture(NORMAL_SAMPLER, custom_uv).xyz;
     offset_normal = normalize(offset_normal * 2 - 1);
     //offset_normal.y *= -1;
     //offset_normal.z *= -1;

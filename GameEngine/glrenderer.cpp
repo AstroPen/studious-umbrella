@@ -21,6 +21,9 @@ static GLuint view_matrix_id;
 static GLuint program_id;
 static GLuint vertex_buffer_id;
 static GLuint texture_sampler_id;
+static GLuint texture_width_id;
+static GLuint texture_height_id;
+static GLuint use_low_res_uv_filter_id;
 
 enum ShaderAttribute {
   VERTEX_POSITION,
@@ -149,6 +152,9 @@ struct RenderElementTextureQuads {
   u32 normal_map_id;
   int vertex_index;
   int quad_count;
+  float texture_width;
+  float texture_height;
+  bool use_low_res_uv;
 };
 
 struct RenderElementHud {
@@ -156,6 +162,9 @@ struct RenderElementHud {
   u32 texture_id;
   int vertex_index;
   int quad_count;
+  float texture_width;
+  float texture_height;
+  bool use_low_res_uv;
 };
 
 
@@ -406,15 +415,20 @@ static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
   }
 }
 
-static void draw_vertices(int vertex_idx, int count, u32 texture_id, u32 normal_map_id) {
+static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, bool use_low_res_uv) {
   TIMED_FUNCTION();
 
   assert(texture_id);
-  //assert(texture_id < BITMAP_COUNT);
   //glUniform1i(texture_sampler_id, texture_id);
   gl_check_error();
   glActiveTexture(GL_TEXTURE0 + 0);
   glBindTexture(GL_TEXTURE_2D, texture_id);
+  glUniform1f(texture_width_id, texture_width);
+  glUniform1f(texture_height_id, texture_height);
+  gl_check_error();
+
+  //assert(use_low_res_uv);
+  glUniform1i(use_low_res_uv_filter_id, use_low_res_uv);
   gl_check_error();
 
   bool has_normal_map = normal_map_id ? true : false;
@@ -476,10 +490,11 @@ static void draw_vertices(int vertex_idx, int count, u32 texture_id, u32 normal_
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
 // it will probably break stuff.
 // UPDATE : This might be fixed now, should test it soon.
-static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, u32 normal_map_id, u32 render_stage = 0) {
+static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, u32 render_stage = 0, bool is_sprite = true) {
   TIMED_FUNCTION();
   auto stage = buffer->stages + render_stage;
   auto prev = stage->tail;
+  // TODO check is_sprite
   if (prev && prev->type == RenderType_RenderElementTextureQuads) {
     auto old_quads = (RenderElementTextureQuads *) prev;
     if (old_quads->texture_id == texture_id && old_quads->normal_map_id == normal_map_id) {
@@ -496,6 +511,9 @@ static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id,
     elem->texture_id = texture_id;
     elem->quad_count = count;
     elem->vertex_index = buffer->vertex_count - count * 6;
+    elem->texture_width = texture_width;
+    elem->texture_height = texture_height;
+    elem->use_low_res_uv = is_sprite;
 
   } else {
     auto elem = push_element(buffer, RenderElementTextureQuads);
@@ -504,6 +522,9 @@ static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id,
     elem->normal_map_id = normal_map_id;
     elem->quad_count = count;
     elem->vertex_index = buffer->vertex_count - count * 6;
+    elem->texture_width = texture_width;
+    elem->texture_height = texture_height;
+    elem->use_low_res_uv = is_sprite;
   }
 }
 
@@ -603,12 +624,15 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
     //c.rgb *= 0.8;
   }
   
-  append_quads(buffer, 6, texture_id, normal_map_id);
+  append_quads(buffer, 6, texture_id, texture->width, texture->height, normal_map_id);
 #undef DEBUG_COLORS
 }
 
-static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, u32 texture_id, u32 normal_map_id = 0) {
+static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id, u32 normal_map_id = 0, bool is_sprite = true) {
   TIMED_FUNCTION();
+
+  auto texture_id = get_texture_id(buffer->assets, bitmap_id);
+  auto texture = get_bitmap(buffer->assets, bitmap_id);
 
   auto quad = to_quad4(rect);
 
@@ -635,7 +659,7 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, u32 t
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, normal_map_id);
+  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, 0, is_sprite);
 }
 
 static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id) {
@@ -645,6 +669,7 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
   //buffer->z_bias_accum += Z_BIAS_EPSILON;
 
   auto texture_id = get_texture_id(buffer->assets, bitmap_id);
+  auto texture = get_bitmap(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
@@ -669,7 +694,7 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, 0, true);
+  append_quads(buffer, 1, texture_id, texture->width, texture->height, 0, true);
 }
 
 inline void render_pixel_space(RenderBuffer *buffer, AlignedRect rect, V4 color, BitmapID bitmap_id) {
@@ -768,7 +793,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
     }
     text++;
   }
-  append_quads(buffer, num_quads, font_info->bitmap.texture_id, 0, true);
+  append_quads(buffer, num_quads, font_info->bitmap.texture_id, font_width, font_height, 0, true);
 }
 
 inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) {
@@ -916,11 +941,11 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   verts.t = t4;
 
   push_quad_vertices(buffer, verts);
-  append_quads(buffer, 1, bitmap_id, normal_map_id);
+  append_quads(buffer, 1, bitmap_id, 1, 1, normal_map_id);
 
   verts.p = quad2.verts;
   push_quad_vertices(buffer, verts);
-  append_quads(buffer, 1, bitmap_id, normal_map_id);
+  append_quads(buffer, 1, bitmap_id, 1, 1, normal_map_id);
 }
 
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e);
@@ -1009,7 +1034,7 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, bitmap_id, normal_map_id);
+  append_quads(buffer, 1, bitmap_id, info.texture_width, info.texture_height, normal_map_id);
 
 #if DEBUG_CUBES
   push_box(buffer, box, vec4(0.9, 1, 0, 0.2), BITMAP_WHITE, 1);
@@ -1090,7 +1115,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, normal_map_id);
+  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id);
 
 #if DEBUG_CUBES
   push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
@@ -1176,7 +1201,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     //-8, -6, -10, 1,
   };
 
-  glClearColor(1,1,0,1);
+  glClearColor(0.5,0.5,0,1);
   gl_check_error();
   glClearDepth(1);
   gl_check_error();
@@ -1261,7 +1286,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
           set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
           if (e->texture_id) texture_id = e->texture_id;
 
-          draw_vertices(0, e->quad_count * 6, texture_id, e->normal_map_id);
+          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, e->normal_map_id, e->use_low_res_uv);
         } break;
 
         case RenderType_RenderElementHud : {
@@ -1270,7 +1295,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
           set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
           if (e->texture_id) texture_id = e->texture_id;
 
-          draw_vertices(0, e->quad_count * 6, texture_id, 0);
+          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, 0, e->use_low_res_uv);
         } break;
 
         case RenderType_RenderElementClear : {

@@ -45,6 +45,7 @@ static V4 get_sprite_uv(TextureGroup *group, int sprite_index, bool reversed) {
   u32 v_count = group->bitmap.height / group->sprite_height;
   u32 row_idx = sprite_index / h_count;
   assert(row_idx < v_count);
+  // TODO consider using modf or remainder from the c lib
   u32 col_idx = sprite_index % h_count;
 
   float umin = float(col_idx) / float(h_count);
@@ -272,6 +273,8 @@ static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
       result.scale = get_sprite_scale(e);
       result.width = group->sprite_width;
       result.height = group->sprite_height;
+      result.texture_width = group->bitmap.width;
+      result.texture_height = group->bitmap.height;
 
       return result;
     } break;
@@ -757,6 +760,8 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
 
   param.s_clamp = REPEAT_CLAMPING;
   param.t_clamp = REPEAT_CLAMPING;
+  param.max_blend = LINEAR_BLEND;
+  param.min_blend = LINEAR_BLEND;
   init_texture(assets, BITMAP_WALL, param);
   init_texture(assets, BITMAP_WALL_NORMAL_MAP, param);
 

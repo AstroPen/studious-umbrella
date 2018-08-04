@@ -242,7 +242,7 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
 
     auto r = rectangle(flatten(e->collision_box), e->collision_box.center.z);
 
-    push_rectangle(render_buffer, r, e->visual.color, texture_id, normal_map_id);
+    push_rectangle(render_buffer, r, e->visual.color, texture_asset_id, normal_map_id);
   }
 
 }

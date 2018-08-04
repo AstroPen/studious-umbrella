@@ -41,6 +41,7 @@ static void init_opengl(RenderInfo *info) {
   // NOTE turn this on for gamma correction :
   //glEnable(GL_FRAMEBUFFER_SRGB);
 
+  //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   glDepthFunc(GL_LEQUAL);
 
@@ -73,11 +74,14 @@ static void init_opengl(RenderInfo *info) {
   program_id = create_shader_program(header, vertex_shader, fragment_shader);
 
   //transform_id = glGetUniformLocation(program_id, "transform");
-  projection_matrix_id = glGetUniformLocation(program_id, "projection_matrix");
-  view_matrix_id = glGetUniformLocation(program_id, "view_matrix");
+  projection_matrix_id = glGetUniformLocation(program_id, "PROJECTION_MATRIX");
+  view_matrix_id = glGetUniformLocation(program_id, "VIEW_MATRIX");
   gl_check_error();
 
   texture_sampler_id = glGetUniformLocation(program_id, "TEXTURE_SAMPLER");
+  texture_width_id = glGetUniformLocation(program_id, "TEXTURE_WIDTH");
+  texture_height_id = glGetUniformLocation(program_id, "TEXTURE_HEIGHT");
+  use_low_res_uv_filter_id = glGetUniformLocation(program_id, "USE_LOW_RES_UV_FILTER");
   gl_check_error();
 
   auto buf = info->render_buffer;

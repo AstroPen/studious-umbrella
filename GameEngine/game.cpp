@@ -370,7 +370,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto background_rect = rectangle(aligned_rect(0, 0, g->width, g->height));
 #define DRAW_GRADIENT_BACKGROUND 1
 #if DRAW_GRADIENT_BACKGROUND
-  push_rectangle(render_buffer, background_rect, vec4(1), background_texture->texture_id);
+  push_rectangle(render_buffer, background_rect, vec4(1), BITMAP_BACKGROUND, 0, false);
 #endif
 
 
@@ -386,7 +386,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   auto collision_indicator = rectangle(aligned_rect(g->collision_normal + center_pos, 2.0f * METERS_PER_PIXEL, 2.0f * METERS_PER_PIXEL), 1.1);
   auto white_texture = get_bitmap(&g->assets, BITMAP_WHITE); // TODO TODO I should really change it so that this is done in the renderer
   assert(white_texture);
-  push_rectangle(render_buffer, collision_indicator, vec4(0,1,0,1), white_texture->texture_id);
+  push_rectangle(render_buffer, collision_indicator, vec4(0,1,0,1), BITMAP_WHITE);
 
   // Cursor :
   //auto circ = Circle{g->pointer_position, cursor_size / 2.0f};
