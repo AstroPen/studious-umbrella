@@ -11,8 +11,12 @@
 #include "packed_assets.h"
 
 
-static void print_error(char *msg, char *filename, u32 line_num) {
+static void print_error(char *msg, char *filename, u32 line_num, lstring line = {}) {
   printf("Error on line %u of %s : %s.\n", line_num, filename, msg);
+  if (line) {
+    STACK_STRING(buf, line);
+    printf(KRED "%u    %s\n\n" KNRM, line_num, buf);
+  }
   exit(1); // TODO should maybe close more cleanly
 }
 
@@ -25,8 +29,10 @@ static void usage(char *program_name) {
 
 enum CommandKeyword {
   COMMAND_VERSION,
-  COMMAND_LAYOUT,
+  COMMAND_ANIMATION_LAYOUT,
+  COMMAND_CUBE_LAYOUT,
   COMMAND_ANIMATION,
+  COMMAND_FACE,
   COMMAND_SET,
   COMMAND_BITMAP,
 
@@ -65,6 +71,7 @@ struct StringTable {
   hstring blend_mode_hstrings[BLEND_COUNT];
   hstring clamp_mode_hstrings[CLAMP_COUNT];
   hstring direction_hstrings[DIRECTION_COUNT];
+  hstring face_index_hstrings[FACE_COUNT];
 } string_table_;
 
 StringTable * const string_table = &string_table_;
@@ -76,8 +83,10 @@ static void init_string_table() {
     string_table->command_hstrings[COMMAND_##name] = hash_string(#name); i++;
     u32 i = 0;
     ADD_COMMAND_HASH(VERSION);
-    ADD_COMMAND_HASH(LAYOUT);
+    ADD_COMMAND_HASH(ANIMATION_LAYOUT);
     ADD_COMMAND_HASH(ANIMATION);
+    ADD_COMMAND_HASH(CUBE_LAYOUT);
+    ADD_COMMAND_HASH(FACE);
     ADD_COMMAND_HASH(BITMAP);
     ADD_COMMAND_HASH(SET);
     assert(i == COMMAND_COUNT);
@@ -166,6 +175,20 @@ static void init_string_table() {
 #undef ADD_DIRECTION_HASH
   }
 
+  {
+#define ADD_FACE_HASH(face) \
+    string_table->face_index_hstrings[FACE_##face] = hash_string(#face); i++;
+    u32 i = 0;
+    ADD_FACE_HASH(TOP);
+    ADD_FACE_HASH(BOTTOM);
+    ADD_FACE_HASH(RIGHT);
+    ADD_FACE_HASH(LEFT);
+    ADD_FACE_HASH(FRONT);
+    ADD_FACE_HASH(BACK);
+    assert(i == FACE_COUNT);
+#undef ADD_FACE_HASH
+  }
+
 #if 0
   for (u32 i = 0; i < ANIM_COUNT; i++) {
     print_hstring(string_table->animation_type_hstrings[i]);
@@ -208,6 +231,9 @@ MAKE_LOOKUP_FUNCTION(TextureGroupID, group_id, TEXTURE_GROUP, 1, 0);
 MAKE_LOOKUP_FUNCTION(TextureFormatSpecifier, blend_mode, BLEND, 0, BLEND_FIRST);
 MAKE_LOOKUP_FUNCTION(TextureFormatSpecifier, clamp_mode, CLAMP, 0, CLAMP_FIRST);
 MAKE_LOOKUP_FUNCTION(Direction, direction, DIRECTION, 0, 0);
+MAKE_LOOKUP_FUNCTION(FaceIndex, face_index, FACE, 0, 0);
+
+#undef MAKE_LOOKUP_FUNCTION
 
 //
 // Token functions ---
@@ -247,7 +273,9 @@ enum TokenError : u32 {
   INVALID_BLEND_MODE,
   INVALID_CLAMP_MODE,
   INVALID_DIRECTION,
+  INVALID_FACE_NAME,
   ANIMATION_BEFORE_LAYOUT_SPECIFIED,
+  FACE_BEFORE_LAYOUT_SPECIFIED,
   BITMAP_BEFORE_LAYOUT_SPECIFIED,
   COMMENT_NEVER_ENDED,
 };
@@ -270,18 +298,22 @@ static char *to_string(TokenError error) {
     case INVALID_GROUP_ID : return "Received an invalid texture group id";
     case INVALID_BLEND_MODE : return "Received an invalid blend mode";
     case INVALID_CLAMP_MODE : return "Received an invalid clamp mode";
-    case INVALID_DIRECTION : return "Received an direction name";
-    case ANIMATION_BEFORE_LAYOUT_SPECIFIED : return "ANIMATION command cannot be called before LAYOUT";
+    case INVALID_DIRECTION : return "Received an invalid direction name";
+    case INVALID_FACE_NAME : return "Received an invalid face name";
+    case ANIMATION_BEFORE_LAYOUT_SPECIFIED : return "ANIMATION command cannot be called before ANIMATION_LAYOUT";
+    case FACE_BEFORE_LAYOUT_SPECIFIED : return "FACE command cannot be called before CUBE_LAYOUT";
     case BITMAP_BEFORE_LAYOUT_SPECIFIED : return "BITMAP command cannot be called before LAYOUT";
     case COMMENT_NEVER_ENDED : return "A comment block was opened but never closed";
     default : return "Unspecified error";
   }
 }
 
-static void print_error(TokenError error, char *filename, u32 line_num) {
+static void print_error(TokenError error, char *filename, u32 line_num, lstring line) {
   assert(error);
   auto msg = to_string(error);
   printf("Error parsing line %u of %s : %s.\n", line_num, filename, msg);
+  STACK_STRING(buf, line);
+  printf(KRED "%u    %s\n\n" KNRM, line_num, buf);
   exit(1); // TODO should maybe close more cleanly
 }
 
@@ -482,6 +514,13 @@ struct AnimationArgs {
   TokenError error;
 };
 
+struct FaceArgs {
+  FaceIndex face;
+  u16 index;
+
+  TokenError error;
+};
+
 struct SetArgs {
   AttributeKeyword attribute;
   union {
@@ -520,12 +559,18 @@ struct BitmapArgs {
     return result; \
   }
 
-inline TextureGroupID invalid_of(TextureGroupID) { return TEXTURE_GROUP_INVALID; }
-inline TextureLayoutType invalid_of(TextureLayoutType) { return LAYOUT_INVALID; }
-inline AnimationType invalid_of(AnimationType) { return ANIM_INVALID; }
-inline CommandKeyword invalid_of(CommandKeyword) { return COMMAND_INVALID; }
-inline AttributeKeyword invalid_of(AttributeKeyword) { return ATTRIBUTE_INVALID; }
-inline Direction invalid_of(Direction) { return DIRECTION_INVALID; }
+#define MAKE_INVALID_ERROR_FUNCTIONS(Type, PREFIX, ERROR) \
+  inline Type invalid_of(Type) { return PREFIX##_INVALID; } \
+  inline TokenError error_of(Type) { return INVALID_##ERROR; }
+
+MAKE_INVALID_ERROR_FUNCTIONS(TextureGroupID, TEXTURE_GROUP, GROUP_ID);
+MAKE_INVALID_ERROR_FUNCTIONS(TextureLayoutType, LAYOUT, LAYOUT_TYPE);
+MAKE_INVALID_ERROR_FUNCTIONS(AnimationType, ANIM, ANIMATION_TYPE);
+MAKE_INVALID_ERROR_FUNCTIONS(CommandKeyword, COMMAND, COMMAND_NAME);
+MAKE_INVALID_ERROR_FUNCTIONS(AttributeKeyword, ATTRIBUTE, ATTRIBUTE_NAME);
+MAKE_INVALID_ERROR_FUNCTIONS(Direction, DIRECTION, DIRECTION);
+MAKE_INVALID_ERROR_FUNCTIONS(FaceIndex, FACE, FACE_NAME);
+
 inline TextureFormatSpecifier invalid_of(TextureFormatSpecifier spec) { 
   if (spec == BLEND_INVALID) return BLEND_INVALID;
   if (spec == CLAMP_INVALID) return CLAMP_INVALID;
@@ -535,12 +580,6 @@ inline TextureFormatSpecifier invalid_of(TextureFormatSpecifier spec) {
   return BLEND_INVALID; 
 }
 
-inline TokenError error_of(TextureGroupID) { return INVALID_GROUP_ID; }
-inline TokenError error_of(TextureLayoutType) { return INVALID_LAYOUT_TYPE; }
-inline TokenError error_of(AnimationType) { return INVALID_ANIMATION_TYPE; }
-inline TokenError error_of(CommandKeyword) { return INVALID_COMMAND_NAME; }
-inline TokenError error_of(AttributeKeyword) { return INVALID_ATTRIBUTE_NAME; }
-inline TokenError error_of(Direction) { return INVALID_DIRECTION; }
 inline TokenError error_of(TextureFormatSpecifier spec) { 
   if (spec == BLEND_INVALID) return INVALID_BLEND_MODE;
   if (spec == CLAMP_INVALID) return INVALID_CLAMP_MODE;
@@ -549,6 +588,9 @@ inline TokenError error_of(TextureFormatSpecifier spec) {
   assert(!"Unknown spec error");
   return INVALID_BLEND_MODE; 
 }
+
+#undef MAKE_INVALID_ERROR_FUNCTIONS
+
 #define IS_VALID(x) ((x) != invalid_of(x))
 #define DO_LOOKUP(arg, type, token) \
   auto arg = type##_lookup(string_table, hstring(token)); \
@@ -619,6 +661,14 @@ static AnimationArgs parse_animation_args(lstring args) {
   HANDLE_ARG_INT(frames);
   HANDLE_ARG_FLOAT(duration);
   HANDLE_ARG_LOOKUP(direction, direction);
+  HANDLE_EXTRA_ARGS();
+  return result;
+}
+
+static FaceArgs parse_face_args(lstring args) {
+  FaceArgs result = {};
+  HANDLE_ARG_LOOKUP(face, face_index);
+  HANDLE_ARG_UINT16(index);
   HANDLE_EXTRA_ARGS();
   return result;
 }
@@ -755,6 +805,7 @@ int main(int argc, char *argv[]) {
 
   darray<PackedTextureLayout> packed_layouts;
   darray<PackedAnimation> packed_animations;
+  darray<PackedFace> packed_faces;
   darray<PackedTextureGroup> packed_groups;
   darray<PixelBuffer> loaded_bitmaps;
 
@@ -779,15 +830,15 @@ int main(int argc, char *argv[]) {
   line_number++;
 
   Token command = parse_command(version_ln);
-  if (!command) print_error(command.error, build_filename, line_number);
+  if (!command) print_error(command.error, build_filename, line_number, version_ln);
   if (CommandKeyword(command) != COMMAND_VERSION) {
     print_error("VERSION not specified", build_filename, line_number);
   }
   auto args = parse_version_args(command.remainder);
-  if (args.error) print_error(args.error, build_filename, line_number);
+  if (args.error) print_error(args.error, build_filename, line_number, version_ln);
 
   if (args.version_number != 0) {
-    print_error("Only version number 0 is currently accepted", build_filename, line_number);
+    print_error("Only version number 0 is currently accepted", build_filename, line_number, version_ln);
   }
 
   //
@@ -795,6 +846,7 @@ int main(int argc, char *argv[]) {
   //
 
   u16 current_animation_index = 0;
+  u16 current_face_index = 0;
   TextureLayoutType current_layout_type = LAYOUT_INVALID;
   u16 current_group_flags = 0;
   u8 current_min_blend = LINEAR_BLEND;
@@ -816,7 +868,7 @@ int main(int argc, char *argv[]) {
     line_number++;
 
     Token command = parse_command(next_line);
-    if (!command) print_error(command.error, build_filename, line_number);
+    if (!command) print_error(command.error, build_filename, line_number, next_line);
 
     CommandKeyword command_num = CommandKeyword(command);
     switch (command_num) {
@@ -837,22 +889,33 @@ int main(int argc, char *argv[]) {
       } break;
 
       case COMMAND_VERSION : {
-        print_error("VERSION command repeated", build_filename, line_number);
+        print_error("VERSION command repeated", build_filename, line_number, next_line);
       } break; 
 
-      case COMMAND_LAYOUT  : {
-        auto args = parse_layout_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number);
-        auto layout = push(packed_layouts);
+#define DO_LAYOUT() \
+        auto args = parse_layout_args(command.remainder); \
+        if (args.error) print_error(args.error, build_filename, line_number, next_line); \
+        auto layout = push(packed_layouts); \
         layout->layout_type = args.type;
+
+      case COMMAND_ANIMATION_LAYOUT  : {
+        DO_LAYOUT();
         layout->animation_count = 0;
+        current_animation_index = 0;
       } break; 
+
+      case COMMAND_CUBE_LAYOUT : {
+        DO_LAYOUT();
+        layout->face_count = 0;
+        current_face_index = 0;
+      } break;
 
       case COMMAND_ANIMATION : {
         auto args = parse_animation_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number);
+        if (args.error) print_error(args.error, build_filename, line_number, next_line);
         auto layout = peek(packed_layouts);
-        if (!layout) print_error(ANIMATION_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number);
+        if (!layout) print_error(ANIMATION_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
+        // TODO check that the layout type is animation
         auto animation = push(packed_animations);
         *animation = {};
         layout->animation_count++;
@@ -864,9 +927,22 @@ int main(int argc, char *argv[]) {
         current_animation_index += args.frames;
       } break;
 
+      case COMMAND_FACE : {
+        auto args = parse_face_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number, next_line);
+        auto layout = peek(packed_layouts);
+        if (!layout) print_error(FACE_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
+        // TODO check that the layout type is cube
+        auto face = push(packed_faces);
+        *face = {};
+        layout->face_count++;
+        face->sprite_index = args.index;
+        current_face_index++;
+      } break;
+
       case COMMAND_SET : {
         auto args = parse_set_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number);
+        if (args.error) print_error(args.error, build_filename, line_number, next_line);
 
         switch (args.attribute) {
           case ATTRIBUTE_LAYOUT : 
@@ -896,9 +972,9 @@ int main(int argc, char *argv[]) {
 
       case COMMAND_BITMAP : {
         auto args = parse_bitmap_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number);
+        if (args.error) print_error(args.error, build_filename, line_number, next_line);
         if (current_layout_type == LAYOUT_INVALID)
-          print_error(BITMAP_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number);
+          print_error(BITMAP_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
         
         auto group = push(packed_groups);
         group->bitmap_offset = current_data_offset;
@@ -925,7 +1001,7 @@ int main(int argc, char *argv[]) {
         printf("%s\n", bitmap_filename.str);
         PixelBuffer bitmap = load_image_file(bitmap_filename.str);
         if (!is_initialized(&bitmap)) 
-          print_error("Failed to load bitmap", build_filename, line_number);
+          print_error("Failed to load bitmap", build_filename, line_number, next_line);
         group->width = bitmap.width;
         group->height = bitmap.height;
         current_data_offset += bitmap.width * bitmap.height * 4;
@@ -934,7 +1010,7 @@ int main(int argc, char *argv[]) {
       } break;
 
       case COMMAND_INVALID : {
-        print_error(INVALID_COMMAND_NAME, build_filename, line_number);
+        print_error(INVALID_COMMAND_NAME, build_filename, line_number, next_line);
       } break;
 
       default : {

@@ -45,6 +45,15 @@ enum BitmapID : u32 {
 //
 // I should add a "HAS_TEXTURE" to the shader so that I can get rid of BITMAP_WHITE.
 //
+//
+// UPDATE
+// In addition to a TextureGroupID, each entity should have a TextureType that describes
+// whether it is an animated character, cube object, etc. The TextureType is also used to 
+// look up the layout or something. The group may also need to contribute layout information.
+// For example, it could have an array of TEXTURE_TYPE_COUNT length of layout pointers that
+// are null if the group doesn't have sprites of that type. It might also store counts of each,
+// and then each entity has an index along with its TextureType.
+//
 // 
 enum TextureGroupID {
   TEXTURE_GROUP_INVALID,
@@ -129,10 +138,15 @@ enum AnimationType {
   ANIM_INVALID
 };
 
-struct TextureLayout {
-  u16 animation_frame_counts[ANIM_COUNT][DIRECTION_COUNT];
-  u16 animation_start_index[ANIM_COUNT][DIRECTION_COUNT];
-  float animation_times[ANIM_COUNT][DIRECTION_COUNT];
+union TextureLayout {
+  struct { // For LAYOUT_CHARACTER
+    u16 animation_frame_counts[ANIM_COUNT][DIRECTION_COUNT];
+    u16 animation_start_index[ANIM_COUNT][DIRECTION_COUNT];
+    float animation_times[ANIM_COUNT][DIRECTION_COUNT];
+  };
+  struct { // For LAYOUT_TERRAIN
+    u16 cube_face_index[6];
+  };
 };
 
 enum FontID {

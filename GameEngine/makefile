@@ -35,7 +35,7 @@ assets/packed_assets.pack : asset_packer assets/*.png assets/*.spec
 
 object_files = stb_image.o stb_truetype.o
 
-engine_includes = gl_sdlplatform.cpp sdl_thread.cpp sdlgl_init.cpp glrenderer.cpp pixel.h vmath.cpp game.cpp entity.cpp assets.cpp asset_interface.h game.h ../Common/* \
+engine_includes = gl_sdlplatform.cpp sdl_thread.cpp sdlgl_init.cpp glrenderer.cpp pixel.h vmath.cpp game.cpp entity.cpp assets.cpp asset_interface.h packed_assets.h game.h ../Common/* \
 	blinn_phong.frag blinn_phong.vert debug_system.cpp custom_stb.h
 
 test: $(engine_includes) $(object_files) makefile

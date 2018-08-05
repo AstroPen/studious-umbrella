@@ -1,16 +1,36 @@
 #ifndef _LSTRING_H_
 #define _LSTRING_H_
 
+// For colored strings :
+#define KNRM  "\x1B[0m"
+#define KBLK  "\x1B[30m"
+#define KRED  "\x1B[31m"
+#define KGRN  "\x1B[32m"
+#define KYEL  "\x1B[33m"
+#define KBLU  "\x1B[34m"
+#define KMAG  "\x1B[35m"
+#define KCYN  "\x1B[36m"
+#define KWHT  "\x1B[37m"
+
+#define KBGBLK  "\x1B[40m"
+#define KBGRED  "\x1B[41m"
+#define KBGGRN  "\x1B[42m"
+#define KBGYEL  "\x1B[43m"
+#define KBGBLU  "\x1B[44m"
+#define KBGMAG  "\x1B[45m"
+#define KBGCYN  "\x1B[46m"
+#define KBGWHT  "\x1B[47m"
+
 struct lstring {
   char *str;
-  uint32_t len;
+  u32 len;
 
-  inline char &operator[](uint32_t i) {
+  inline char &operator[](u32 i) {
     assert(i < len);
     return str[i];
   }
 
-  inline lstring operator+(uint32_t i) {
+  inline lstring operator+(u32 i) {
     return {str + i, len - i};
   }
 
@@ -24,7 +44,7 @@ struct lstring {
 
 inline lstring length_string(char *cstr) {
   if (!cstr) return {};
-  uint32_t len = 0;
+  u32 len = 0;
   while (cstr[len]) {
     len++;
   }
@@ -67,32 +87,32 @@ struct hstring {
   union {
     struct {
       char *str;
-      uint32_t len;
+      u32 len;
     };
     lstring lstr;
   };
-  uint32_t hash;
+  u32 hash;
 
   inline operator lstring() { return lstr; }
 };
 
 struct Stream {
   lstring data;
-  uint32_t cursor;
+  u32 cursor;
 };
 
-static Stream get_stream(uint8_t *data, uint32_t len) {
+static Stream get_stream(u8 *data, u32 len) {
   return {(char *)data, len, 0};
 }
 
 // djb2 by Dan Bernstein, found on stackoverflow
-static hstring hash_string(uint8_t *str, uint32_t len, int end_char) {
+static hstring hash_string(u8 *str, u32 len, int end_char) {
   if (!str) return {};
   if (!len) return {};
 
-  uint32_t hash = 5381; int c;
+  u32 hash = 5381; int c;
 
-  uint32_t i;
+  u32 i;
   for (i = 0; i < len; i++) {
     c = str[i];
     if (c == end_char) return {(char *)str, i, hash};
@@ -101,8 +121,8 @@ static hstring hash_string(uint8_t *str, uint32_t len, int end_char) {
   return {(char *)str, len, hash};
 }
 
-inline hstring hash_string(const char *str, uint32_t len, int end_char = -1) {
-  return hash_string((uint8_t *) str, len, end_char);
+inline hstring hash_string(const char *str, u32 len, int end_char = -1) {
+  return hash_string((u8 *) str, len, end_char);
 }
 
 inline hstring hash_string(const char *cstr, char end_char = '\0') {

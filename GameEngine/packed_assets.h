@@ -20,10 +20,30 @@ struct PackedAnimation {
   u32 flags;
 };
 
+enum FaceIndex {
+  FACE_TOP, FACE_FRONT,
+  FACE_RIGHT, FACE_LEFT,
+  FACE_BACK, FACE_BOTTOM,
+  FACE_COUNT,
+  FACE_INVALID,
+};
+
+struct PackedFace {
+  u16 sprite_index;
+};
+
 struct PackedTextureLayout {
   u32 layout_type;
-  u32 animation_count;
-  PackedAnimation animations[0];
+  union {
+    struct {
+      u32 animation_count;
+      PackedAnimation animations[0];
+    };
+    struct {
+      u32 face_count;
+      PackedFace faces[0];
+    };
+  };
 };
 
 enum PackedGroupFlags {
