@@ -216,7 +216,13 @@ static void init_render_stage(RenderStage *stage, RenderStage::ProjectionType pr
   stage->flags = RenderStage::Flags(flags);
 }
 
-#define RENDER_STAGE_COUNT 2
+enum RenderStageNum {
+  RENDER_STAGE_BASE,
+  RENDER_STAGE_TRANSPARENT,
+  RENDER_STAGE_HUD,
+  RENDER_STAGE_COUNT,
+};
+
 
 struct RenderBuffer {
   PushAllocator allocator;
@@ -269,12 +275,16 @@ static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
   buffer->allocator = new_push_allocator(&temp, remaining_size(&temp));
   assert(is_initialized(&buffer->allocator));
 
-  init_render_stage(buffer->stages + 0, 
+  init_render_stage(buffer->stages + RENDER_STAGE_BASE, 
       RenderStage::PERSPECTIVE, RenderStage::CAMERA_VIEW, 
       RenderStage::CLEAR_DEPTH | RenderStage::CLEAR_COLOR | 
       RenderStage::ENABLE_DEPTH_TEST | RenderStage::HAS_LIGHTING);
 
-  init_render_stage(buffer->stages + 1, 
+  init_render_stage(buffer->stages + RENDER_STAGE_TRANSPARENT,
+      RenderStage::PERSPECTIVE, RenderStage::CAMERA_VIEW,
+      RenderStage::ENABLE_DEPTH_TEST | RenderStage::HAS_LIGHTING);
+
+  init_render_stage(buffer->stages + RENDER_STAGE_HUD, 
       RenderStage::ORTHOGRAPHIC, RenderStage::IDENTITY, 
       0);
 
@@ -331,10 +341,11 @@ static void print_render_buffer(RenderBuffer *buffer) {
 }
 #endif
 
-#define push_element(render_buffer, type) ((type *) push_element_((render_buffer), RenderType_##type, 0, sizeof(type)))
-#define push_hud_element(render_buffer, type) ((type *) push_element_((render_buffer), RenderType_##type, 1, sizeof(type)))
+#define push_element(render_buffer, type, stage) ((type *) push_element_((render_buffer), RenderType_##type, stage, sizeof(type)))
 static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 stage, u32 size) {
   TIMED_FUNCTION();
+
+  assert(stage < RENDER_STAGE_COUNT);
   auto elem = (RenderElement *) alloc_size(&buffer->allocator, size);
   if (!elem) {
     assert(!"RenderElement allocator is full.");
@@ -490,7 +501,7 @@ static void draw_vertices(int vertex_idx, int count, u32 texture_id, float textu
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
 // it will probably break stuff.
 // UPDATE : This might be fixed now, should test it soon.
-static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, u32 render_stage = 0, bool is_sprite = true) {
+static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, RenderStageNum render_stage, bool is_sprite = true) {
   TIMED_FUNCTION();
 
   // TODO reenable this when I want to optimize things and I've fixed the bug above
@@ -505,29 +516,34 @@ static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id,
     }
   }
 #endif
+//static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 stage, u32 size) {
+  RenderType render_type = RenderType_RenderElementTextureQuads;
+  if (normal_map_id == 0) render_type = RenderType_RenderElementHud;
 
-  // TODO Clean this up, I think we should have a separate Element type for having no normal map and use it whenever normal_map_id is 0.
-  if (render_stage == 1) {
-    auto elem = push_hud_element(buffer, RenderElementHud);
+  switch (render_type) {
+    case RenderType_RenderElementTextureQuads : {
+      auto elem = push_element(buffer, RenderElementTextureQuads, render_stage);
+      elem->texture_id = texture_id;
+      elem->normal_map_id = normal_map_id;
+      elem->quad_count = count;
+      elem->vertex_index = buffer->vertex_count - count * 6;
+      elem->texture_width = texture_width;
+      elem->texture_height = texture_height;
+      elem->use_low_res_uv = is_sprite;
+    } break;
 
-    assert(!normal_map_id);
-    elem->texture_id = texture_id;
-    elem->quad_count = count;
-    elem->vertex_index = buffer->vertex_count - count * 6;
-    elem->texture_width = texture_width;
-    elem->texture_height = texture_height;
-    elem->use_low_res_uv = is_sprite;
+    case RenderType_RenderElementHud : {
+      auto elem = push_element(buffer, RenderElementHud, render_stage);
+      assert(!normal_map_id);
+      elem->texture_id = texture_id;
+      elem->quad_count = count;
+      elem->vertex_index = buffer->vertex_count - count * 6;
+      elem->texture_width = texture_width;
+      elem->texture_height = texture_height;
+      elem->use_low_res_uv = is_sprite;
+    } break;
 
-  } else {
-    auto elem = push_element(buffer, RenderElementTextureQuads);
-
-    elem->texture_id = texture_id;
-    elem->normal_map_id = normal_map_id;
-    elem->quad_count = count;
-    elem->vertex_index = buffer->vertex_count - count * 6;
-    elem->texture_width = texture_width;
-    elem->texture_height = texture_height;
-    elem->use_low_res_uv = is_sprite;
+    default : assert(!"Error."); break;
   }
 }
 
@@ -627,7 +643,8 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
     //c.rgb *= 0.8;
   }
   
-  append_quads(buffer, 6, texture_id, texture->width, texture->height, normal_map_id);
+  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
+  append_quads(buffer, 6, texture_id, texture->width, texture->height, normal_map_id, stage);
 #undef DEBUG_COLORS
 }
 
@@ -662,7 +679,9 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, 0, is_sprite);
+  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
+
+  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, stage, is_sprite);
 }
 
 static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id) {
@@ -697,7 +716,7 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, texture->width, texture->height, 0, true);
+  append_quads(buffer, 1, texture_id, texture->width, texture->height, 0, RENDER_STAGE_HUD, true);
 }
 
 inline void render_pixel_space(RenderBuffer *buffer, AlignedRect rect, V4 color, BitmapID bitmap_id) {
@@ -796,7 +815,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
     }
     text++;
   }
-  append_quads(buffer, num_quads, font_info->bitmap.texture_id, font_width, font_height, 0, true);
+  append_quads(buffer, num_quads, font_info->bitmap.texture_id, font_width, font_height, 0, RENDER_STAGE_HUD, true);
 }
 
 inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) {
@@ -944,11 +963,11 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   verts.t = t4;
 
   push_quad_vertices(buffer, verts);
-  append_quads(buffer, 1, bitmap_id, 1, 1, normal_map_id);
+  //append_quads(buffer, 1, bitmap_id, 1, 1, normal_map_id);
 
   verts.p = quad2.verts;
   push_quad_vertices(buffer, verts);
-  append_quads(buffer, 1, bitmap_id, 1, 1, normal_map_id);
+  append_quads(buffer, 2, bitmap_id, 1, 1, normal_map_id, RENDER_STAGE_BASE);
 }
 
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e);
@@ -1037,7 +1056,7 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, bitmap_id, info.texture_width, info.texture_height, normal_map_id);
+  append_quads(buffer, 1, bitmap_id, info.texture_width, info.texture_height, normal_map_id, RENDER_STAGE_TRANSPARENT);
 
 #if DEBUG_CUBES
   push_box(buffer, box, vec4(0.9, 1, 0, 0.2), BITMAP_WHITE, 1);
@@ -1118,7 +1137,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 
   push_quad_vertices(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id);
+  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, RENDER_STAGE_TRANSPARENT);
 
 #if DEBUG_CUBES
   push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
@@ -1236,6 +1255,12 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
 
   for (u32 i = 0; i < RENDER_STAGE_COUNT; i++) {
     auto stage = buffer->stages + i;
+
+    u32 clear_bits = 0;
+    if (stage->flags & RenderStage::CLEAR_COLOR) clear_bits |= GL_COLOR_BUFFER_BIT;
+    if (stage->flags & RenderStage::CLEAR_DEPTH) clear_bits |= GL_DEPTH_BUFFER_BIT;
+    if (clear_bits) glClear(clear_bits);
+
     if (!stage->element_count) continue;
     assert(stage->first);
     assert(stage->tail);
@@ -1248,11 +1273,6 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
 
     bool has_lighting = (stage->flags & RenderStage::HAS_LIGHTING) != 0;
     glUniform1i(glGetUniformLocation(program_id, "HAS_LIGHTING"), has_lighting);
-
-    u32 clear_bits = 0;
-    if (stage->flags & RenderStage::CLEAR_COLOR) clear_bits |= GL_COLOR_BUFFER_BIT;
-    if (stage->flags & RenderStage::CLEAR_DEPTH) clear_bits |= GL_DEPTH_BUFFER_BIT;
-    if (clear_bits) glClear(clear_bits);
 
     switch (stage->projection) {
       case RenderStage::ORTHOGRAPHIC :
