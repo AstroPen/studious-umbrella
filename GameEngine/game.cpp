@@ -212,10 +212,10 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   g->perm_allocator.max_size = memory.permanent_size;
   g->perm_allocator.memory = (uint8_t *) memory.permanent_store;
   // NOTE the GameState lives at the top of the permanent_store :
-  alloc_struct(&g->perm_allocator, GameState);
+  ALLOC_STRUCT(&g->perm_allocator, GameState);
 
   g->max_entities = MAX_ENTITY_COUNT;
-  g->entities = alloc_array(&g->perm_allocator, Entity, MAX_ENTITY_COUNT);
+  g->entities = ALLOC_ARRAY(&g->perm_allocator, Entity, MAX_ENTITY_COUNT);
   
   g->width  = render_buffer->screen_width / float(PIXELS_PER_METER);
   g->height = render_buffer->screen_height / float(PIXELS_PER_METER);
@@ -265,7 +265,7 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
 
 static void render_frame_rate_text(GameState *g, float dt) {
   V2 text_p = {1.f/16,15.f/16};
-  char *frame_rate_text = alloc_array(&g->temp_allocator, char, 8);
+  char *frame_rate_text = ALLOC_ARRAY(&g->temp_allocator, char, 8);
   sprintf(frame_rate_text, "%d ms", (int)(dt * 1000.0f));
   render_shadowed_text_screen_space(g->render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD);
 }

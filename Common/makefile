@@ -2,7 +2,7 @@
 commands = g++ -Wall -Wno-writable-strings -Wno-unused-function \
 	-Wno-missing-braces -std=c++11 -O2 -I../Common -I.. -o
 
-all: swap_allocator_test dynamic_array_test sort_test
+all: swap_allocator_test dynamic_array_test sort_test assert_test
 
 common_includes = common.h scalar_math.h
 
@@ -14,4 +14,7 @@ dynamic_array_test: dynamic_array_test.cpp dynamic_array.h $(common_includes)
 
 sort_test: sort_test.cpp heap_sort.h quick_sort.h $(common_includes)
 	$(commands) sort_test sort_test.cpp
+
+assert_test: assert_test.cpp $(common_includes)
+	$(commands) assert_test assert_test.cpp
 

@@ -791,7 +791,6 @@ int main(int argc, char *argv[]) {
 
   printf("Packing assets from %s\n", build_filename);
 
-#if 1
   init_string_table();
   char directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
   lstring directory_name = length_string(directory_buffer);
@@ -1020,7 +1019,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-#if 1
   {
     u32 pre_data_size = sizeof(PackedAssetHeader);
     pre_data_size += count(packed_layouts) * sizeof(PackedTextureLayout);
@@ -1035,17 +1033,17 @@ int main(int argc, char *argv[]) {
     PushAllocator dest_allocator_ = new_push_allocator(pre_data_size);
     auto dest_allocator = &dest_allocator_;
 
-    PackedAssetHeader *asset_header = alloc_struct(dest_allocator, PackedAssetHeader);
+    PackedAssetHeader *asset_header = ALLOC_STRUCT(dest_allocator, PackedAssetHeader);
     assert(asset_header);
     *asset_header = packed_header;
 
     u32 current_animation_index = 0;
     for (u32 i = 0; i < packed_header.layout_count; i++) {
-      auto layout = alloc_struct(dest_allocator, PackedTextureLayout);
+      auto layout = ALLOC_STRUCT(dest_allocator, PackedTextureLayout);
       assert(layout);
       *layout = packed_layouts[i];
       u32 animation_count = layout->animation_count;
-      auto animations = alloc_array(dest_allocator, PackedAnimation, animation_count);
+      auto animations = ALLOC_ARRAY(dest_allocator, PackedAnimation, animation_count);
       assert(animations);
       assert(animations == layout->animations); // Check alignment
       assert(current_animation_index + animation_count <= count(packed_animations));
@@ -1053,7 +1051,7 @@ int main(int argc, char *argv[]) {
       current_animation_index += animation_count;
     }
 
-    auto groups = alloc_array(dest_allocator, PackedTextureGroup, packed_header.texture_group_count);
+    auto groups = ALLOC_ARRAY(dest_allocator, PackedTextureGroup, packed_header.texture_group_count);
     assert(groups);
     array_copy(packed_groups.p, groups, packed_header.texture_group_count);
     assert(dest_allocator->bytes_allocated == pre_data_size);
@@ -1061,10 +1059,7 @@ int main(int argc, char *argv[]) {
     write_pack_file(dest_allocator, loaded_bitmaps);
   }
 
-
-#endif
-
-#else
+#if 0
 
   PixelBuffer buffer = load_image_file("assets/lttp_link.png");
   assert(is_initialized(&buffer));
@@ -1084,7 +1079,7 @@ int main(int argc, char *argv[]) {
   PushAllocator dest_allocator_ = new_push_allocator(pre_data_size);
   auto dest_allocator = &dest_allocator_;
 
-  PackedAssetHeader *asset_header = alloc_struct(dest_allocator, PackedAssetHeader);
+  PackedAssetHeader *asset_header = ALLOC_STRUCT(dest_allocator, PackedAssetHeader);
   asset_header->magic = 'PACK';
   asset_header->version = 0;
   asset_header->total_size = pre_data_size;
@@ -1092,17 +1087,17 @@ int main(int argc, char *argv[]) {
   asset_header->texture_group_count = 1;
   asset_header->data_offset = pre_data_size;
 
-  PackedTextureLayout *character_layout = alloc_struct(dest_allocator, PackedTextureLayout);
+  PackedTextureLayout *character_layout = ALLOC_STRUCT(dest_allocator, PackedTextureLayout);
   character_layout->layout_type = LAYOUT_CHARACTER;
   character_layout->animation_count = 1;
 
-  PackedAnimation *anim0 = alloc_struct(dest_allocator, PackedAnimation);
+  PackedAnimation *anim0 = ALLOC_STRUCT(dest_allocator, PackedAnimation);
   anim0->animation_type = ANIM_IDLE;
   anim0->frame_count = 1;
   anim0->duration = 1;
   //anim0->animation_start_index = {}; // All zeroes for now
 
-  PackedTextureGroup *link_group = alloc_struct(dest_allocator, PackedTextureGroup);
+  PackedTextureGroup *link_group = ALLOC_STRUCT(dest_allocator, PackedTextureGroup);
   link_group->width = buffer.width;
   link_group->height = buffer.height;
   link_group->texture_group_id = TEXTURE_GROUP_LINK;

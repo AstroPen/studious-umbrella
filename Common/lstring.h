@@ -94,6 +94,9 @@ struct hstring {
   u32 hash;
 
   inline operator lstring() { return lstr; }
+  inline operator void*() {
+    return (void *)(len > 0 && str);
+  }
 };
 
 struct Stream {
@@ -154,7 +157,7 @@ static bool str_equal(hstring a, hstring b) {
 }
 
 #define STACK_STRING(name, lstr) \
-  assert(lstr.len < 2048); \
+  assert(lstr && lstr.len < 2048); \
   char name[lstr.len + 1]; \
   mem_copy(lstr.str, name, lstr.len); \
   name[lstr.len] = '\0';

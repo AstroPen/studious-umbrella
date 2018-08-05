@@ -8,13 +8,13 @@
 #endif
 
 struct PushAllocator {
-  uint8_t *memory;
+  u8 *memory;
 #ifdef PUSH_ALLOCATOR_MULTITHREADED
   atomic_uint bytes_allocated;
 #else
-  uint32_t bytes_allocated;
+  u32 bytes_allocated;
 #endif
-  uint32_t max_size;
+  u32 max_size;
 };
 
 static inline bool is_initialized(PushAllocator *a) {
@@ -24,63 +24,63 @@ static inline bool is_initialized(PushAllocator *a) {
   return true;
 }
 
-static inline uint32_t remaining_size(PushAllocator *allocator) {
+static inline u32 remaining_size(PushAllocator *allocator) {
   return allocator->max_size - allocator->bytes_allocated;
 }
 
-static inline uint64_t get_alignment_offset(uint8_t *memory, uint32_t bytes_allocated, uint64_t alignment) {
-  uint64_t memory_index = (uint64_t) memory + bytes_allocated;
+static inline u64 get_alignment_offset(u8 *memory, u32 bytes_allocated, u64 alignment) {
+  u64 memory_index = (u64) memory + bytes_allocated;
   auto mask = alignment - 1;
-  uint64_t alignment_offset = 0;
+  u64 alignment_offset = 0;
   if (memory_index & mask) {
     alignment_offset = alignment - (memory_index & mask);
   }
   return alignment_offset;
 }
 
-// TODO Why is alignment a uint64_t? I have no idea why I decided that. It should probably be a uint32_t.
+// TODO Why is alignment a u64? I have no idea why I decided that. It should probably be a u32.
 #ifdef PUSH_ALLOCATOR_MULTITHREADED
-static inline void *alloc_size(PushAllocator *allocator, uint32_t size, uint64_t alignment = 1) {
+static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
   TIMED_FUNCTION();
 
   // NOTE : this will loop until the allocator is full or it successfully allocates
   while (true) {
-    uint32_t bytes_allocated = allocator->bytes_allocated;
+    u32 bytes_allocated = allocator->bytes_allocated;
     auto alignment_offset = get_alignment_offset(allocator->memory, bytes_allocated, alignment);
 
     if (bytes_allocated + size + alignment_offset > allocator->max_size) {
-      assert(!"PushAllocator out of memory.");
+      ASSERT(!"PushAllocator out of memory.");
       return NULL;
     }
-    uint32_t new_allocated = bytes_allocated + size + alignment_offset;
+    u32 new_allocated = bytes_allocated + size + alignment_offset;
     if (atomic_compare_exchange(&allocator->bytes_allocated, bytes_allocated, new_allocated)) {
       void *result = allocator->memory + bytes_allocated + alignment_offset;
-      //assert(((uint64_t)result) % alignment == 0);
+      //assert(((u64)result) % alignment == 0);
       return result;
     }
   }
 }
 #else
 // NOTE: Single threaded version
-static inline void *alloc_size(PushAllocator *allocator, uint32_t size, uint64_t alignment = 1) {
+static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
   TIMED_FUNCTION();
 
-  uint32_t bytes_allocated = allocator->bytes_allocated;
+  u32 bytes_allocated = allocator->bytes_allocated;
   auto alignment_offset = get_alignment_offset(allocator->memory, bytes_allocated, alignment);
 
   if (bytes_allocated + size + alignment_offset > allocator->max_size) {
-    assert(!"PushAllocator out of memory.");
+    ASSERT(!"PushAllocator out of memory.");
     return NULL;
   }
   allocator->bytes_allocated += size + alignment_offset;
   void *result = allocator->memory + bytes_allocated + alignment_offset;
-  //assert(((uint64_t)result) % alignment == 0);
+  //assert(((u64)result) % alignment == 0);
   return result;
 }
 #endif
 
-static inline PushAllocator new_push_allocator(uint32_t size) {
-  uint8_t *memory = (uint8_t *) calloc(size, 1);
+inline PushAllocator new_push_allocator(u32 size) {
+  u8 *memory = (u8 *) calloc(size, 1);
   if (!memory) {
     return {};
   }
@@ -92,8 +92,8 @@ static inline PushAllocator new_push_allocator(uint32_t size) {
   return result;
 }
 
-static inline PushAllocator new_push_allocator(PushAllocator *old, uint32_t size, uint32_t alignment = 8) {
-  uint8_t *memory = (uint8_t *) alloc_size(old, size, alignment);
+inline PushAllocator new_push_allocator(PushAllocator *old, u32 size, u32 alignment = 8) {
+  u8 *memory = (u8 *) alloc_size(old, size, alignment);
   if (!memory) {
     return {};
   }
@@ -106,18 +106,18 @@ static inline PushAllocator new_push_allocator(PushAllocator *old, uint32_t size
 }
 
 struct TemporaryAllocator : PushAllocator {
-  TemporaryAllocator() {
+  inline TemporaryAllocator() {
     memory = NULL;
     bytes_allocated = 0;
     max_size = 0;
   }
-  TemporaryAllocator(PushAllocator alloc) {
+  inline TemporaryAllocator(PushAllocator alloc) {
     memory = alloc.memory;
     bytes_allocated = alloc.bytes_allocated;
     max_size = alloc.max_size;
   }
-  ~TemporaryAllocator() {
-    if (memory) assert(!"Temporary Allocator was not freed.");
+  inline ~TemporaryAllocator() {
+    if (memory) ASSERT(!"Temporary Allocator was not freed.");
   }
 };
 
@@ -142,14 +142,14 @@ static inline void clear(PushAllocator *allocator) {
 }
 
 // TODO make this thread safe somehow?
-static inline void *pop_size(PushAllocator *allocator, uint32_t size) {
+static inline void *pop_size(PushAllocator *allocator, u32 size) {
   assert(size < allocator->bytes_allocated);
   allocator->bytes_allocated -= size;
   return allocator->memory + allocator->bytes_allocated;
 }
 
-#define alloc_struct(allocator, type) ((type *) alloc_size((allocator), sizeof(type), alignof(type)))
-#define alloc_array(allocator, type, count) ((type *) alloc_size((allocator), sizeof(type) * (count), alignof(type)))
+#define ALLOC_STRUCT(allocator, type) ((type *) alloc_size((allocator), sizeof(type), alignof(type)))
+#define ALLOC_ARRAY(allocator, type, count) ((type *) alloc_size((allocator), sizeof(type) * (count), alignof(type)))
 
 #ifdef PUSH_ALLOCATOR_NO_DEFINED_TIMER
 #undef TIMED_FUNCTION

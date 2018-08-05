@@ -107,7 +107,7 @@ static inline void draw_gradient_background(GameState *g, WorkQueue *queue) {
   assert(background_texture);
 
   int num_splits = 8;
-  auto bg_args = alloc_array(&g->temp_allocator, DrawGradientBackgroundWork, num_splits);
+  auto bg_args = ALLOC_ARRAY(&g->temp_allocator, DrawGradientBackgroundWork, num_splits);
   assert(bg_args);
 
   int y_start = 0;
@@ -270,7 +270,7 @@ static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
   printf("Total render buffer size : %d\n", total_buffer_size);
 
   auto temp = new_push_allocator(total_buffer_size);
-  buffer->vertices = alloc_array(&temp, Vertex, buffer->max_vertices);
+  buffer->vertices = ALLOC_ARRAY(&temp, Vertex, buffer->max_vertices);
   assert(buffer->vertices);
   buffer->allocator = new_push_allocator(&temp, remaining_size(&temp));
   assert(is_initialized(&buffer->allocator));

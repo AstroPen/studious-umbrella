@@ -55,7 +55,7 @@ static void print_io_error(int error, const char *filename = NULL) {
 }
 
 inline void push_string(PushAllocator *allocator, char *str, uint32_t len) {
-  char *error_str = alloc_array(allocator, char, len);
+  char *error_str = ALLOC_ARRAY(allocator, char, len);
   mem_copy(str, error_str, len);
 }
 

@@ -529,7 +529,7 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
     return {};
   }
 
-  auto baked_chars = alloc_array(perm_allocator, BakedChar, num_glyphs + 1);
+  auto baked_chars = ALLOC_ARRAY(perm_allocator, BakedChar, num_glyphs + 1);
   if (!baked_chars) {
     assert(!"Failed to allocate baked_chars.");
     return {};
