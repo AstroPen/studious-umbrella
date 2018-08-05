@@ -54,7 +54,7 @@ vec3 directional_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, 
 vec2 get_custom_uv() {
   if (!USE_LOW_RES_UV_FILTER) return v_in.uv;
 
-  vec2 alpha = vec2(0.07);
+  vec2 alpha = vec2(0.07); // TODO This should vary based on the distance
   vec2 x = fract(v_in.scaled_uv);
   vec2 x_ = clamp(0.5 / alpha * x, 0.0, 0.5) +
             clamp(0.5 / alpha * (x - 1.0) + 0.5,

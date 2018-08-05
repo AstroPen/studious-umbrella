@@ -232,7 +232,8 @@ struct GameState {
   PushAllocator temp_allocator;
   PushAllocator perm_allocator;
   V2 player_direction;
-  V2 pointer_position;
+  V2 pointer_screen_p;
+  V3 pointer_world_p;
   V2 collision_normal;
   float force_scale;
   float seconds_elapsed;

@@ -492,16 +492,19 @@ static void draw_vertices(int vertex_idx, int count, u32 texture_id, float textu
 // UPDATE : This might be fixed now, should test it soon.
 static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, u32 render_stage = 0, bool is_sprite = true) {
   TIMED_FUNCTION();
+
+  // TODO reenable this when I want to optimize things and I've fixed the bug above
+#if 0
   auto stage = buffer->stages + render_stage;
   auto prev = stage->tail;
-  // TODO check is_sprite
   if (prev && prev->type == RenderType_RenderElementTextureQuads) {
     auto old_quads = (RenderElementTextureQuads *) prev;
-    if (old_quads->texture_id == texture_id && old_quads->normal_map_id == normal_map_id) {
+    if (old_quads->texture_id == texture_id && old_quads->normal_map_id == normal_map_id && old_quads->use_low_res_uv == is_sprite) {
       old_quads->quad_count += count;
       return;
     }
   }
+#endif
 
   // TODO Clean this up, I think we should have a separate Element type for having no normal map and use it whenever normal_map_id is 0.
   if (render_stage == 1) {
@@ -1216,7 +1219,8 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   glUniform1i(normal_sampler_id, 1); // Texture unit 1 is for normal maps.
 
   auto light_p_id = glGetUniformLocation(program_id, "LIGHT_P");
-  V3 light_p = vec3(debug_global_memory.game_state->pointer_position, 0.5);
+  V3 light_p = debug_global_memory.game_state->pointer_world_p + vec3(0,0,0.5);
+  push_box(buffer, aligned_box(light_p, 1), vec4(1, 1, 0, 0.2), BITMAP_WHITE, 1);
   
   //V3 light_p = {7,9,2};
   glUniform3fv(light_p_id, 1, light_p.elements);

@@ -73,8 +73,7 @@ static bool apply_input(GameState *g, ControllerState controller) {
     pointer_p.x /= g->camera.screen_width;
     pointer_p.y /= g->camera.screen_height;
 
-    g->pointer_position = pointer_p;
-    //g->pointer_position = to_game_coordinate(pointer_p, g->height);
+    g->pointer_screen_p = pointer_p;
   }
 
   b = buttons + BUTTON_MOUSE_LEFT;
@@ -162,6 +161,19 @@ static bool apply_input(GameState *g, ControllerState controller) {
   }
 
   g->player_color = player_color;
+
+  //
+  // Calculate pointer_world_p :
+  //
+
+  // TODO Make this more accurate by better accounting for perspective
+  auto pointer_off = g->pointer_screen_p;
+  pointer_off -= vec2(0.5);
+  pointer_off *= vec2(g->camera.screen_width,g->camera.screen_height) * METERS_PER_PIXEL;
+
+  // TODO FIXME camera.forward is backwards, fix that
+  g->pointer_world_p = g->camera.p - g->camera.forward * 10 + g->camera.right * pointer_off.x + g->camera.up * pointer_off.y;
+
   return true;
 }
 
@@ -172,14 +184,8 @@ static void update_physics(GameState *g) {
   // TODO this is obviously a pretty janky way to do shooting, figure out something better?
   if (g->shooting) {
     auto player_p = center(g->entities->collision_box);
-    auto pointer_off = g->pointer_position; // * vec2(g->camera.screen_width,g->camera.screen_width);
-    pointer_off -= vec2(0.5);
-    pointer_off *= vec2(g->camera.screen_width,g->camera.screen_height) * METERS_PER_PIXEL;
 
-    // TODO FIXME camera.forward is backwards, fix that
-    auto pointer_p = g->camera.p - g->camera.forward * 10 + g->camera.right * pointer_off.x + g->camera.up * pointer_off.y;
-
-    auto cursor_dir = normalize((pointer_p - player_p).xy);
+    auto cursor_dir = normalize((g->pointer_world_p - player_p).xy);
     add_particle(g, player_p.xy, 25 * cursor_dir, 1, 0.2, 1, V4{0.3, 0.3, 0.2, 1});
     g->shooting--;
   }
@@ -392,7 +398,7 @@ static bool update_and_render(GameMemory memory, GameInput game_input) {
   //auto circ = Circle{g->pointer_position, cursor_size / 2.0f};
   //draw_circle(pixel_buffer, circ, cursor_color);
 
-  render_circle_screen_space(render_buffer, g->pointer_position, 10, vec4(1));
+  render_circle_screen_space(render_buffer, g->pointer_screen_p, 10, vec4(1));
 
 
 
