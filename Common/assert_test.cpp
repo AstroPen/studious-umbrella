@@ -5,6 +5,11 @@
 #undef HALT_ON_ASSERT
 #define HALT_ON_ASSERT false
 
+static FILE *log_file;
+
+#undef ASSERT_LOG
+#define ASSERT_LOG() log_file
+
 void other_function() {
   ASSERT(!"Inside other function.");
 }
@@ -17,7 +22,52 @@ bool ret_false(int i, float f) {
   return !sqrt(f / ((i % 3) + 1));
 }
 
+enum AssertEnum {
+  AENUM_A,
+  AENUM_B,
+  AENUM_C,
+};
+
+void test_switch_statement(int num) {
+  switch (num) {
+    case AENUM_A : break;
+    case AENUM_B : break;
+    case AENUM_C : break;
+    default : INVALID_SWITCH_CASE(num);
+  }
+}
+
+void test_assert_equals() {
+  int a = 0; int b = 0; int c = 1;
+  float d = 0; float e = 0; float f = 1;
+  ASSERT_EQUALS(a, b);
+  ASSERT_EQUALS(d, e);
+  ASSERT_EQUALS(a, d);
+  ASSERT_EQUALS(c, f);
+  ASSERT_EQUALS(a, f);
+}
+
+void print_log_file() {
+  int err = fflush(log_file);
+  rewind(log_file);
+
+  assert(!err);
+  const int buf_size = 1000;
+  char buf[buf_size];
+  printf("Printing contents to stdout : \n" KBLU);
+  assert(log_file);
+  auto str = fgets(buf, buf_size, log_file);
+  assert(str);
+  while (str) {
+    printf("%s", str);
+    str = fgets(buf, buf_size, log_file);
+  }
+}
+
 int main() {
+  log_file = tmpfile();
+  assert(log_file);
+
   ASSERT(true || false);
 
   ASSERT(false);
@@ -63,5 +113,18 @@ int main() {
   int a = 0; int b = 0; int c = 1;
   ASSERT_EQUALS(a, b);
   ASSERT_EQUALS(a, c);
+
+  test_switch_statement(0);
+  test_switch_statement(1);
+  test_switch_statement(2);
+  test_switch_statement(3);
+
+  int *test_unused = NULL; UNUSED(test_unused[0] = 1);
+
+  test_assert_equals();
+
+  print_log_file();
+
+  fclose(log_file);
 }
 

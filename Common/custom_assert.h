@@ -43,30 +43,6 @@ namespace Assert {
     fprintf(log, "%s : %f\n", variable_name, variable);
   }
 
-  inline void print_variable(FILE *log, int variable) {
-    fprintf(log, " %d", variable);
-  }
-
-  inline void print_variable(FILE *log, int64 variable) {
-    fprintf(log, " %lld", variable);
-  }
-
-  inline void print_variable(FILE *log, u32 variable) {
-    fprintf(log, " %u", variable);
-  }
-
-  inline void print_variable(FILE *log, u64 variable) {
-    fprintf(log, " %llu", variable);
-  }
-
-  inline void print_variable(FILE *log, float variable) {
-    fprintf(log, " %f", variable);
-  }
-
-  inline void print_variable(FILE *log, float64 variable) {
-    fprintf(log, " %f", variable);
-  }
-
   template <typename... Types>
   static u32 count_variables(Types... args) {
     return sizeof...(Types);
