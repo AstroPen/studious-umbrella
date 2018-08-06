@@ -67,9 +67,9 @@ inline void array_copy(T const *source, T *dest, u32 len) {
   mem_copy(source, dest, len * sizeof(T));
 }
 
-#define PRINT_INT(variable_name) printf(#variable_name " : %d\n", (variable_name));
-#define PRINT_UINT(variable_name) printf(#variable_name " : %u\n", (variable_name));
-#define PRINT_FLOAT(variable_name) printf(#variable_name " : %f\n", (variable_name));
+#define PRINT_INT(variable_name) printf(#variable_name " : %d\n", (variable_name))
+#define PRINT_UINT(variable_name) printf(#variable_name " : %u\n", (variable_name))
+#define PRINT_FLOAT(variable_name) printf(#variable_name " : %f\n", (variable_name))
 
 #include "scalar_math.h"
 //#include "push_allocator.h"

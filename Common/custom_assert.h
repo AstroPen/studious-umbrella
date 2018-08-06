@@ -51,6 +51,7 @@ namespace Assert {
 // TODO print stack trace using backtrace() from execinfo.h
 // https://stackoverflow.com/questions/77005/how-to-automatically-generate-a-stacktrace-when-my-gcc-c-program-crashes
   static void print_stack_trace(FILE *log, int max_count) {
+    assert(log); assert(max_count < 2048);
     void *stack_array[max_count];
     size_t count = backtrace(stack_array, max_count);
     if (count) {
@@ -58,8 +59,10 @@ namespace Assert {
       if (symbols) {
         fprintf(log, "Stack backtrace :\n");
         for (u32 i = 0; i < count; i++) {
+          assert(symbols[i]);
           fprintf(log, "%s\n", symbols[i]);
         }
+        free(symbols);
       } else {
         fprintf(log, "Error : Unable to allocate memory for stacktrace.\n");
       }
@@ -68,6 +71,7 @@ namespace Assert {
 
   template <typename T>
   inline T verify_print(T result, FILE *log, bool do_halt, bool do_stack_trace, int max_count, const char *condition, const char *function, const char *file, int line) {
+    assert(log); assert(condition); assert(function); assert(file);
     if (!result) {
       fprintf(log, "Verify expression failed : (%s), function %s, file %s, line %d.\n", 
           condition, function, file, line);
@@ -79,6 +83,7 @@ namespace Assert {
   }
 
   static void print_failure(FILE *log, const char *message, const char *function, const char *file, int line) {
+    assert(log); assert(message); assert(function); assert(file);
     fprintf(log, "Assertion failed : (%s), function %s, file %s, line %d.\n", 
         message, function, file, line);
   }
@@ -152,6 +157,7 @@ namespace Assert {
   #define ASSERT(cond) UNUSED(cond)
   #define VERIFY(cond) (cond)
 // TODO define a FAILURE call that does nothing
+  #define FAILURE(msg, ...) UNUSED(msg); UNUSED(count_variables(__VA_ARGS__));
   #define ASSERT_EQUALS(a, b) UNUSED(a); UNUSED(b)
 #endif
 
