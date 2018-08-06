@@ -157,11 +157,13 @@ static bool str_equal(hstring a, hstring b) {
 }
 
 #define STACK_STRING(name, lstr) \
-  assert(lstr && lstr.len < 2048); \
-  char name[lstr.len + 1]; \
-  mem_copy(lstr.str, name, lstr.len); \
-  name[lstr.len] = '\0';
+    assert(lstr && lstr.len < 2048); \
+    char name[lstr.len + 1]; \
+    mem_copy(lstr.str, name, lstr.len); \
+    name[lstr.len] = '\0'; \
 
+// TODO do this instead 
+// https://stackoverflow.com/questions/2137779/how-do-i-print-a-non-null-terminated-string-using-printf
 static void print_hstring(hstring str) {
   STACK_STRING(tmp, str);
   printf("hstring : '%s', len : %u, hash : %u\n", tmp, str.len, str.hash);

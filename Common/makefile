@@ -4,7 +4,7 @@ commands = g++ -Wall -Wno-writable-strings -Wno-unused-function \
 
 all: swap_allocator_test dynamic_array_test sort_test assert_test
 
-common_includes = common.h scalar_math.h
+common_includes = common.h scalar_math.h custom_assert.h
 
 swap_allocator_test: swap_allocator_test.cpp swap_allocator.h push_allocator.h $(common_includes)
 	$(commands) swap_allocator_test swap_allocator_test.cpp

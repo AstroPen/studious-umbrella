@@ -10,72 +10,12 @@
 #include <cmath>
 #include <climits>
 
+typedef int64_t int64;
 typedef double float64;
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
-
-
-// Needed for stack trace, not available for all compilers :
-#include "execinfo.h"
-
-#define UNUSED(x) do { (void)sizeof(x); } while(0)
-
-#define DEFAULT_HALT do { abort(); } while(0)
-#define DEFAULT_ASSERT_LOG stderr
-#define DEFAULT_ASSERT_MAX_STACK_TRACE 10
-#define ASSERT_MAX_STACK_TRACE() DEFAULT_ASSERT_MAX_STACK_TRACE
-#define HALT() DEFAULT_HALT
-#define ASSERT_LOG() DEFAULT_ASSERT_LOG
-#define HALT_ON_ASSERT true
-#define PRINT_STACK_TRACE_ON_ASSERT true
-
-// Idea : make an assert_print that takes an lstring as a log
-namespace Assert {
-  inline void assert_print(FILE *log, const char *condition, const char *function, const char *file, int line) {
-    fprintf(log, "Assertion failed : (%s), function %s, file %s, line %d.\n", 
-        condition, function, file, line);
-  }
-
-// TODO print stack trace using backtrace() from execinfo.h
-// https://stackoverflow.com/questions/77005/how-to-automatically-generate-a-stacktrace-when-my-gcc-c-program-crashes
-  static void print_stack_trace(FILE *log, int max_count) {
-    void *stack_array[max_count];
-    size_t count = backtrace(stack_array, max_count);
-    if (count) {
-      char **symbols = backtrace_symbols(stack_array, count);
-      if (symbols) {
-        fprintf(log, "Stack backtrace :\n");
-        for (u32 i = 0; i < count; i++) {
-          fprintf(log, "%s\n", symbols[i]);
-        }
-      } else {
-        fprintf(log, "Error : Unable to allocate memory for stacktrace.\n");
-      }
-    }
-  }
-}
-
-// TODO test this fully to make sure it works before putting it in everything
-//
-// NOTE : Based on this article :
-// http://cnicholson.net/2009/02/stupid-c-tricks-adventures-in-assert/
-
-// TODO Make an ASSERT_EXPR or something that can be put in if statements and such
-
-#ifndef NDEBUG
-  #define ASSERT(cond) \
-    do { \
-      if (!(cond)) { \
-        Assert::assert_print(ASSERT_LOG(), #cond, __FUNCTION__, __FILE__, __LINE__); \
-        if (PRINT_STACK_TRACE_ON_ASSERT) Assert::print_stack_trace(ASSERT_LOG(), ASSERT_MAX_STACK_TRACE()); \
-        if (HALT_ON_ASSERT) HALT(); \
-      } \
-    } while(0)  
-#else  
-  #define ASSERT(cond) UNUSED(cond)
-#endif
 
 union bit32 {
   int i;
@@ -133,6 +73,8 @@ inline void array_copy(T const *source, T *dest, u32 len) {
 
 #include "scalar_math.h"
 //#include "push_allocator.h"
+#include "custom_assert.h"
+
 #endif
 
 
