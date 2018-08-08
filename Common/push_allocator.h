@@ -49,7 +49,7 @@ static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
     auto alignment_offset = get_alignment_offset(allocator->memory, bytes_allocated, alignment);
 
     if (bytes_allocated + size + alignment_offset > allocator->max_size) {
-      ASSERT(!"PushAllocator out of memory.");
+      FAILURE("PushAllocator out of memory.", allocator->bytes_allocated, allocator->max_size, size);
       return NULL;
     }
     u32 new_allocated = bytes_allocated + size + alignment_offset;
@@ -69,7 +69,7 @@ static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
   auto alignment_offset = get_alignment_offset(allocator->memory, bytes_allocated, alignment);
 
   if (bytes_allocated + size + alignment_offset > allocator->max_size) {
-    ASSERT(!"PushAllocator out of memory.");
+    FAILURE("PushAllocator out of memory.", allocator->bytes_allocated, allocator->max_size, size);
     return NULL;
   }
   allocator->bytes_allocated += size + alignment_offset;

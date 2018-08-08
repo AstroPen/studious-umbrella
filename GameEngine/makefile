@@ -25,7 +25,7 @@ create_normal_map : create_normal_map.cpp custom_stb.h pixel.h stb_image.o makef
 	-I/usr/local/include/GL -I../Common
 	$(link) create_normal_map create_normal_map.o stb_image.o
 
-asset_packer : asset_packer.cpp pixel.h packed_assets.h asset_interface.h ../Common/* stb_image.o stb_truetype.o makefile
+asset_packer : asset_packer.cpp pixel.h packed_assets.h asset_interface.h ../Common/*.h stb_image.o stb_truetype.o makefile
 	$(compile) asset_packer.cpp -o asset_packer.o \
 	-I/usr/local/include/GL -I../Common
 	$(link) asset_packer asset_packer.o stb_image.o stb_truetype.o
@@ -35,7 +35,7 @@ assets/packed_assets.pack : asset_packer assets/*.png assets/*.spec
 
 object_files = stb_image.o stb_truetype.o
 
-engine_includes = gl_sdlplatform.cpp sdl_thread.cpp sdlgl_init.cpp glrenderer.cpp pixel.h vmath.cpp game.cpp entity.cpp assets.cpp asset_interface.h packed_assets.h game.h ../Common/* \
+engine_includes = gl_sdlplatform.cpp sdl_thread.cpp sdlgl_init.cpp glrenderer.cpp pixel.h vmath.cpp game.cpp entity.cpp assets.cpp asset_interface.h packed_assets.h game.h ../Common/*.h \
 	blinn_phong.frag blinn_phong.vert debug_system.cpp custom_stb.h
 
 test: $(engine_includes) $(object_files) makefile

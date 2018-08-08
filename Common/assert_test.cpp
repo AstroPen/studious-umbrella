@@ -8,8 +8,16 @@
 static FILE *log_file;
 static FILE *fail_msgs;
 
-#define EXPECT_SUCCESS log_file = stdout
-#define EXPECT_FAIL log_file = fail_msgs
+static int expected_failure_count = 0;
+static int expected_success_count = 0;
+
+#define EXPECT_SUCCESS \
+  log_file = stdout; \
+  expected_success_count++;
+
+#define EXPECT_FAIL \
+  log_file = fail_msgs; \
+  expected_failure_count++;
 
 #undef ASSERT_LOG
 #define ASSERT_LOG() log_file
@@ -46,12 +54,12 @@ void test_assert_equals() {
   int a = 0; int b = 0; int c = 1;
   float d = 0; float e = 0; float f = 1;
   EXPECT_SUCCESS;
-  ASSERT_EQUALS(a, b);
-  ASSERT_EQUALS(d, e);
-  ASSERT_EQUALS(a, d);
-  ASSERT_EQUALS(c, f);
+  ASSERT_EQUAL(a, b);
+  ASSERT_EQUAL(d, e);
+  ASSERT_EQUAL(a, d);
+  ASSERT_EQUAL(c, f);
   EXPECT_FAIL;
-  ASSERT_EQUALS(a, f);
+  ASSERT_EQUAL(a, f);
 }
 
 void print_fail_msgs() {
@@ -69,6 +77,7 @@ void print_fail_msgs() {
     printf("%s", str);
     str = fgets(buf, buf_size, log_file);
   }
+  printf(KNRM "\n");
 }
 
 int main() {
@@ -93,11 +102,11 @@ int main() {
 
   EXPECT_SUCCESS;
   result = VERIFY(ret_true(4, 7.12));
-  ASSERT_EQUALS(result, ret_true(4, 7.12));
+  ASSERT_EQUAL(result, ret_true(4, 7.12));
   if (result != ret_true(4, 7.12)) PRINT_UINT(result);
 
   result = VERIFY(1 + 1);
-  ASSERT_EQUALS(result, 1 + 1);
+  ASSERT_EQUAL(result, 1 + 1);
   if (result != 1 + 1) PRINT_UINT(result); 
 
   result = VERIFY(2 * 3 + 1);
@@ -131,9 +140,9 @@ int main() {
   INVALID_CODE_PATH();
   int a = 0; int b = 0; int c = 1;
   EXPECT_SUCCESS;
-  ASSERT_EQUALS(a, b);
+  ASSERT_EQUAL(a, b);
   EXPECT_FAIL;
-  ASSERT_EQUALS(a, c);
+  ASSERT_EQUAL(a, c);
 
   EXPECT_SUCCESS;
   test_switch_statement(0);
@@ -147,6 +156,8 @@ int main() {
   test_assert_equals();
 
   print_fail_msgs();
+  //PRINT_INT(expected_failure_count);
+  //PRINT_INT(expected_success_count);
 
   fclose(log_file);
 }

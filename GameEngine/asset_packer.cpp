@@ -89,7 +89,7 @@ static void init_string_table() {
     ADD_COMMAND_HASH(FACE);
     ADD_COMMAND_HASH(BITMAP);
     ADD_COMMAND_HASH(SET);
-    assert(i == COMMAND_COUNT);
+    ASSERT_EQUAL(i, COMMAND_COUNT);
 #undef ADD_COMMAND_HASH
   }
 
@@ -106,7 +106,7 @@ static void init_string_table() {
     ADD_ATTRIBUTE_HASH(OFFSET);
     ADD_ATTRIBUTE_HASH(SPRITE_DEPTH);
     ADD_ATTRIBUTE_HASH(SPRITE_INDEX);
-    assert(i == ATTRIBUTE_COUNT);
+    ASSERT_EQUAL(i, ATTRIBUTE_COUNT);
 #undef ADD_ATTRIBUTE_HASH
   }
 
@@ -117,7 +117,7 @@ static void init_string_table() {
     ADD_ANIM_HASH(IDLE);
     ADD_ANIM_HASH(MOVE);
     ADD_ANIM_HASH(SLIDE);
-    assert(i == ANIM_COUNT);
+    ASSERT_EQUAL(i, ANIM_COUNT);
 #undef ADD_ANIM_HASH
   }
 
@@ -128,7 +128,7 @@ static void init_string_table() {
     ADD_LAYOUT_HASH(CHARACTER);
     ADD_LAYOUT_HASH(TERRAIN);
     ADD_LAYOUT_HASH(SINGLETON);
-    assert(i == LAYOUT_COUNT);
+    ASSERT_EQUAL(i, LAYOUT_COUNT);
 #undef ADD_LAYOUT_HASH
   }
 
@@ -138,7 +138,7 @@ static void init_string_table() {
     u32 i = 1; // NOTE : Texture groups start at 1
     ADD_GROUP_HASH(LINK);
     ADD_GROUP_HASH(WALL);
-    assert(i == TEXTURE_GROUP_COUNT);
+    ASSERT_EQUAL(i, TEXTURE_GROUP_COUNT);
 #undef ADD_GROUP_HASH
   }
 
@@ -149,7 +149,7 @@ static void init_string_table() {
     u32 i = 0;
     ADD_BLEND_HASH(LINEAR);
     ADD_BLEND_HASH(NEAREST);
-    assert(i == BLEND_COUNT);
+    ASSERT_EQUAL(i, BLEND_COUNT);
 #undef ADD_BLEND_HASH
   }
 
@@ -159,7 +159,7 @@ static void init_string_table() {
     u32 i = 0;
     ADD_CLAMP_HASH(CLAMP_TO_EDGE);
     ADD_CLAMP_HASH(REPEAT_CLAMPING);
-    assert(i == CLAMP_COUNT);
+    ASSERT_EQUAL(i, CLAMP_COUNT);
 #undef ADD_CLAMP_HASH
   }
 
@@ -171,7 +171,7 @@ static void init_string_table() {
     ADD_DIRECTION_HASH(DOWN);
     ADD_DIRECTION_HASH(LEFT);
     ADD_DIRECTION_HASH(RIGHT);
-    assert(i == DIRECTION_COUNT);
+    ASSERT_EQUAL(i, DIRECTION_COUNT);
 #undef ADD_DIRECTION_HASH
   }
 
@@ -185,7 +185,7 @@ static void init_string_table() {
     ADD_FACE_HASH(LEFT);
     ADD_FACE_HASH(FRONT);
     ADD_FACE_HASH(BACK);
-    assert(i == FACE_COUNT);
+    ASSERT_EQUAL(i, FACE_COUNT);
 #undef ADD_FACE_HASH
   }
 
@@ -309,7 +309,7 @@ static char *to_string(TokenError error) {
 }
 
 static void print_error(TokenError error, char *filename, u32 line_num, lstring line) {
-  assert(error);
+  ASSERT(error);
   auto msg = to_string(error);
   printf("Error parsing line %u of %s : %s.\n", line_num, filename, msg);
   STACK_STRING(buf, line);
@@ -322,7 +322,7 @@ static void print_error(TokenError error, char *filename, u32 line_num, lstring 
     type = TOKEN_##POSTFIX; name = arg; remainder = rem; return *this; \
   } \
   inline explicit operator type_name() { \
-    assert(!type || type == TOKEN_##POSTFIX); return name; \
+    ASSERT(!type || type == TOKEN_##POSTFIX); return name; \
   }
 
 struct Token {
@@ -378,7 +378,7 @@ static Token pop_quote(lstring line) {
         lstring str = {line.str, i};
         if (!str) return Token().set(EMPTY_STRING);
         lstring remainder = line + i + 1;
-        assert(!remainder || remainder[0] != '\"');
+        ASSERT(!remainder || remainder[0] != '\"');
         return Token().set(str, remainder);
       }
     }
@@ -400,7 +400,7 @@ static Token pop_hash(lstring line) {
 // TODO I may eventually want this to work without requiring the length first
 static Token parse_int(lstring line) {
 
-  assert(line);
+  ASSERT(line);
   if (line.len >= 10) return Token().set(INTEGER_TOO_LARGE);
 
   bool is_negative = false;
@@ -437,7 +437,7 @@ static Token pop_int(lstring line) {
 // TODO I may eventually want this to work without requiring the length first
 static Token parse_float(lstring line) {
 
-  assert(line);
+  ASSERT(line);
   if (line.len >= 149) return Token().set(FLOAT_TOO_LARGE);
 
   bool is_negative = false;
@@ -459,7 +459,7 @@ static Token parse_float(lstring line) {
     result *= 10; result += digit;
   }
 
-  assert(i == line.len || line[i] == '.');
+  ASSERT(i == line.len || line[i] == '.');
 
   float place = 10;
   for (i++; i < line.len; i++) {
@@ -576,7 +576,7 @@ inline TextureFormatSpecifier invalid_of(TextureFormatSpecifier spec) {
   if (spec == CLAMP_INVALID) return CLAMP_INVALID;
   if (spec >= BLEND_FIRST && spec <= BLEND_LAST) return BLEND_INVALID;
   if (spec >= CLAMP_FIRST && spec <= CLAMP_LAST) return CLAMP_INVALID;
-  assert(!"Unknown spec invalid");
+  FAILURE("Unknown spec invalid");
   return BLEND_INVALID; 
 }
 
@@ -585,7 +585,7 @@ inline TokenError error_of(TextureFormatSpecifier spec) {
   if (spec == CLAMP_INVALID) return INVALID_CLAMP_MODE;
   if (spec >= BLEND_FIRST && spec <= BLEND_LAST) return INVALID_BLEND_MODE;
   if (spec >= CLAMP_FIRST && spec <= CLAMP_LAST) return INVALID_CLAMP_MODE;
-  assert(!"Unknown spec error");
+  FAILURE("Unknown spec error");
   return INVALID_BLEND_MODE; 
 }
 
@@ -718,7 +718,7 @@ static SetArgs parse_set_args(lstring args) {
     } break;
 
     default : {
-      assert(!"Unhandled attribute type error.");
+      INVALID_SWITCH_CASE(attribute);
     } break;
   }
 
@@ -770,14 +770,14 @@ static void write_pack_file(PushAllocator *header, darray<PixelBuffer> bitmaps) 
   // TODO I might want to make my own version of this, but this is fine for now
   FILE *pack_file = fopen("assets/packed_assets.pack", "wb");
   //if (!pack_file) printf("Failed to open pack file for writing"); // TODO handle error better
-  assert(pack_file);
-  auto written = fwrite(header->memory, 1, header->bytes_allocated, pack_file);
-  assert(written == header->bytes_allocated); // TODO handle error
+  ASSERT(pack_file);
+  u64 written = fwrite(header->memory, 1, header->bytes_allocated, pack_file);
+  ASSERT_EQUAL(written, header->bytes_allocated); // TODO handle error
   for (u32 i = 0; i < count(bitmaps); i++) {
     auto bitmap = bitmaps + i;
     u64 bitmap_size = u64(bitmap->width) * bitmap->height * 4;
     written = fwrite(bitmap->buffer, 1, bitmap_size, pack_file);
-    assert(written == bitmap_size); // TODO handle error
+    ASSERT_EQUAL(written, bitmap_size); // TODO handle error
   }
   printf("Packed in %ld bytes\n", ftell(pack_file));
   fclose(pack_file);
@@ -804,7 +804,7 @@ int main(int argc, char *argv[]) {
 
   darray<PackedTextureLayout> packed_layouts;
   darray<PackedAnimation> packed_animations;
-  darray<PackedFace> packed_faces;
+  darray<PackedFaces> packed_faces;
   darray<PackedTextureGroup> packed_groups;
   darray<PixelBuffer> loaded_bitmaps;
 
@@ -813,7 +813,7 @@ int main(int argc, char *argv[]) {
   File *build_file = &build_file_;
 
   int error = read_entire_file(build_file, allocator);
-  assert(!error);
+  ASSERT(!error);
   close_file(build_file);
 
   auto build_stream_ = get_stream(build_file->buffer, build_file->size);
@@ -845,7 +845,6 @@ int main(int argc, char *argv[]) {
   //
 
   u16 current_animation_index = 0;
-  u16 current_face_index = 0;
   TextureLayoutType current_layout_type = LAYOUT_INVALID;
   u16 current_group_flags = 0;
   u8 current_min_blend = LINEAR_BLEND;
@@ -879,11 +878,12 @@ int main(int argc, char *argv[]) {
           line_number++;
 
           Token comment_token = parse_comment_end(next_line);
-          if (!comment_token) assert(!"Error during comment.");
+          if (!comment_token) FAILURE("Error during comment.", comment_token.error);
           auto comment_command = CommandKeyword(comment_token);
           if (comment_command == COMMAND_NONE) continue;
           if (comment_command == COMMAND_COMMENT_END) break;
-          assert(!"Invalid command from parse_comment_end.");
+          
+          FAILURE("Invalid command from parse_comment_end.", comment_command);
         }
       } break;
 
@@ -906,7 +906,6 @@ int main(int argc, char *argv[]) {
       case COMMAND_CUBE_LAYOUT : {
         DO_LAYOUT();
         layout->face_count = 0;
-        current_face_index = 0;
       } break;
 
       case COMMAND_ANIMATION : {
@@ -914,7 +913,8 @@ int main(int argc, char *argv[]) {
         if (args.error) print_error(args.error, build_filename, line_number, next_line);
         auto layout = peek(packed_layouts);
         if (!layout) print_error(ANIMATION_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
-        // TODO check that the layout type is animation
+        // TODO handle this error for real
+        ASSERT(layout->layout_type == LAYOUT_CHARACTER);
         auto animation = push(packed_animations);
         *animation = {};
         layout->animation_count++;
@@ -931,12 +931,17 @@ int main(int argc, char *argv[]) {
         if (args.error) print_error(args.error, build_filename, line_number, next_line);
         auto layout = peek(packed_layouts);
         if (!layout) print_error(FACE_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
-        // TODO check that the layout type is cube
-        auto face = push(packed_faces);
-        *face = {};
+        // TODO handle this error for real
+        ASSERT(layout->layout_type == LAYOUT_TERRAIN);
+        PackedFaces *face;
+        if (layout->face_count) {
+          face = peek(packed_faces);
+        } else {
+          face = push(packed_faces);
+          *face = {};
+        }
         layout->face_count++;
-        face->sprite_index = args.index;
-        current_face_index++;
+        face->sprite_index[args.face] = args.index;
       } break;
 
       case COMMAND_SET : {
@@ -965,7 +970,7 @@ int main(int argc, char *argv[]) {
             current_sprite_depth = args.sprite_depth; break;
           case ATTRIBUTE_SPRITE_INDEX :
             current_animation_index = args.sprite_index; break;
-          default : assert(!"Unknown attribute.");
+          default : INVALID_SWITCH_CASE(args.attribute);
         }
       } break;
 
@@ -993,7 +998,6 @@ int main(int argc, char *argv[]) {
         group->offset_z = current_offset.z;
         group->sprite_depth = current_sprite_depth;
 
-        // TODO TODO Actually read the bitmap
         lstring bitmap_filename = append(directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
         zero_terminate(bitmap_filename);
         print_lstring(bitmap_filename); // TODO DELETE ME
@@ -1014,7 +1018,7 @@ int main(int argc, char *argv[]) {
 
       default : {
         print_lstring(next_line);
-        assert(!"Invalid command from parse_command.");
+        INVALID_SWITCH_CASE(command_num);
       } break;
     }
   }
@@ -1024,6 +1028,7 @@ int main(int argc, char *argv[]) {
     pre_data_size += count(packed_layouts) * sizeof(PackedTextureLayout);
     pre_data_size += count(packed_animations) * sizeof(PackedAnimation);
     pre_data_size += count(packed_groups) * sizeof(PackedTextureGroup);
+    pre_data_size += count(packed_faces) * sizeof(PackedFaces);
     packed_header.data_offset = pre_data_size;
     packed_header.layout_count = count(packed_layouts);
     packed_header.texture_group_count = count(packed_groups);
@@ -1034,27 +1039,43 @@ int main(int argc, char *argv[]) {
     auto dest_allocator = &dest_allocator_;
 
     PackedAssetHeader *asset_header = ALLOC_STRUCT(dest_allocator, PackedAssetHeader);
-    assert(asset_header);
+    ASSERT(asset_header);
     *asset_header = packed_header;
 
-    u32 current_animation_index = 0;
+    u32 packed_animation_index = 0;
+    u32 packed_face_index = 0;
+
     for (u32 i = 0; i < packed_header.layout_count; i++) {
       auto layout = ALLOC_STRUCT(dest_allocator, PackedTextureLayout);
-      assert(layout);
+      ASSERT(layout);
       *layout = packed_layouts[i];
-      u32 animation_count = layout->animation_count;
-      auto animations = ALLOC_ARRAY(dest_allocator, PackedAnimation, animation_count);
-      assert(animations);
-      assert(animations == layout->animations); // Check alignment
-      assert(current_animation_index + animation_count <= count(packed_animations));
-      array_copy(packed_animations + current_animation_index, animations, animation_count);
-      current_animation_index += animation_count;
+      switch (layout->layout_type) {
+        case LAYOUT_CHARACTER : {
+          u32 animation_count = layout->animation_count;
+          auto animations = ALLOC_ARRAY(dest_allocator, PackedAnimation, animation_count);
+          ASSERT(animations);
+          ASSERT_EQUAL(animations, layout->animations); // Check alignment
+          ASSERT(packed_animation_index + animation_count <= count(packed_animations));
+          array_copy(packed_animations + packed_animation_index, animations, animation_count);
+          packed_animation_index += animation_count;
+        } break;
+        case LAYOUT_TERRAIN : {
+          u32 face_count = layout->face_count;
+          auto face = ALLOC_STRUCT(dest_allocator, PackedFaces);
+          ASSERT(face);
+          ASSERT_EQUAL(face, layout->faces); // Check alignment
+          ASSERT(packed_face_index + 1 <= count(packed_faces));
+          *face = packed_faces[packed_face_index];
+          packed_face_index++;
+        } break;
+        default : INVALID_SWITCH_CASE(layout->layout_type);
+      }
     }
 
     auto groups = ALLOC_ARRAY(dest_allocator, PackedTextureGroup, packed_header.texture_group_count);
-    assert(groups);
+    ASSERT(groups);
     array_copy(packed_groups.p, groups, packed_header.texture_group_count);
-    assert(dest_allocator->bytes_allocated == pre_data_size);
+    ASSERT_EQUAL(dest_allocator->bytes_allocated, pre_data_size);
 
     write_pack_file(dest_allocator, loaded_bitmaps);
   }

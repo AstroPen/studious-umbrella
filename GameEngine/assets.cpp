@@ -346,7 +346,7 @@ static void unpack_assets(GameAssets *assets) {
 
   assert(file_buffer == temporary->memory); // TODO delete these :
   assert(header->total_size == temporary->bytes_allocated);
-  assert(layout_count == 1);
+  assert(layout_count == 2);
   assert(texture_group_count == 1);
 
   // NOTE : This only works if the structs are tightly packed and aligned properly.
@@ -357,27 +357,36 @@ static void unpack_assets(GameAssets *assets) {
     auto packed_layout = (PackedTextureLayout *) file_buffer;
     u32 layout_type = packed_layout->layout_type;
 
-    assert(layout_type >= 0 && layout_type < LAYOUT_COUNT);
-    assert(layout_type = LAYOUT_CHARACTER); // TODO delete this
+    ASSERT(layout_type >= 0 && layout_type < LAYOUT_COUNT);
     TextureLayout *layout = assets->texture_layouts + layout_type;
-    u32 animation_count = packed_layout->animation_count;
-
     file_buffer += sizeof(PackedTextureLayout);
 
-    // For each animation :
-    for (u32 an = 0; an < animation_count; an++) {
-      auto packed_animation = packed_layout->animations + an;
-      auto animation_type = packed_animation->animation_type;
-      auto frame_count = packed_animation->frame_count;
-      auto duration = packed_animation->duration;
-      auto direction = packed_animation->direction;
-      auto start_index = packed_animation->start_index;
+    if (layout_type == LAYOUT_CHARACTER) {
+      u32 animation_count = packed_layout->animation_count;
 
-      layout->animation_frame_counts[animation_type][direction] = frame_count;
-      layout->animation_times[animation_type][direction] = duration;
-      layout->animation_start_index[animation_type][direction] = start_index;
 
-      file_buffer += sizeof(PackedAnimation);
+      // For each animation :
+      for (u32 an = 0; an < animation_count; an++) {
+        auto packed_animation = packed_layout->animations + an;
+        auto animation_type = packed_animation->animation_type;
+        auto frame_count = packed_animation->frame_count;
+        auto duration = packed_animation->duration;
+        auto direction = packed_animation->direction;
+        auto start_index = packed_animation->start_index;
+
+        layout->animation_frame_counts[animation_type][direction] = frame_count;
+        layout->animation_times[animation_type][direction] = duration;
+        layout->animation_start_index[animation_type][direction] = start_index;
+
+        file_buffer += sizeof(PackedAnimation);
+      }
+    } else {
+      ASSERT_EQUAL(layout_type, LAYOUT_TERRAIN);
+      //u32 face_count = packed_layout->face_count;
+      // TODO set the unspecified ones to some sort of default?
+      array_copy(packed_layout->faces->sprite_index, layout->cube_face_index, FACE_COUNT);
+
+      file_buffer += sizeof(PackedFaces);
     }
   }
 

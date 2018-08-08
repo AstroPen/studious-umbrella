@@ -36,7 +36,7 @@ inline uint32_t total_size(darray<T> arr, uint32_t count) {
 
 template <typename T>
 inline bool initialize(darray<T> &arr, uint32_t max_count = 10) {
-  assert(!arr); // TODO possibly remove this?
+  ASSERT(!arr); // TODO possibly remove this?
   if (!max_count) return true;
   auto head = (darray_head *) malloc(total_size(arr, max_count));
   if (!head) return false;
@@ -53,7 +53,7 @@ inline bool expand(darray<T> &arr, uint32_t amount) {
   auto head = header(arr);
 
   head = (darray_head *) realloc(head, total_size(arr, head->max_count + amount));
-  assert(head);
+  ASSERT(head);
   if (!head) return false;
   head->max_count += amount;
   arr = (T *)(head + 1);
@@ -73,7 +73,7 @@ inline T *push(darray<T> &arr) {
   if (!arr) return NULL;
   auto head = header(arr);
 
-  assert(head->count <= head->max_count);
+  ASSERT(head->count <= head->max_count);
   // TODO consider expanding by 1 on failure?
   if (head->count == head->max_count)
     if (!expand(arr)) return NULL;
@@ -89,7 +89,7 @@ inline T *push(darray<T> &arr, T entry) {
   if (!arr) return NULL;
   auto head = header(arr);
 
-  assert(head->count <= head->max_count);
+  ASSERT(head->count <= head->max_count);
   // TODO consider expanding by 1 on failure?
   if (head->count == head->max_count)
     if (!expand(arr)) return NULL;
@@ -102,7 +102,7 @@ inline T *push(darray<T> &arr, T entry) {
 
 template <typename T>
 inline void dfree(darray<T> &arr) {
-  assert(arr);
+  ASSERT(arr);
   if (!arr) return;
 
   auto head = header(arr);
@@ -119,9 +119,9 @@ inline void clear(darray<T> &arr) {
 
 template <typename T>
 inline T pop(darray<T> &arr) {
-  assert(arr);
+  ASSERT(arr);
   auto head = header(arr);
-  assert(head->count);
+  ASSERT(head->count);
   head->count--;
   return arr[head->count];
 }
@@ -138,25 +138,25 @@ static void dynamic_array_test() {
   printf("Dynamic array test begin.\n");
 
   darray<int> ints;
-  assert(!ints);
-  assert(ints.p == NULL);
-  assert(!count(ints));
-  assert(!header(ints));
+  ASSERT(!ints);
+  ASSERT(ints.p == NULL);
+  ASSERT(!count(ints));
+  ASSERT(!header(ints));
   ints = NULL;
-  assert(ints.p == NULL);
+  ASSERT(ints.p == NULL);
 
   initialize(ints);
-  assert(ints);
-  assert(ints.p);
-  assert(count(ints) == 0);
-  assert(push(ints, 2));
-  assert(count(ints) == 1);
-  assert(ints.p[0] == 2);
-  assert(ints[0] == 2);
-  assert(ints.p + 1 == ints + 1);
-  assert(ints.p + 1 == ints + 1);
+  ASSERT(ints);
+  ASSERT(ints.p);
+  ASSERT_EQUAL(count(ints), 0);
+  VERIFY(push(ints, 2));
+  ASSERT_EQUAL(count(ints), 1);
+  ASSERT_EQUAL(ints.p[0], 2);
+  ASSERT_EQUAL(ints[0], 2);
+  ASSERT_EQUAL(ints.p + 1, ints + 1);
+  ASSERT_EQUAL(ints.p + 1, ints + 1);
 
-  assert(push(ints, 3));
+  VERIFY(push(ints, 3));
   assert(ints.p[1] == 3);
   assert(count(ints) == 2);
 
@@ -164,7 +164,7 @@ static void dynamic_array_test() {
   assert(arr == ints.p);
 
   for (int i = 0; i < 300; i++) {
-    assert(push(ints, i));
+    VERIFY(push(ints, i));
     assert(ints);
     assert(count(ints) == (i + 3));
   }
@@ -172,17 +172,16 @@ static void dynamic_array_test() {
   dfree(ints);
   assert(!ints);
 
-  assert(push(ints, 37));
+  VERIFY(push(ints, 37));
   assert(ints[0] == 37);
   assert(count(ints) == 1);
 
   clear(ints);
   assert(!count(ints));
-  assert(push(ints, 4));
+  VERIFY(push(ints, 4));
   assert(count(ints) == 1);
   assert(ints[0] == 4);
-  auto x = push(ints);
-  assert(x);
+  auto x = VERIFY(push(ints));
   assert(count(ints) == 2);
   *x = 1;
   assert(ints[0] == 4);
@@ -192,7 +191,7 @@ static void dynamic_array_test() {
   int y = pop(ints);
   assert(y == 1);
   assert(count(ints) == 1);
-  assert(push(ints, 5));
+  VERIFY(push(ints, 5));
   assert(count(ints) == 2);
   assert(ints[1] == 5);
 

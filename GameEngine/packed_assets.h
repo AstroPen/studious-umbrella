@@ -28,8 +28,8 @@ enum FaceIndex {
   FACE_INVALID,
 };
 
-struct PackedFace {
-  u16 sprite_index;
+struct PackedFaces {
+  u16 sprite_index[8];
 };
 
 struct PackedTextureLayout {
@@ -41,7 +41,7 @@ struct PackedTextureLayout {
     };
     struct {
       u32 face_count;
-      PackedFace faces[0];
+      PackedFaces faces[0]; // NOTE : Should only contain 1 element
     };
   };
 };
