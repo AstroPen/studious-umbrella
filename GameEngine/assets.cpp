@@ -347,7 +347,7 @@ static void unpack_assets(GameAssets *assets) {
   assert(file_buffer == temporary->memory); // TODO delete these :
   assert(header->total_size == temporary->bytes_allocated);
   assert(layout_count == 2);
-  assert(texture_group_count == 1);
+  assert(texture_group_count == 2);
 
   // NOTE : This only works if the structs are tightly packed and aligned properly.
   file_buffer += sizeof(PackedAssetHeader);
@@ -363,7 +363,6 @@ static void unpack_assets(GameAssets *assets) {
 
     if (layout_type == LAYOUT_CHARACTER) {
       u32 animation_count = packed_layout->animation_count;
-
 
       // For each animation :
       for (u32 an = 0; an < animation_count; an++) {
@@ -394,6 +393,11 @@ static void unpack_assets(GameAssets *assets) {
   for (u32 tg = 0; tg < texture_group_count; tg++) {
     auto packed_group = (PackedTextureGroup *) file_buffer;
     TextureGroupID group_id = (TextureGroupID) packed_group->texture_group_id;
+    ASSERT(group_id > TEXTURE_GROUP_INVALID && group_id < TEXTURE_GROUP_COUNT);
+
+    // TODO delete these:
+    if (tg == 0) ASSERT_EQUAL(packed_group->s_clamp, CLAMP_TO_EDGE);
+    if (tg == 1) ASSERT_EQUAL(packed_group->s_clamp, REPEAT_CLAMPING);
 
 
     TextureGroup *group = assets->texture_groups + group_id;
@@ -401,7 +405,8 @@ static void unpack_assets(GameAssets *assets) {
     group->bitmap.buffer = data + packed_group->bitmap_offset;
     group->bitmap.width = packed_group->width;
     group->bitmap.height = packed_group->height;
-    assert(packed_group->layout_type > 0 && packed_group->layout_type < LAYOUT_COUNT);
+    // TODO 0 is actually legal, just not implemented yet
+    ASSERT(packed_group->layout_type > 0 && packed_group->layout_type < LAYOUT_COUNT);
     group->layout = (TextureLayoutType) packed_group->layout_type;
     group->sprite_width = packed_group->sprite_width;
     group->sprite_height = packed_group->sprite_height;

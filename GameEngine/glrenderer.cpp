@@ -1,49 +1,9 @@
 #ifndef _NAR_GL_RENDERER_CPP_
 #define _NAR_GL_RENDERER_CPP_
 
-
-#if 1
-#define gl_check_error() _gl_check_error(__FILE__, __LINE__)
-#else
-#define gl_check_error() 
-#endif
-static inline void _gl_check_error(const char *file_name, int line_num) {
-  GLenum err;
-  while ((err = glGetError()) != GL_NO_ERROR) {
-    printf("OpenGL error: 0x%x in file %s, on line %d\n", err, file_name, line_num);
-  }
-}
-
-// TODO pass these around more elegantly?
-//static GLuint transform_id;
-static GLuint projection_matrix_id;
-static GLuint view_matrix_id;
-static GLuint program_id;
-static GLuint vertex_buffer_id;
-static GLuint texture_sampler_id;
-static GLuint texture_width_id;
-static GLuint texture_height_id;
-static GLuint use_low_res_uv_filter_id;
-
-enum ShaderAttribute {
-  VERTEX_POSITION,
-  VERTEX_UV,
-  VERTEX_COLOR,
-  VERTEX_NORMAL,
-  VERTEX_TANGENT,
-};
-
-GLint to_gl_format_specifier(TextureFormatSpecifier spec) {
-  switch (spec) {
-    case RGBA : return GL_RGBA;
-    case BGRA : return GL_BGRA;
-    case CLAMP_TO_EDGE : return GL_CLAMP_TO_EDGE;
-    case REPEAT_CLAMPING : return GL_REPEAT;
-    case LINEAR_BLEND : return GL_LINEAR;
-    case NEAREST_BLEND : return GL_NEAREST;
-    default : return 0;
-  };
-}
+//
+// Gradient background test code ---
+//
 
 static void draw_grad_bg_internal(PixelBuffer buf, u32 game_ticks, int y_start, int y_end) {
   TIMED_FUNCTION();
@@ -131,6 +91,10 @@ static inline void draw_gradient_background(GameState *g, WorkQueue *queue) {
   bg_args[i].y_end = y_end;
   push_work(queue, bg_args + i, (work_queue_callback *) do_draw_gradient_background_work);
 }
+
+//
+// Renderer type definitions ---
+//
 
 enum RenderType : u32 {
   // TODO switch to RenderElementTextureTris
@@ -240,8 +204,13 @@ struct RenderBuffer {
   RenderStage stages[RENDER_STAGE_COUNT];
 };
 
+// TODO maybe delete these, they are not currently used I think
 #define Z_BIAS_EPSILON 0.000001f
 #define Z_BIAS_HUD_BASE 0.01
+
+//
+// Basic RenderBuffer operations ---
+//
 
 static inline void clear(RenderBuffer *buffer) {
   clear(&buffer->allocator);
@@ -388,6 +357,10 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 s
   return elem;
 }
 
+//
+// Vertex operations ---
+//
+
 static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
   if (buffer->max_vertices - buffer->vertex_count <= 0) {
     assert(!"Vertex buffer overflowed.");
@@ -426,77 +399,74 @@ static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
   }
 }
 
-static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, bool use_low_res_uv) {
-  TIMED_FUNCTION();
-
-  assert(texture_id);
-  //glUniform1i(texture_sampler_id, texture_id);
-  gl_check_error();
-  glActiveTexture(GL_TEXTURE0 + 0);
-  glBindTexture(GL_TEXTURE_2D, texture_id);
-  glUniform1f(texture_width_id, texture_width);
-  glUniform1f(texture_height_id, texture_height);
-  gl_check_error();
-
-  //assert(use_low_res_uv);
-  glUniform1i(use_low_res_uv_filter_id, use_low_res_uv);
-  gl_check_error();
-
-  bool has_normal_map = normal_map_id ? true : false;
-  glUniform1i(glGetUniformLocation(program_id, "HAS_NORMAL_MAP"), has_normal_map);
-
-  if (has_normal_map) {
-    glActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_2D, normal_map_id);
-  }
+// TODO Expand on these functions and use them throughout the file
+inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V4 c) {
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
   
-  glEnableVertexAttribArray(VERTEX_POSITION);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_COLOR);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_UV);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_NORMAL);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_TANGENT);
-  gl_check_error();
+  V2 uv4[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  V4 c4[4] = {c,c,c,c};
 
-  // NOTE : the boolean is "normalized"
-  glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
-      sizeof(Vertex), (void *)(offsetof(Vertex, position) + vertex_idx));
-  gl_check_error();
+  V3 n = {0,0,1};
+  V3 n4[4] = {n,n,n,n};
 
-  // TODO switch this to GL_UNSIGNED_BYTE
-  glVertexAttribPointer(VERTEX_COLOR, 4, GL_FLOAT, false, 
-      sizeof(Vertex), (void *)(offsetof(Vertex, color) + vertex_idx));
-  gl_check_error();
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
 
-  glVertexAttribPointer(VERTEX_UV, 2, GL_FLOAT, false, 
-      sizeof(Vertex), (void *)(offsetof(Vertex, uv) + vertex_idx));
-  gl_check_error();
+  VertexSOA verts;
+  verts.p = quad->verts;
+  verts.uv = uv4;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
 
-  glVertexAttribPointer(VERTEX_NORMAL, 3, GL_FLOAT, false,
-      sizeof(Vertex), (void *)(offsetof(Vertex, normal) + vertex_idx));
-  gl_check_error();
-
-  glVertexAttribPointer(VERTEX_TANGENT, 3, GL_FLOAT, false,
-      sizeof(Vertex), (void *)(offsetof(Vertex, tangent) + vertex_idx));
-  gl_check_error();
-
-  glDrawArrays(GL_TRIANGLES, 0, count);
-  gl_check_error();
-
-  glDisableVertexAttribArray(VERTEX_POSITION);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_COLOR);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_UV);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_NORMAL);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_TANGENT);
-  gl_check_error();
+  push_quad_vertices(buffer, verts);
 }
+
+inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V4 c) {
+  assert(uv);
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
+  
+  V4 c4[4] = {c,c,c,c};
+
+  V3 n = {0,0,1};
+  V3 n4[4] = {n,n,n,n};
+
+  V3 t = {1,0,0};
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = quad->verts;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
+}
+
+inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V3 n, V3 t, V4 c) {
+  assert(uv);
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
+  
+  V4 c4[4] = {c,c,c,c};
+
+  V3 n4[4] = {n,n,n,n};
+
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = quad->verts;
+  verts.uv = uv;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
+}
+
 
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
 // it will probably break stuff.
@@ -546,6 +516,10 @@ static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id,
     default : assert(!"Error."); break;
   }
 }
+
+//
+// High level renderer calls ---
+//
 
 #if 0
 // TODO maybe combine this with the other function
@@ -628,19 +602,8 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
 #endif
 
     V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
-    V4 c4[4] = {c,c,c,c};
-    V3 n4[4] = {n[i],n[i],n[i],n[i]};
-    V3 t4[4] = {t[i],t[i],t[i],t[i]};
 
-    VertexSOA verts;
-    verts.p = quads[i].verts;
-    verts.uv = uv;
-    verts.c = c4;
-    verts.n = n4;
-    verts.t = t4;
-
-    push_quad_vertices(buffer, verts);
-    //c.rgb *= 0.8;
+    push_quad_vert_helper(buffer, quads + i, uv, n[i], t[i], c);
   }
   
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
@@ -657,32 +620,53 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
   auto quad = to_quad4(rect);
 
   V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  auto c = color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
 
   // TODO calculate this for non-axis-aligned rectangles
   V3 n = {0,0,1};
-  V3 n4[4] = {n,n,n,n};
-
   V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
 
-  VertexSOA verts;
-  verts.p = quad.verts;
-  verts.uv = uv;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
+  push_quad_vert_helper(buffer, &quad, uv, n, t, color);
 
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
 
   append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, stage, is_sprite);
 }
+
+// NOTE : Mostly intended for debugging purposes
+static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float width) {
+  /*
+  GameCamera *camera = buffer->camera;
+
+  V3 Z = camera->forward;
+  V3 X = camera->right;
+  V3 Y = camera->up;
+  */
+
+  Rectangle r;
+  r.center = (p1 + p2) / 2;
+  r.offsets[0] = p2 - r.center;
+  // TODO Do some fancy crap here with the camera/cross product to make r face the camera
+  r.offsets[1] = vec3(width, 0, 0);
+  auto quad = to_quad4(r);
+
+  Rectangle r2 = r;
+  r2.offsets[1] = vec3(0, 0, width);
+  auto quad2 = to_quad4(r2);
+
+  u32 bitmap_id = get_texture_id(buffer->assets, BITMAP_WHITE);
+  u32 normal_map_id = 0;
+
+  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+
+  push_quad_vert_helper(buffer, &quad, uv, color);
+  push_quad_vert_helper(buffer, &quad2, uv, color);
+
+  append_quads(buffer, 2, bitmap_id, 1, 1, normal_map_id, RENDER_STAGE_BASE);
+}
+
+//
+// Hud rendering ---
+//
 
 static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id) {
   TIMED_FUNCTION();
@@ -694,27 +678,7 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
   auto texture = get_bitmap(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
-  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  auto c = color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n = {0,0,1};
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad.verts;
-  verts.uv = uv;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
+  push_quad_vert_helper(buffer, &quad, color);
 
   append_quads(buffer, 1, texture_id, texture->width, texture->height, 0, RENDER_STAGE_HUD, true);
 }
@@ -737,30 +701,9 @@ inline void render_circle_screen_space(RenderBuffer *buffer, V2 p, float width, 
   render_screen_space(buffer, aligned_rect(p, width, width), color, BITMAP_CIRCLE);
 }
 
-// Expand on these functions and use them throughout the file
-inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V4 color) {
-  auto c = color;
-  assert(uv);
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n = {0,0,1};
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad->verts;
-  verts.uv = uv;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
-}
+//
+// Text rendering ---
+//
 
 static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, u32 font_id) { 
   // TODO figure out a way to time this that doesn't interfere with drawing debug text
@@ -919,73 +862,26 @@ static void render_frame_records(RenderBuffer *buffer) {
 #undef TAB
 }
 
-static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float width) {
-  /*
-  GameCamera *camera = buffer->camera;
 
-  V3 Z = camera->forward;
-  V3 X = camera->right;
-  V3 Y = camera->up;
-  */
-
-  Rectangle r;
-  r.center = (p1 + p2) / 2;
-  r.offsets[0] = p2 - r.center;
-  // TODO Do some fancy crap here with the camera/cross product to make r face the camera
-  r.offsets[1] = vec3(width, 0, 0);
-  auto quad = to_quad4(r);
-
-  Rectangle r2 = r;
-  r2.offsets[1] = vec3(0, 0, width);
-  auto quad2 = to_quad4(r2);
-
-  u32 bitmap_id = get_texture_id(buffer->assets, BITMAP_WHITE);
-  u32 normal_map_id = 0;
-
-  V2 uv4[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  auto c = color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n = {0,0,1};
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad.verts;
-  verts.uv = uv4;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
-  //append_quads(buffer, 1, bitmap_id, 1, 1, normal_map_id);
-
-  verts.p = quad2.verts;
-  push_quad_vertices(buffer, verts);
-  append_quads(buffer, 2, bitmap_id, 1, 1, normal_map_id, RENDER_STAGE_BASE);
-}
+//
+// Entity rendering ---
+//
 
 static RenderingInfo get_render_info(GameAssets *assets, Entity *e);
 
-// TODO switch everthing to use the same path
-static void render_entity(RenderBuffer *buffer, Entity *e) {
+// TODO possibly factor some of this out into render_entity
+static void render_sprite(RenderBuffer *buffer, Entity *e) {
 #define DEBUG_CUBES 0
   TIMED_FUNCTION();
 
   RenderingInfo info = get_render_info(buffer->assets, e);
   if (info.texture_uv == vec4(0)) return;
   //PRINT_V4(info.texture_uv);
-  assert(info.normal_map_uv == vec4(0,0,0,0));
   assert(info.bitmap_id);
 
 
   u32 bitmap_id = info.bitmap_id;
-  u32 normal_map_id = 0;
+  u32 normal_map_id = (info.normal_map_uv == vec4(0)) ? 0 : info.bitmap_id;
 
   GameCamera *camera = buffer->camera;
 
@@ -1017,14 +913,8 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
 
   V4 uv = info.texture_uv;
   V2 uv4[4] = {{uv.x,uv.w}, uv.zw, {uv.z,uv.y}, uv.xy};
-  auto c = info.color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
 
   V3 n = normalize(Z + vec3(0,-2,0)); // TODO Figure this out for real
-  V3 n4[4] = {n,n,n,n};
 
   /*
   float z_min = visual_info.offset.z;
@@ -1041,20 +931,13 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
 
   // NOTE : This is always correct if the sprite isn't skewed.
   V3 t = X; //{1,0,0};
-  V3 t4[4] = {t,t,t,t};
 
-  VertexSOA verts;
-  verts.p = quad.verts;
-  verts.uv = uv4;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
 
   // DELETEME
-  //render_arrow(buffer, r.center, r.center + n, vec4(0.1,0,0,1), 0.1);
-  //render_arrow(buffer, r.center, r.center + t, vec4(0,0,0.3,1), 0.1);
+  //render_arrow(buffer, r.center, r.center + n, vec4(0.3,0,0,1), 0.1);
+  //render_arrow(buffer, r.center, r.center + t, vec4(0,0,0.5,1), 0.1);
 
-  push_quad_vertices(buffer, verts);
+  push_quad_vert_helper(buffer, &quad, uv4, n, t, info.color);
 
   append_quads(buffer, 1, bitmap_id, info.texture_width, info.texture_height, normal_map_id, RENDER_STAGE_TRANSPARENT);
 
@@ -1064,6 +947,19 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
 #undef DEBUG_CUBES
 }
 
+static void render_box(RenderBuffer *buffer, Entity *e) {
+}
+
+// TODO switch everthing to use the same path
+static void render_entity(RenderBuffer *buffer, Entity *e) {
+  TIMED_FUNCTION();
+  
+  if (e->flags & ENTITY_SPRITE) render_sprite(buffer, e);
+  else if (e->flags & ENTITY_CUBOID) render_box(buffer, e);
+
+}
+
+#if 0
 // TODO massively rework this to simplify and get better z biasing.
 static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_info) {
 #define DEBUG_CUBES 0
@@ -1143,6 +1039,111 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
 #endif
 #undef DEBUG_CUBES
+}
+#endif
+
+#if 1
+#define gl_check_error() _gl_check_error(__FILE__, __LINE__)
+#else
+#define gl_check_error() 
+#endif
+
+// TODO pass these around more elegantly?
+//static GLuint transform_id;
+static GLuint projection_matrix_id;
+static GLuint view_matrix_id;
+static GLuint program_id;
+static GLuint vertex_buffer_id;
+static GLuint texture_sampler_id;
+static GLuint texture_width_id;
+static GLuint texture_height_id;
+static GLuint use_low_res_uv_filter_id;
+
+static inline void _gl_check_error(const char *file_name, int line_num) {
+  GLenum err;
+  while ((err = glGetError()) != GL_NO_ERROR) {
+    printf("OpenGL error: 0x%x in file %s, on line %d\n", err, file_name, line_num);
+  }
+}
+
+enum ShaderAttribute {
+  VERTEX_POSITION,
+  VERTEX_UV,
+  VERTEX_COLOR,
+  VERTEX_NORMAL,
+  VERTEX_TANGENT,
+};
+
+static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, bool use_low_res_uv) {
+  TIMED_FUNCTION();
+
+  assert(texture_id);
+  //glUniform1i(texture_sampler_id, texture_id);
+  gl_check_error();
+  glActiveTexture(GL_TEXTURE0 + 0);
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  glUniform1f(texture_width_id, texture_width);
+  glUniform1f(texture_height_id, texture_height);
+  gl_check_error();
+
+  //assert(use_low_res_uv);
+  glUniform1i(use_low_res_uv_filter_id, use_low_res_uv);
+  gl_check_error();
+
+  bool has_normal_map = normal_map_id ? true : false;
+  glUniform1i(glGetUniformLocation(program_id, "HAS_NORMAL_MAP"), has_normal_map);
+
+  if (has_normal_map) {
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_2D, normal_map_id);
+  }
+  
+  glEnableVertexAttribArray(VERTEX_POSITION);
+  gl_check_error();
+  glEnableVertexAttribArray(VERTEX_COLOR);
+  gl_check_error();
+  glEnableVertexAttribArray(VERTEX_UV);
+  gl_check_error();
+  glEnableVertexAttribArray(VERTEX_NORMAL);
+  gl_check_error();
+  glEnableVertexAttribArray(VERTEX_TANGENT);
+  gl_check_error();
+
+  // NOTE : the boolean is "normalized"
+  glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
+      sizeof(Vertex), (void *)(offsetof(Vertex, position) + vertex_idx));
+  gl_check_error();
+
+  // TODO switch this to GL_UNSIGNED_BYTE
+  glVertexAttribPointer(VERTEX_COLOR, 4, GL_FLOAT, false, 
+      sizeof(Vertex), (void *)(offsetof(Vertex, color) + vertex_idx));
+  gl_check_error();
+
+  glVertexAttribPointer(VERTEX_UV, 2, GL_FLOAT, false, 
+      sizeof(Vertex), (void *)(offsetof(Vertex, uv) + vertex_idx));
+  gl_check_error();
+
+  glVertexAttribPointer(VERTEX_NORMAL, 3, GL_FLOAT, false,
+      sizeof(Vertex), (void *)(offsetof(Vertex, normal) + vertex_idx));
+  gl_check_error();
+
+  glVertexAttribPointer(VERTEX_TANGENT, 3, GL_FLOAT, false,
+      sizeof(Vertex), (void *)(offsetof(Vertex, tangent) + vertex_idx));
+  gl_check_error();
+
+  glDrawArrays(GL_TRIANGLES, 0, count);
+  gl_check_error();
+
+  glDisableVertexAttribArray(VERTEX_POSITION);
+  gl_check_error();
+  glDisableVertexAttribArray(VERTEX_COLOR);
+  gl_check_error();
+  glDisableVertexAttribArray(VERTEX_UV);
+  gl_check_error();
+  glDisableVertexAttribArray(VERTEX_NORMAL);
+  gl_check_error();
+  glDisableVertexAttribArray(VERTEX_TANGENT);
+  gl_check_error();
 }
 
 static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_count) {
@@ -1411,6 +1412,18 @@ static GLuint create_shader_program(char* header,
   }
 
   return program_id;
+}
+
+GLint to_gl_format_specifier(TextureFormatSpecifier spec) {
+  switch (spec) {
+    case RGBA : return GL_RGBA;
+    case BGRA : return GL_BGRA;
+    case CLAMP_TO_EDGE : return GL_CLAMP_TO_EDGE;
+    case REPEAT_CLAMPING : return GL_REPEAT;
+    case LINEAR_BLEND : return GL_LINEAR;
+    case NEAREST_BLEND : return GL_NEAREST;
+    default : return 0;
+  };
 }
 
 struct TextureParameters {

@@ -236,7 +236,8 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
 
 
   if (e->flags & ENTITY_SPRITE) { 
-    push_sprite(render_buffer, e->collision_box, e->visual);
+    // NOTE : push_sprite is depreciated, sprites should be drawn using render_entity
+    //push_sprite(render_buffer, e->collision_box, e->visual);
 
   } else {
 
