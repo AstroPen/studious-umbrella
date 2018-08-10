@@ -20,14 +20,6 @@ struct PackedAnimation {
   u32 flags;
 };
 
-enum FaceIndex {
-  FACE_TOP, FACE_FRONT,
-  FACE_RIGHT, FACE_LEFT,
-  FACE_BACK, FACE_BOTTOM,
-  FACE_COUNT,
-  FACE_INVALID,
-};
-
 struct PackedFaces {
   u16 sprite_index[8];
 };

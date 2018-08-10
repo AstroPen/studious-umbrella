@@ -159,8 +159,8 @@ static inline float max_z(AlignedBox box) {
   return max_xyz(box).z;
 }
 
-static inline V3 center(AlignedBox r) {
-  return r.center;
+static inline V3 center(AlignedBox b) {
+  return b.center;
 }
 
 static inline void translate(AlignedBox *r, V3 dp) {

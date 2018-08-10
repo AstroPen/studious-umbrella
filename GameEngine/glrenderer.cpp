@@ -1,6 +1,34 @@
 #ifndef _NAR_GL_RENDERER_CPP_
 #define _NAR_GL_RENDERER_CPP_
 
+// TODO consider putting this in vmath once I add FaceIndex to somewhere accessable
+static const V3 aabb_normals[6] = { 
+  [FACE_TOP] = vec3(0,0,1),
+  [FACE_BOTTOM] = vec3(0,0,-1),
+  [FACE_LEFT] = vec3(-1,0,0),
+  [FACE_RIGHT] = vec3(1,0,0),
+  [FACE_FRONT] = vec3(0,-1,0),
+  [FACE_BACK] = vec3(0,1,0)
+};
+
+static const V3 aabb_tangents[6] = {
+  [FACE_TOP] = vec3(1,0,0),
+  [FACE_BOTTOM] = vec3(-1,0,0),
+  [FACE_LEFT] = vec3(0,-1,0),
+  [FACE_RIGHT] = vec3(0,1,0),
+  [FACE_FRONT] = vec3(1,0,0),
+  [FACE_BACK] = vec3(-1,0,0)
+};
+
+static const V3 aabb_cotangents[6] = {
+  [FACE_TOP] = vec3(0,1,0),
+  [FACE_BOTTOM] = vec3(0,1,0),
+  [FACE_LEFT] = vec3(0,0,1),
+  [FACE_RIGHT] = vec3(0,0,1),
+  [FACE_FRONT] = vec3(0,0,1),
+  [FACE_BACK] = vec3(0,0,1)
+};
+
 //
 // Gradient background test code ---
 //
@@ -539,7 +567,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, u32 texture
   //c.rgb *= c.rgb;
   
   V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
+  V3 *n = aabb_normals;
 
   for (int i = 0; i < 6; i++) {
 
@@ -567,11 +595,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
 
   auto texture = get_bitmap(buffer->assets, texture_asset_id);
   auto texture_id = get_texture_id(buffer->assets, texture_asset_id);
-  float tex_width = texture->width * METERS_PER_PIXEL * scale;
-  float tex_height = texture->height * METERS_PER_PIXEL * scale;
 
-  assert(tex_width);
-  assert(tex_height);
   auto b = box;
 
   Quad4 quads[6];
@@ -587,15 +611,18 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
   float x_scale = 1;
   float y_scale = 1;
 
-  V3 n[6] = {{0,0,1},{0,-1,0},{1,0,0},{-1,0,0},{0,1,0},{0,0,-1}};
-
-  V3 t[6] = {{1,0,0},{1,0,0},{0,1,0},{0,-1,0},{-1,0,0},{-1,0,0}};
+  V3 const *n = aabb_normals;
+  V3 const *t = aabb_tangents;
 
   for (int i = 0; i < 6; i++) {
     auto dim = rects[i].offset;
 
-    if (tex_width) x_scale = abs(dim.x / tex_width);
-    if (tex_height) y_scale = abs(dim.y / tex_height);
+    float x_repeats = abs(dim.x);
+    float y_repeats = abs(dim.y);
+    if (texture_asset_id && texture_asset_id != BITMAP_WHITE) {
+      x_scale = x_repeats * scale;
+      y_scale = y_repeats * scale;
+    }
 
 #if DEBUG_COLORS
     c = debug_colors[i];
@@ -947,7 +974,161 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
 #undef DEBUG_CUBES
 }
 
-static void render_box(RenderBuffer *buffer, Entity *e) {
+#if 0
+// TODO This should be factored differently, since get_render_info needs to know
+// what part of the box its drawing. Its fine for now since we draw every part of
+// the box the same way.
+static void render_tile(RenderBuffer *buffer, Entity *e, AlignedBox box, u32 face_mask) {
+  TIMED_FUNCTION();
+
+#define DEBUG_COLORS 0
+#if DEBUG_COLORS
+  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
+#endif
+
+  RenderingInfo info = get_render_info(buffer->assets, e);
+  V4 texture_uv = info.texture_uv;
+  V4 normal_map_uv = vec4(0); // info.normal_map_uv; // TODO
+  u32 bitmap_id = info.bitmap_id;
+  V4 c = info.color;
+  float scale = info.scale;
+  float tex_width = info.texture_width;
+  float tex_height = info.texture_height;
+  ASSERT(tex_width); ASSERT(tex_height);
+
+  Quad4 quads[6];
+  to_quad4s(box, quads);
+
+  AlignedRect rects[6] = {top_rect(b), front_rect(b), right_rect(b), 
+                          left_rect(b), back_rect(b), bot_rect(b)};
+
+  float x_scale = 1;
+  float y_scale = 1;
+  V3 const *n = aabb_normals;
+  V3 const *t = aabb_tangents;
+
+  float sprite_width = (texture_uv.z - texture_uv.x) * tex_width;
+  float sprite_height = (texture_uv.w - texture_uv.y) * tex_height;
+  V3 dim = b.offset * 2 * PIXELS_PER_METER / scale;
+  float front_x_repeats = dim.x / sprite_width;
+  float side_x_repeats = dim.y / sprite_width;
+
+  float top_y_repeats = dim.y / sprite_height;
+  float side_y_repeats = dim.z / sprite_height;
+
+  u32 num_quads = 0;
+
+  for (int i = 0; i < 6; i++) {
+    auto dim = rects[i].offset;
+
+    if (!SHIFT_TEST(face_mask, i)) continue;
+
+#if DEBUG_COLORS
+    c = debug_colors[i];
+#endif
+
+    V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
+
+    push_quad_vert_helper(buffer, quads + i, uv, n[i], t[i], c);
+  }
+  
+  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
+  append_quads(buffer, num_quads, texture_id, texture->width, texture->height, normal_map_id, stage);
+#undef DEBUG_COLORS
+}
+
+
+static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect, FaceIndex face_idx) {
+  float tile_dim = 1;
+  V3 n = aabb_normals[face_idx];
+
+  // NOTE : These are the indices of the axes in the array {x,y,z}
+  u32 x_axis_index = !n.x ? 0 : 1;
+  u32 y_axis_index = !n.z ? 2 : 1;
+  u32 zero_axis_index = 3 - x_axis_index - y_axis_index;
+
+  V3 tile_offset = vec3(tile_dim / 2);
+  tile_offset.elements[zero_axis_index] = 0;
+
+  AlignedRect3 tile;
+  tile.offset = tile_offset;
+  V3 origin = rect.center - rect.offset + tile_offset;
+
+  u32 x_count = rect.offset.elements[x_axis_index] * 2 / tile_dim;
+  u32 y_count = rect.offset.elements[y_axis_index] * 2 / tile_dim;
+
+  for (u32 i = 0; i < x_count; i++) {
+    for (u32 j = 0; j < y_count; j++) {
+      V3 origin_translation = {};
+      origin_translation.elements[x_axis_index] = i * tile_dim;
+      origin_translation.elements[y_axis_index] = j * tile_dim;
+      tile_center = origin + origin_translation;
+    }
+  }
+}
+#endif
+
+// TODO Finish implementing this. We can't actually have the cube textures stretch
+// like we did before since they will be pulled from a sprite sheet. Instead, we 
+// need to manually loop them somehow (or just make each cube be a real cube 
+// instead of a long rectangular prism).
+//
+// UPDATE : I'm now leaning towards doing this in the shader. We could just 
+// manually restrict the uv range by specifying the sprite width and height as 
+// uniforms. However, we still need to add a border to the texture to prevent
+// it from blending wrong around the edges.
+//
+// UPDATE 2 : Actually, I think that I should break the box up into separate cubes.
+// Each cube is likely to have a different texture (because of corners) in 
+// practice, so they can't even share vertices.
+static void render_tiled_box(RenderBuffer *buffer, Entity *e) {
+  TIMED_FUNCTION();
+
+  float tile_dim = 1;
+  V3 tile_offset = vec3(tile_dim / 2);
+
+  AlignedBox b = e->collision_box;
+  ASSERT(b.offset.x >= 0);
+  ASSERT(b.offset.y >= 0);
+  ASSERT(b.offset.z >= 0);
+
+  u32 x_dim = b.offset.x * 2 / tile_dim;
+  u32 y_dim = b.offset.y * 2 / tile_dim;
+  u32 z_dim = b.offset.z * 2 / tile_dim;
+
+  // TODO the way this should actually work is this :
+  // 1. Split the box into faces (aligned_rects).
+  // 2. Call render_tiled_rect on each of them.
+  // 3. In render_tiled_rect break the rect into tiles.
+  // 4. Call render_tile on each of them.
+
+
+  u32 num_cubes = x_dim * y_dim * z_dim;
+  V3 origin = b.center - b.offset + tile_offset;
+
+  AlignedBox box;
+  box.offset = tile_offset;
+
+  for (u32 i = 0; i < x_dim; i++) {
+    for (u32 j = 0; j < y_dim; j++) {
+      for (u32 k = 0; k < z_dim; k++) {
+        V3 origin_translation = vec3(i, j, k) * tile_dim;
+        box.center = origin + origin_translation;
+
+        u32 face_mask = 0;
+        if (i == 0) SHIFT_SET(face_mask, FACE_LEFT);
+        if (i == x_dim - 1) SHIFT_SET(face_mask, FACE_RIGHT);
+        if (j == 0) SHIFT_SET(face_mask, FACE_FRONT);
+        if (j == y_dim - 1) SHIFT_SET(face_mask, FACE_BACK);
+        if (k == 0) SHIFT_SET(face_mask, FACE_BOTTOM);
+        if (k == z_dim - 1) SHIFT_SET(face_mask, FACE_TOP);
+        //render_unit_box(buffer, e, box);
+      }
+    }
+  }
+
+  // TODO consider pulling out some of the push calls from render_unit_box
+  // to call them here instead.
 }
 
 // TODO switch everthing to use the same path
@@ -955,11 +1136,11 @@ static void render_entity(RenderBuffer *buffer, Entity *e) {
   TIMED_FUNCTION();
   
   if (e->flags & ENTITY_SPRITE) render_sprite(buffer, e);
-  else if (e->flags & ENTITY_CUBOID) render_box(buffer, e);
+  else if (e->flags & ENTITY_CUBOID) render_tiled_box(buffer, e);
 
 }
 
-#if 0
+#if 1
 // TODO massively rework this to simplify and get better z biasing.
 static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_info) {
 #define DEBUG_CUBES 0

@@ -7,7 +7,7 @@ in vec3 vertex_normal;
 in vec3 vertex_tangent;
 
 out VertexData {
-  smooth out vec2 uv;
+  smooth out vec2 uv; // TODO this is kind of redundant with scaled_uv
   smooth out vec4 color;
   smooth out vec3 normal;
   smooth out vec3 tangent;

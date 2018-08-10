@@ -109,21 +109,22 @@ static bool add_room(GameState *g, AlignedRect tile_bounds) {
   //auto tile_size = V2{1,1};
   auto wall_color = vec4(0.2, 0.2, 0.2, 1);
 
-  add_wall(g, aligned_rect(min_xy(tile_bounds), 
-                           V2{max_x(tile_bounds), min_y(tile_bounds) + 1}), 
-                           wall_color);
+  float width = width_of(tile_bounds);
+  float height = height_of(tile_bounds) - 2;
+  V2 left_center, right_center, bottom_center, top_center;
+  left_center = right_center = bottom_center = top_center = tile_bounds.center;
+  V2 center_offset = tile_bounds.offset - vec2(0.5);
 
-  add_wall(g, aligned_rect(V2{min_x(tile_bounds), max_y(tile_bounds) - 1}, 
-                           max_xy(tile_bounds)), 
-                           wall_color);
+  left_center.x -= center_offset.x;
+  right_center.x += center_offset.x;
+  bottom_center.y -= center_offset.y;
+  top_center.y += center_offset.y;
 
-  add_wall(g, aligned_rect(min_xy(tile_bounds), 
-                           V2{min_x(tile_bounds) + 1, max_y(tile_bounds)}), 
-                           wall_color);
+  add_wall(g, aligned_rect(left_center, 1, height), wall_color);
+  add_wall(g, aligned_rect(right_center, 1, height), wall_color);
+  add_wall(g, aligned_rect(bottom_center, width, 1), wall_color);
+  add_wall(g, aligned_rect(top_center, width, 1), wall_color);
 
-  add_wall(g, aligned_rect(V2{max_x(tile_bounds) - 1, min_y(tile_bounds)}, 
-                           max_xy(tile_bounds)), 
-                           wall_color);
   return true;
 }
 
@@ -237,7 +238,7 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
 
   if (e->flags & ENTITY_SPRITE) { 
     // NOTE : push_sprite is depreciated, sprites should be drawn using render_entity
-    //push_sprite(render_buffer, e->collision_box, e->visual);
+    push_sprite(render_buffer, e->collision_box, e->visual);
 
   } else {
 

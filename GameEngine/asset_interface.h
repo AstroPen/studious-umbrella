@@ -1,6 +1,15 @@
 #ifndef _ASSET_INTERFACE_H_
 #define _ASSET_INTERFACE_H_
 
+// TODO consider putting this somewhere accessable by vmath.h
+enum FaceIndex {
+  FACE_TOP, FACE_FRONT,
+  FACE_RIGHT, FACE_LEFT,
+  FACE_BACK, FACE_BOTTOM,
+  FACE_COUNT,
+  FACE_INVALID,
+};
+
 enum BitmapID : u32 {
   BITMAP_INVALID,
 

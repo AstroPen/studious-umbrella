@@ -71,6 +71,16 @@ inline void array_copy(T const *source, T *dest, u32 len) {
 #define PRINT_UINT(variable_name) printf(#variable_name " : %u\n", (variable_name))
 #define PRINT_FLOAT(variable_name) printf(#variable_name " : %f\n", (variable_name))
 
+#define FLAG_SET(mask, flag) do { (mask) |= (flag); } while(0)
+#define FLAG_UNSET(mask, flag) do { (mask) &= ~(flag); } while(0)
+#define FLAG_TOGGLE(mask, flag) do { (mask) ^= (flag); } while(0)
+#define FLAG_TEST(mask, flag) ((mask) & (flag))
+
+#define SHIFT_SET(mask, flag) do { (mask) |= 1UL << (flag); } while(0)
+#define SHIFT_UNSET(mask, flag) do { (mask) &= ~(1UL << (flag)); } while(0)
+#define SHIFT_TOGGLE(mask, flag) do { (mask) ^= 1UL << (flag); } while(0)
+#define SHIFT_TEST(mask, flag) ((mask) & (1UL << (flag)))
+
 #include "scalar_math.h"
 //#include "push_allocator.h"
 #include "custom_assert.h"
