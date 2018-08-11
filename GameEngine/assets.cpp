@@ -24,8 +24,8 @@ static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) 
 
 // TODO some of these getters should be made safe in case the group/layout does not exist
 static inline TextureGroup *get_texture_group(GameAssets * assets, TextureGroupID id) {
-  assert(id);
-  assert(id < TEXTURE_GROUP_COUNT);
+  ASSERT(id);
+  ASSERT(id < TEXTURE_GROUP_COUNT);
   auto result = assets->texture_groups + id;
   if (result->bitmap.buffer) return result;
   return NULL;
@@ -241,86 +241,65 @@ static float get_sprite_depth(TextureGroup *group, int sprite_index) {
   return group->sprite_depth;
 }
 
-#define LINK_RUN_SPEED 19.0f
-
-static RenderingInfo get_render_info(GameAssets *assets, Entity *e) {
+static TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIndex face_idx, u32 tile_idx) {
+  UNUSED(tile_idx);
   TextureGroup *group = get_texture_group(assets, e->texture_group_id);
   if (!group) return {};
 
-  switch (group->layout) {
-    case LAYOUT_CHARACTER : {
-      TextureLayout *layout = get_layout(assets, group->layout);
+  ASSERT_EQUAL(group->layout, LAYOUT_TERRAIN);
+  TextureLayout *layout = get_layout(assets, group->layout);
 
-      auto anim_state = get_current_animation_state(e);
+  int sprite_index = layout->cube_face_index[face_idx];
+  if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
 
-      bool reversed = false;
-      int sprite_index = get_sprite_index(layout, anim_state);
-      if (sprite_index < 0 && anim_state.flags | ANIMATION_REVERSABLE) {
-        anim_state.direction = flip_direction(anim_state.direction);
-        sprite_index = get_sprite_index(layout, anim_state);
-        if (sprite_index >= 0) reversed = true;
-      }
-      if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
+  TileRenderInfo result = {};
+  result.bitmap_id = group->render_id;
+  result.texture_uv = get_sprite_uv(group, sprite_index, false);
+  if (has_normal_map(group)) 
+    result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2, false);
+  result.color = get_color(e);
+  result.texture_width = group->bitmap.width;
+  result.texture_height = group->bitmap.height;
 
-      RenderingInfo result = {};
-      result.bitmap_id = group->render_id;
-      result.texture_uv = get_sprite_uv(group, sprite_index, reversed);
-      if (has_normal_map(group)) 
-        result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2, reversed);
-      result.color = get_color(e);
-      result.offset = get_sprite_offset(group);
-      result.sprite_depth = get_sprite_depth(group, sprite_index);
-      result.scale = get_sprite_scale(e);
-      result.width = group->sprite_width;
-      result.height = group->sprite_height;
-      result.texture_width = group->bitmap.width;
-      result.texture_height = group->bitmap.height;
-
-      return result;
-    } break;
-
-    default : assert(!"Invalid texture layout.");
-  }
-
-  return {};
+  return result;
 }
-#if 0
-// TODO Delete this when it is no longer needed for reference
-struct TextureGroup {
-  PixelBuffer bitmap; // TODO remove the texture_id from PixelBuffer
-  TextureLayoutType layout;
-  u32 sprite_width; // TODO Should maybe be column count, row count
-  u32 sprite_height;
-  union {
-    float sprite_depth;
-    u32 sprite_depth_index; // used to index an array of sprite_depths
-  };
-  u32 render_id;
-  u32 sprite_count; // TODO I'd like to get rid of this
-  V3 sprite_offset;
-  bool has_normal_map;
-};
 
-enum Direction {
-  LEFT,
-  RIGHT,
-  UP,
-  DOWN
-};
+#define LINK_RUN_SPEED 19.0f
 
-enum AnimationType {
-  ANIM_IDLE,
-  ANIM_MOVE,
+static SpriteRenderInfo get_sprite_render_info(GameAssets *assets, Entity *e) {
+  TextureGroup *group = get_texture_group(assets, e->texture_group_id);
+  if (!group) return {};
 
-  ANIM_COUNT
-};
+  ASSERT_EQUAL(group->layout, LAYOUT_CHARACTER);
+  TextureLayout *layout = get_layout(assets, group->layout);
 
-struct TextureLayout {
-  u16 animation_frame_counts[ANIM_COUNT];
-  u16 animation_start_index[ANIM_COUNT][4]; // 4 is for direction count
-  float animation_times[ANIM_COUNT];
-};
-#endif
+  auto anim_state = get_current_animation_state(e);
+
+  bool reversed = false;
+  int sprite_index = get_sprite_index(layout, anim_state);
+  if (sprite_index < 0 && anim_state.flags | ANIMATION_REVERSABLE) {
+    anim_state.direction = flip_direction(anim_state.direction);
+    sprite_index = get_sprite_index(layout, anim_state);
+    if (sprite_index >= 0) reversed = true;
+  }
+  if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
+
+  SpriteRenderInfo result = {};
+  result.bitmap_id = group->render_id;
+  result.texture_uv = get_sprite_uv(group, sprite_index, reversed);
+  if (has_normal_map(group)) 
+    result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2, reversed);
+  result.color = get_color(e);
+  result.offset = get_sprite_offset(group);
+  result.sprite_depth = get_sprite_depth(group, sprite_index);
+  result.scale = get_sprite_scale(e);
+  result.width = group->sprite_width;
+  result.height = group->sprite_height;
+  result.texture_width = group->bitmap.width;
+  result.texture_height = group->bitmap.height;
+
+  return result;
+}
 
 #include "packed_assets.h"
 

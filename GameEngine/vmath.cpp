@@ -315,6 +315,19 @@ static inline AlignedRect3 left_face(AlignedBox r) {
   return result;
 }
 
+static inline AlignedRect3 get_face(AlignedBox b, FaceIndex idx) {
+  switch (idx) {
+    case FACE_TOP : return top_face(b);
+    case FACE_FRONT : return front_face(b);
+    case FACE_RIGHT : return right_face(b);
+    case FACE_LEFT : return left_face(b);
+    case FACE_BOTTOM : return bottom_face(b);
+    case FACE_BACK : return back_face(b);
+    default : INVALID_SWITCH_CASE(idx);
+  }
+  return {};
+}
+
 //
 // AlignedBox to Quad3 conversions ---
 //
@@ -600,8 +613,8 @@ static inline Quad4 to_quad4(AlignedRect r, float w = 0) {
 static inline Quad4 to_quad4(AlignedRect3 r, FaceIndex idx, float w = 0) {
   V3 p1 = r.center - r.offset;
   V3 p3 = r.center + r.offset;
-  V3 tangent = aabb_tangents[idx];
-  V3 cotangent = aabb_cotangents[idx];
+  V3 tangent = abs(aabb_tangents[idx]);
+  V3 cotangent = abs(aabb_cotangents[idx]);
   V3 reverse_offset = -r.offset * tangent + r.offset * cotangent;
   V3 p2 = r.center - reverse_offset;
   V3 p4 = r.center + reverse_offset;
@@ -617,6 +630,13 @@ static inline Quad4 to_quad4(AlignedRect3 r, FaceIndex idx, float w = 0) {
 //
 // Quad4 accessors ---
 //
+
+#define PRINT_QUAD4(name) \
+  printf(#name " : \n  (%f,%f,%f,%f),\n  (%f,%f,%f,%f),\n  (%f,%f,%f,%f),\n  (%f,%f,%f,%f)\n", \
+      name.verts[0].x,name.verts[0].y,name.verts[0].z,name.verts[0].w, \
+      name.verts[1].x,name.verts[1].y,name.verts[1].z,name.verts[1].w, \
+      name.verts[2].x,name.verts[2].y,name.verts[2].z,name.verts[2].w, \
+      name.verts[3].x,name.verts[3].y,name.verts[3].z,name.verts[3].w);
 
 inline void translate(Quad4 *quad, V3 dp) {
   quad->verts[0].xyz += dp;

@@ -14,6 +14,9 @@ union V2 {
   float elements[2];
 };
 
+// TODO consider defining Assert::print_variable
+#define PRINT_V2(name) printf(#name " : (%f,%f)\n", name.x, name.y);
+
 static inline V2 vec2(float x, float y) {
   return V2{x,y};
 }
@@ -48,6 +51,9 @@ union V3 {
   float elements[3];
 };
 
+// TODO consider defining Assert::print_variable
+#define PRINT_V3(name) printf(#name " : (%f,%f,%f)\n", name.x, name.y, name.z);
+
 static inline V3 vec3(float f) {
   return {f,f,f};
 }
@@ -69,6 +75,7 @@ static inline V3 vec3(float x, V2 yz) {
   result.yz = yz;
   return result;
 }
+
 
 union V4 {
   struct {

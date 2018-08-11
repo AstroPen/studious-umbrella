@@ -99,9 +99,10 @@ static Entity *add_wall(GameState *g, AlignedRect rect, V4 color) {
   wall->visual.color = color;
   wall->visual.texture_id = BITMAP_WALL;
   wall->visual.normal_map_id = BITMAP_WALL_NORMAL_MAP;
-  wall->visual.scale = 2.0f;
+  wall->visual.scale = 1; //2.0f;
   //wall->collision_box = rect;
   wall->collision_box = aligned_box(rect, 0, 1);
+  wall->texture_group_id = TEXTURE_GROUP_WALL;
   return wall;
 }
 
@@ -198,7 +199,7 @@ static inline void push_cuboid_entity(RenderBuffer *render_buffer, Entity *e) {
 static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity *e) {
   TIMED_FUNCTION();
 
-  if (e->flags & ENTITY_PLAYER_CONTROLLED) {
+  if (e->flags & ENTITY_PLAYER_CONTROLLED || e->flags & ENTITY_CUBOID) {
     render_entity(render_buffer, e); 
     return;
   }

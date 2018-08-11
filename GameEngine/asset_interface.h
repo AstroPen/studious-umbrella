@@ -65,8 +65,8 @@ enum TextureGroupID {
 };
 
 // TODO This might replace VisualInfo
-// TODO Rename this 'RenderInfo' and rename the thing called RenderInfo to 'PlatformWindow' or something
-struct RenderingInfo {
+// TODO Rename the thing called RenderInfo to 'PlatformWindow' or something
+struct SpriteRenderInfo {
   // NOTE : {0,0,0,0} means no texture or normal_map
   V4 texture_uv; 
   V4 normal_map_uv;
@@ -76,6 +76,19 @@ struct RenderingInfo {
   float scale;
   u32 width;
   u32 height;
+  float texture_width;
+  float texture_height;
+
+  u32 bitmap_id; // NOTE : This is an OpenGL texture id
+};
+
+struct TileRenderInfo {
+  // NOTE : {0,0,0,0} means no texture or normal_map
+  V4 texture_uv; 
+  V4 normal_map_uv;
+  V4 color;
+  //u32 width;
+  //u32 height;
   float texture_width;
   float texture_height;
 

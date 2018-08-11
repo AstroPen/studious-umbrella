@@ -233,10 +233,10 @@ static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
   buffer->screen_height = height;
 
   // TODO maybe pass in the memory from outside?
-  buffer->max_vertices = 4096 * 8;
+  buffer->max_vertices = 4096 * 16;
   buffer->vertex_count = 0;
   int vertex_buffer_size = buffer->max_vertices * sizeof(Vertex);
-  int total_buffer_size = vertex_buffer_size + 4096 * 64;
+  int total_buffer_size = vertex_buffer_size + 4096 * 128;
   printf("Total render buffer size : %d\n", total_buffer_size);
 
   auto temp = new_push_allocator(total_buffer_size);
@@ -406,7 +406,7 @@ constexpr int VertexQuad::IDXS[VertexQuad::COUNT];
 
 static inline VertexArray push_vertices(RenderBuffer *buffer, u32 count) {
   if (buffer->max_vertices - buffer->vertex_count < count) {
-    assert(!"Vertex buffer overflowed.");
+    FAILURE("Vertex buffer overflowed.", buffer->vertex_count, buffer->max_vertices, count);
     return {};
   }
   auto vert = buffer->vertices + buffer->vertex_count;
@@ -846,12 +846,11 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   u32 bitmap_id = get_texture_id(buffer->assets, BITMAP_WHITE);
   u32 normal_map_id = 0;
 
-  //V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-
   VertexQuad verts1 = push_vertices(buffer, 6);
   VertexQuad verts2 = push_vertices(buffer, 6);
-  set_colors(verts1, color);
-  set_colors(verts2, color);
+  V4 colors[4] = {color, color, vec4(1,1,1,1), color};
+  set_colors(verts1, colors);
+  set_colors(verts2, colors);
 
   set_positions(verts1, &quad);
   set_positions(verts2, &quad2);
@@ -1075,14 +1074,14 @@ static void render_frame_records(RenderBuffer *buffer) {
 // Entity rendering ---
 //
 
-static RenderingInfo get_render_info(GameAssets *assets, Entity *e);
+static SpriteRenderInfo get_sprite_render_info(GameAssets *assets, Entity *e);
 
 // TODO possibly factor some of this out into render_entity
 static void render_sprite(RenderBuffer *buffer, Entity *e) {
 #define DEBUG_CUBES 0
   TIMED_FUNCTION();
 
-  RenderingInfo info = get_render_info(buffer->assets, e);
+  SpriteRenderInfo info = get_sprite_render_info(buffer->assets, e);
   if (info.texture_uv == vec4(0)) return;
   //PRINT_V4(info.texture_uv);
   assert(info.bitmap_id);
@@ -1160,7 +1159,8 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
 #undef DEBUG_CUBES
 }
 
-#if 0
+static TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIndex face_idx, u32 tile_idx);
+
 // TODO This should be factored differently, since get_render_info needs to know
 // what part of the box its drawing. Its fine for now since we draw every part of
 // the box the same way.
@@ -1169,43 +1169,35 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, Face
 
   // TODO pull some of this info out a level
   TileRenderInfo info = get_tile_render_info(buffer->assets, e, face_idx, tile_idx);
-  V4 texture_uv = info.texture_uv;
-  V4 normal_map_uv = vec4(0); // info.normal_map_uv; // TODO
+  // info.normal_map_uv; // TODO
   u32 bitmap_id = info.bitmap_id;
-  V4 c = info.color;
-  float scale = info.scale;
   float tex_width = info.texture_width;
   float tex_height = info.texture_height;
+  // TODO handle cubes without a texture
   ASSERT(tex_width); ASSERT(tex_height);
 
-  Quad quad = to_quad(tile, face_idx);
+  Quad4 quad = to_quad4(tile, face_idx);
   V3 normal = aabb_normals[face_idx];
   V3 tangent = aabb_tangents[face_idx];
 
-  // ------------
-  push_quad_vert_helper(buffer, &quad, texture_uv, 
+  VertexQuad verts = push_vertices(buffer, 6);
+  set_colors(verts, info.color);
+  set_uv(verts, info.texture_uv);
+  set_normals(verts, normal);
+  set_tangents(verts, tangent);
+  set_positions(verts, &quad);
+  finalize(verts);
 
-
-  u32 num_quads = 0;
-
-  for (int i = 0; i < 6; i++) {
-    auto dim = rects[i].offset;
-
-    if (!SHIFT_TEST(face_mask, i)) continue;
-
-    V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
-
-    push_quad_vert_helper(buffer, quads + i, uv, n[i], t[i], c);
-  }
   
-  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
-  append_quads(buffer, num_quads, texture_id, texture->width, texture->height, normal_map_id, stage);
+  auto stage = (info.color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
+  append_quads(buffer, 1, bitmap_id, tex_width, tex_height, 0, stage);
 }
 
 // TODO add debug colors
 static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect, FaceIndex face_idx) {
 
 #define CULL_REVERSE_FACES false
+  
 
   float tile_dim = 1;
   V3 normal = aabb_normals[face_idx];
@@ -1230,8 +1222,8 @@ static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect
   tile.center = origin;
   tile.offset = tile_offset;
 
-  u32 x_count = rect.offset.elements[x_axis_index] * 2 / tile_dim;
-  u32 y_count = rect.offset.elements[y_axis_index] * 2 / tile_dim;
+  u32 x_count = abs(rect.offset.elements[x_axis_index] * 2 / tile_dim);
+  u32 y_count = abs(rect.offset.elements[y_axis_index] * 2 / tile_dim);
 
   float x_translation = tile_offset.elements[x_axis_index] * 2;
   float y_translation = tile_offset.elements[y_axis_index] * 2;
@@ -1239,20 +1231,13 @@ static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect
 
   for (u32 i = 0; i < x_count; i++) {
     for (u32 j = 0; j < y_count; j++) {
-      V3 origin_translation = {};
-      origin_translation.elements[x_axis_index] = i * tile_dim;
-      origin_translation.elements[y_axis_index] = j * tile_dim;
-      tile.center = origin + origin_translation;
-
       render_tile(buffer, e, tile, face_idx, i * y_count + j);
-
       tile.center.elements[y_axis_index] += y_translation;
     }
     tile.center.elements[y_axis_index] = origin_y;
     tile.center.elements[x_axis_index] += x_translation;
   }
 }
-#endif
 
 // TODO Finish implementing this. We can't actually have the cube textures stretch
 // like we did before since they will be pulled from a sprite sheet. Instead, we 
@@ -1270,50 +1255,15 @@ static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect
 static void render_tiled_box(RenderBuffer *buffer, Entity *e) {
   TIMED_FUNCTION();
 
-  float tile_dim = 1;
-  V3 tile_offset = vec3(tile_dim / 2);
+  auto box = e->collision_box;
 
-  AlignedBox b = e->collision_box;
-  ASSERT(b.offset.x >= 0);
-  ASSERT(b.offset.y >= 0);
-  ASSERT(b.offset.z >= 0);
-
-  u32 x_dim = b.offset.x * 2 / tile_dim;
-  u32 y_dim = b.offset.y * 2 / tile_dim;
-  u32 z_dim = b.offset.z * 2 / tile_dim;
-
-  // TODO the way this should actually work is this :
-  // 1. Split the box into faces (aligned_rects).
-  // 2. Call render_tiled_rect on each of them.
-  // 3. In render_tiled_rect break the rect into tiles.
-  // 4. Call render_tile on each of them.
-
-
-  u32 num_cubes = x_dim * y_dim * z_dim;
-  V3 origin = b.center - b.offset + tile_offset;
-
-  AlignedBox box;
-  box.offset = tile_offset;
-
-  for (u32 i = 0; i < x_dim; i++) {
-    for (u32 j = 0; j < y_dim; j++) {
-      for (u32 k = 0; k < z_dim; k++) {
-        V3 origin_translation = vec3(i, j, k) * tile_dim;
-        box.center = origin + origin_translation;
-
-        u32 face_mask = 0;
-        if (i == 0) SHIFT_SET(face_mask, FACE_LEFT);
-        if (i == x_dim - 1) SHIFT_SET(face_mask, FACE_RIGHT);
-        if (j == 0) SHIFT_SET(face_mask, FACE_FRONT);
-        if (j == y_dim - 1) SHIFT_SET(face_mask, FACE_BACK);
-        if (k == 0) SHIFT_SET(face_mask, FACE_BOTTOM);
-        if (k == z_dim - 1) SHIFT_SET(face_mask, FACE_TOP);
-        //render_unit_box(buffer, e, box);
-      }
-    }
+  for (u32 i = 0; i < FACE_COUNT; i++) {
+    auto face = get_face(box, FaceIndex(i));
+    render_tiled_rect(buffer, e, face, FaceIndex(i));
   }
 
-  // TODO consider pulling out some of the push calls from render_unit_box
+
+  // TODO consider pulling out some of the push calls from render_tiled_rect
   // to call them here instead.
 }
 
