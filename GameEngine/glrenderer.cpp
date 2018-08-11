@@ -1,33 +1,6 @@
 #ifndef _NAR_GL_RENDERER_CPP_
 #define _NAR_GL_RENDERER_CPP_
 
-// TODO consider putting this in vmath once I add FaceIndex to somewhere accessable
-static const V3 aabb_normals[6] = { 
-  [FACE_TOP] = vec3(0,0,1),
-  [FACE_BOTTOM] = vec3(0,0,-1),
-  [FACE_LEFT] = vec3(-1,0,0),
-  [FACE_RIGHT] = vec3(1,0,0),
-  [FACE_FRONT] = vec3(0,-1,0),
-  [FACE_BACK] = vec3(0,1,0)
-};
-
-static const V3 aabb_tangents[6] = {
-  [FACE_TOP] = vec3(1,0,0),
-  [FACE_BOTTOM] = vec3(-1,0,0),
-  [FACE_LEFT] = vec3(0,-1,0),
-  [FACE_RIGHT] = vec3(0,1,0),
-  [FACE_FRONT] = vec3(1,0,0),
-  [FACE_BACK] = vec3(-1,0,0)
-};
-
-static const V3 aabb_cotangents[6] = {
-  [FACE_TOP] = vec3(0,1,0),
-  [FACE_BOTTOM] = vec3(0,1,0),
-  [FACE_LEFT] = vec3(0,0,1),
-  [FACE_RIGHT] = vec3(0,0,1),
-  [FACE_FRONT] = vec3(0,0,1),
-  [FACE_BACK] = vec3(0,0,1)
-};
 
 //
 // Gradient background test code ---
@@ -389,15 +362,169 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 s
 // Vertex operations ---
 //
 
-static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
-  if (buffer->max_vertices - buffer->vertex_count <= 0) {
+enum VertexAttribute {
+  VERTEX_POSITION,
+  VERTEX_UV,
+  VERTEX_COLOR,
+  VERTEX_NORMAL,
+  VERTEX_TANGENT,
+};
+
+/*
+enum VertexMode : u16 {
+  VERTEX_TRIANGLE,
+  VERTEX_QUAD,
+};
+*/
+
+struct VertexArray {
+  Vertex *verts;
+  u32 count;
+  u32 attribute_flags;
+};
+
+// TODO add VertexTriangle, VertexTriangleFan, etc
+struct VertexQuad {
+  union {
+    VertexArray array;
+    struct {
+      Vertex *verts;
+      u32 count;
+      u32 attribute_flags;
+    };
+  };
+  // NOTE Wraps counter clockwise around each triangle
+  static constexpr u32 COUNT = 6;
+  static constexpr int IDXS[COUNT] = {0,1,2,0,2,3};
+
+  VertexQuad() = default;
+  inline VertexQuad(VertexArray a) { ASSERT_EQUAL(a.count, COUNT); array = a; }
+  inline operator VertexArray&() { return array; }
+};
+
+constexpr int VertexQuad::IDXS[VertexQuad::COUNT];
+
+static inline VertexArray push_vertices(RenderBuffer *buffer, u32 count) {
+  if (buffer->max_vertices - buffer->vertex_count < count) {
     assert(!"Vertex buffer overflowed.");
-    return;
+    return {};
   }
   auto vert = buffer->vertices + buffer->vertex_count;
-  *vert = v;
-  buffer->vertex_count++;
+  buffer->vertex_count += count;
+  return VertexArray{vert, count, 0};
 }
+
+static inline Vertex *push_vertex(RenderBuffer *buffer) {
+  return push_vertices(buffer, 1).verts;
+}
+
+static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
+  auto vert = push_vertex(buffer);
+  if (vert) *vert = v;
+}
+
+static inline void set_colors(VertexArray &verts, V4 color) {
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].color = color;
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_COLOR);
+}
+
+static inline void set_uv(VertexArray &verts, V2 uv) {
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].uv = uv;
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_UV);
+}
+
+static inline void set_normals(VertexArray &verts, V3 normal) {
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].normal = normal;
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_NORMAL);
+}
+
+static inline void set_tangents(VertexArray &verts, V3 tangent) {
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].tangent = tangent;
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_TANGENT);
+}
+
+static inline void set_colors(VertexQuad &verts, V4 *colors) {
+  ASSERT(colors); int const *idxs = verts.IDXS;
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].color = colors[idxs[i]];
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_COLOR);
+}
+
+static inline void set_uv(VertexQuad &verts, V2 *uv) {
+  ASSERT(uv); int const *idxs = verts.IDXS;
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].uv = uv[idxs[i]];
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_UV);
+}
+
+inline void uv_to_array(V4 uv, V2 *arr) {
+  ASSERT(arr);
+  arr[0] = vec2(uv.x, uv.w);
+  arr[1] = uv.zw;
+  arr[2] = vec2(uv.z, uv.y);
+  arr[3] = uv.xy;
+}
+
+static inline void set_uv(VertexQuad &verts, V4 uv) {
+  V2 uv4[4];
+  uv_to_array(uv, uv4);
+  set_uv(verts, uv4);
+}
+
+static inline void set_normals(VertexQuad &verts, V3 *normals) {
+  ASSERT(normals); int const *idxs = verts.IDXS;
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].normal = normals[idxs[i]];
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_NORMAL);
+}
+
+static inline void set_tangents(VertexQuad &verts, V3 *tangents) {
+  ASSERT(tangents); int const *idxs = verts.IDXS;
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].tangent = tangents[idxs[i]];
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_TANGENT);
+}
+
+static inline void set_positions(VertexQuad &verts, Quad4 *quad) {
+  ASSERT(quad); int const *idxs = verts.IDXS;
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].position = quad->verts[idxs[i]];
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_POSITION);
+}
+
+static inline void finalize(VertexQuad &verts) {
+  if (!SHIFT_TEST(verts.attribute_flags, VERTEX_POSITION)) 
+    FAILURE("Vertex position must be set", verts.attribute_flags);
+  if (!SHIFT_TEST(verts.attribute_flags, VERTEX_COLOR)) 
+    set_colors(verts, vec4(1));
+  if (!SHIFT_TEST(verts.attribute_flags, VERTEX_NORMAL)) 
+    set_normals(verts, vec3(0,0,1));
+  if (!SHIFT_TEST(verts.attribute_flags, VERTEX_TANGENT)) 
+    set_tangents(verts, vec3(1,0,0));
+
+  V2 default_quad_uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  if (!SHIFT_TEST(verts.attribute_flags, VERTEX_UV)) {
+    if (verts.count == 6) {
+      set_uv(verts, default_quad_uv);
+    } else {
+      set_uv(verts, vec2(0));
+    }
+  }
+}
+
 
 struct VertexSOA {
   V4 *p, *c;
@@ -427,7 +554,11 @@ static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
   }
 }
 
+
 // TODO Expand on these functions and use them throughout the file
+//
+// UPDATE : Actually, delete these and add setter functions to VertexSOA.
+// Stuff like : verts.color(c); verts.tangent(t); or something
 inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V4 c) {
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
@@ -494,6 +625,29 @@ inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V3 
 
   push_quad_vertices(buffer, verts);
 }
+
+inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V3 n, V3 t, V4 c) {
+  // NOTE for gamma correction :
+  //c.rgb *= c.rgb;
+ 
+  V2 uv4[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  V4 c4[4] = {c,c,c,c};
+
+  V3 n4[4] = {n,n,n,n};
+
+  V3 t4[4] = {t,t,t,t};
+
+  VertexSOA verts;
+  verts.p = quad->verts;
+  verts.uv = uv4;
+  verts.c = c4;
+  verts.n = n4;
+  verts.t = t4;
+
+  push_quad_vertices(buffer, verts);
+}
+
+
 
 
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
@@ -630,7 +784,13 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
 
     V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
 
-    push_quad_vert_helper(buffer, quads + i, uv, n[i], t[i], c);
+    VertexQuad verts = push_vertices(buffer, 6);
+    set_positions(verts, quads + i);
+    set_colors(verts, c);
+    set_normals(verts, n[i]);
+    set_tangents(verts, t[i]);
+    set_uv(verts, uv);
+    finalize(verts);
   }
   
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
@@ -646,13 +806,16 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
 
   auto quad = to_quad4(rect);
 
-  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-
   // TODO calculate this for non-axis-aligned rectangles
   V3 n = {0,0,1};
   V3 t = {1,0,0};
 
-  push_quad_vert_helper(buffer, &quad, uv, n, t, color);
+  VertexQuad verts = push_vertices(buffer, 6);
+  set_colors(verts, color);
+  set_positions(verts, &quad);
+  set_normals(verts, n);
+  set_tangents(verts, t);
+  finalize(verts);
 
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
 
@@ -683,10 +846,17 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   u32 bitmap_id = get_texture_id(buffer->assets, BITMAP_WHITE);
   u32 normal_map_id = 0;
 
-  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
+  //V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
 
-  push_quad_vert_helper(buffer, &quad, uv, color);
-  push_quad_vert_helper(buffer, &quad2, uv, color);
+  VertexQuad verts1 = push_vertices(buffer, 6);
+  VertexQuad verts2 = push_vertices(buffer, 6);
+  set_colors(verts1, color);
+  set_colors(verts2, color);
+
+  set_positions(verts1, &quad);
+  set_positions(verts2, &quad2);
+  finalize(verts1);
+  finalize(verts2);
 
   append_quads(buffer, 2, bitmap_id, 1, 1, normal_map_id, RENDER_STAGE_BASE);
 }
@@ -705,7 +875,10 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
   auto texture = get_bitmap(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
-  push_quad_vert_helper(buffer, &quad, color);
+  VertexQuad verts = push_vertices(buffer, 6);
+  set_colors(verts, color);
+  set_positions(verts, &quad);
+  finalize(verts);
 
   append_quads(buffer, 1, texture_id, texture->width, texture->height, 0, RENDER_STAGE_HUD, true);
 }
@@ -770,12 +943,20 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
 
       if (is_shadowed) {
         translate(&quad, shadow_offset);
-        push_quad_vert_helper(buffer, &quad, uv, shadow_color);
+        VertexQuad verts = push_vertices(buffer, 6);
+        set_colors(verts, shadow_color);
+        set_uv(verts, uv);
+        set_positions(verts, &quad);
+        finalize(verts);
         num_quads++;
         translate(&quad, -shadow_offset);
       }
 
-      push_quad_vert_helper(buffer, &quad, uv, color);
+      VertexQuad verts = push_vertices(buffer, 6);
+      set_colors(verts, color);
+      set_uv(verts, uv);
+      set_positions(verts, &quad);
+      finalize(verts);
 
       num_quads++;
       pixel_p.x += b->xadvance;
@@ -939,7 +1120,7 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
   auto quad = to_quad4(r);
 
   V4 uv = info.texture_uv;
-  V2 uv4[4] = {{uv.x,uv.w}, uv.zw, {uv.z,uv.y}, uv.xy};
+  //V2 uv4[4] = {{uv.x,uv.w}, uv.zw, {uv.z,uv.y}, uv.xy};
 
   V3 n = normalize(Z + vec3(0,-2,0)); // TODO Figure this out for real
 
@@ -964,7 +1145,12 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
   //render_arrow(buffer, r.center, r.center + n, vec4(0.3,0,0,1), 0.1);
   //render_arrow(buffer, r.center, r.center + t, vec4(0,0,0.5,1), 0.1);
 
-  push_quad_vert_helper(buffer, &quad, uv4, n, t, info.color);
+  VertexQuad verts = push_vertices(buffer, 6);
+  set_colors(verts, info.color);
+  set_uv(verts, uv);
+  set_normals(verts, n);
+  set_tangents(verts, t);
+  set_positions(verts, &quad);
 
   append_quads(buffer, 1, bitmap_id, info.texture_width, info.texture_height, normal_map_id, RENDER_STAGE_TRANSPARENT);
 
@@ -978,15 +1164,11 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
 // TODO This should be factored differently, since get_render_info needs to know
 // what part of the box its drawing. Its fine for now since we draw every part of
 // the box the same way.
-static void render_tile(RenderBuffer *buffer, Entity *e, AlignedBox box, u32 face_mask) {
+static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, FaceIndex face_idx, u32 tile_idx) {
   TIMED_FUNCTION();
 
-#define DEBUG_COLORS 0
-#if DEBUG_COLORS
-  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
-#endif
-
-  RenderingInfo info = get_render_info(buffer->assets, e);
+  // TODO pull some of this info out a level
+  TileRenderInfo info = get_tile_render_info(buffer->assets, e, face_idx, tile_idx);
   V4 texture_uv = info.texture_uv;
   V4 normal_map_uv = vec4(0); // info.normal_map_uv; // TODO
   u32 bitmap_id = info.bitmap_id;
@@ -996,25 +1178,13 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedBox box, u32 fac
   float tex_height = info.texture_height;
   ASSERT(tex_width); ASSERT(tex_height);
 
-  Quad4 quads[6];
-  to_quad4s(box, quads);
+  Quad quad = to_quad(tile, face_idx);
+  V3 normal = aabb_normals[face_idx];
+  V3 tangent = aabb_tangents[face_idx];
 
-  AlignedRect rects[6] = {top_rect(b), front_rect(b), right_rect(b), 
-                          left_rect(b), back_rect(b), bot_rect(b)};
+  // ------------
+  push_quad_vert_helper(buffer, &quad, texture_uv, 
 
-  float x_scale = 1;
-  float y_scale = 1;
-  V3 const *n = aabb_normals;
-  V3 const *t = aabb_tangents;
-
-  float sprite_width = (texture_uv.z - texture_uv.x) * tex_width;
-  float sprite_height = (texture_uv.w - texture_uv.y) * tex_height;
-  V3 dim = b.offset * 2 * PIXELS_PER_METER / scale;
-  float front_x_repeats = dim.x / sprite_width;
-  float side_x_repeats = dim.y / sprite_width;
-
-  float top_y_repeats = dim.y / sprite_height;
-  float side_y_repeats = dim.z / sprite_height;
 
   u32 num_quads = 0;
 
@@ -1023,10 +1193,6 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedBox box, u32 fac
 
     if (!SHIFT_TEST(face_mask, i)) continue;
 
-#if DEBUG_COLORS
-    c = debug_colors[i];
-#endif
-
     V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
 
     push_quad_vert_helper(buffer, quads + i, uv, n[i], t[i], c);
@@ -1034,36 +1200,56 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedBox box, u32 fac
   
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
   append_quads(buffer, num_quads, texture_id, texture->width, texture->height, normal_map_id, stage);
-#undef DEBUG_COLORS
 }
 
-
+// TODO add debug colors
 static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect, FaceIndex face_idx) {
+
+#define CULL_REVERSE_FACES false
+
   float tile_dim = 1;
-  V3 n = aabb_normals[face_idx];
+  V3 normal = aabb_normals[face_idx];
+  V3 tangent = aabb_tangents[face_idx];
+  V3 cotangent = aabb_cotangents[face_idx];
+
+  if (CULL_REVERSE_FACES) {
+    if (towards(buffer->camera->forward, normal)) return;
+  }
 
   // NOTE : These are the indices of the axes in the array {x,y,z}
-  u32 x_axis_index = !n.x ? 0 : 1;
-  u32 y_axis_index = !n.z ? 2 : 1;
+  u32 x_axis_index = !normal.x ? 0 : 1;
+  u32 y_axis_index = !normal.z ? 2 : 1;
   u32 zero_axis_index = 3 - x_axis_index - y_axis_index;
 
-  V3 tile_offset = vec3(tile_dim / 2);
-  tile_offset.elements[zero_axis_index] = 0;
+  V3 tile_offset = (tangent + cotangent) * tile_dim / 2;
+  ASSERT_EQUAL(tile_offset.elements[zero_axis_index], 0);
+
+  V3 origin = rect.center - rect.offset + tile_offset;
 
   AlignedRect3 tile;
+  tile.center = origin;
   tile.offset = tile_offset;
-  V3 origin = rect.center - rect.offset + tile_offset;
 
   u32 x_count = rect.offset.elements[x_axis_index] * 2 / tile_dim;
   u32 y_count = rect.offset.elements[y_axis_index] * 2 / tile_dim;
+
+  float x_translation = tile_offset.elements[x_axis_index] * 2;
+  float y_translation = tile_offset.elements[y_axis_index] * 2;
+  float origin_y = origin.elements[y_axis_index];
 
   for (u32 i = 0; i < x_count; i++) {
     for (u32 j = 0; j < y_count; j++) {
       V3 origin_translation = {};
       origin_translation.elements[x_axis_index] = i * tile_dim;
       origin_translation.elements[y_axis_index] = j * tile_dim;
-      tile_center = origin + origin_translation;
+      tile.center = origin + origin_translation;
+
+      render_tile(buffer, e, tile, face_idx, i * y_count + j);
+
+      tile.center.elements[y_axis_index] += y_translation;
     }
+    tile.center.elements[y_axis_index] = origin_y;
+    tile.center.elements[x_axis_index] += x_translation;
   }
 }
 #endif
@@ -1177,15 +1363,8 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 
   auto quad = to_quad4(r);
 
-  V2 uv[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  auto c = visual_info.color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
-
+  auto c = visual_info.color; 
   V3 n = -Z;
-  V3 n4[4] = {n,n,n,n};
 
   /*
   float z_min = visual_info.offset.z;
@@ -1193,7 +1372,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   */
 
   float z_min = 0;
-  float z_max = visual_info.sprite_depth; //0.3; // TODO figure this out for real
+  float z_max = visual_info.sprite_depth; // TODO figure this out for real
 
   float bias[4] = {z_min, z_min, z_max, z_max};
   for (int i = 0; i < 4; i++) {
@@ -1202,17 +1381,13 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 
   // NOTE : This is always correct if the sprite isn't skewed.
   V3 t = X; //{1,0,0};
-  V3 t4[4] = {t,t,t,t};
 
-  VertexSOA verts;
-  verts.p = quad.verts;
-  verts.uv = uv;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-
-  push_quad_vertices(buffer, verts);
+  VertexQuad verts = push_vertices(buffer, 6);
+  set_colors(verts, c);
+  set_normals(verts, n);
+  set_tangents(verts, t);
+  set_positions(verts, &quad);
+  finalize(verts);
 
   append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, RENDER_STAGE_TRANSPARENT);
 
@@ -1246,14 +1421,6 @@ static inline void _gl_check_error(const char *file_name, int line_num) {
     printf("OpenGL error: 0x%x in file %s, on line %d\n", err, file_name, line_num);
   }
 }
-
-enum ShaderAttribute {
-  VERTEX_POSITION,
-  VERTEX_UV,
-  VERTEX_COLOR,
-  VERTEX_NORMAL,
-  VERTEX_TANGENT,
-};
 
 static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, bool use_low_res_uv) {
   TIMED_FUNCTION();

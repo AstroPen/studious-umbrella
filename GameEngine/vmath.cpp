@@ -46,6 +46,33 @@ struct HorizontalLine {
   float width;
 };
 
+static const V3 aabb_normals[6] = { 
+  [FACE_TOP] = vec3(0,0,1),
+  [FACE_BOTTOM] = vec3(0,0,-1),
+  [FACE_LEFT] = vec3(-1,0,0),
+  [FACE_RIGHT] = vec3(1,0,0),
+  [FACE_FRONT] = vec3(0,-1,0),
+  [FACE_BACK] = vec3(0,1,0)
+};
+
+static const V3 aabb_tangents[6] = {
+  [FACE_TOP] = vec3(1,0,0),
+  [FACE_BOTTOM] = vec3(-1,0,0),
+  [FACE_LEFT] = vec3(0,-1,0),
+  [FACE_RIGHT] = vec3(0,1,0),
+  [FACE_FRONT] = vec3(1,0,0),
+  [FACE_BACK] = vec3(-1,0,0)
+};
+
+static const V3 aabb_cotangents[6] = {
+  [FACE_TOP] = vec3(0,1,0),
+  [FACE_BOTTOM] = vec3(0,1,0),
+  [FACE_LEFT] = vec3(0,0,1),
+  [FACE_RIGHT] = vec3(0,0,1),
+  [FACE_FRONT] = vec3(0,0,1),
+  [FACE_BACK] = vec3(0,0,1)
+};
+
 
 //
 // AlignedRect accessors ---
@@ -465,12 +492,12 @@ static inline Quad4 right_quad4(AlignedBox b, float w = 0) {
 }
 
 static inline void to_quad4s(AlignedBox b, Quad4 *quads, float w = 0) {
-  quads[0] = top_quad4(b, w);
-  quads[1] = front_quad4(b, w);
-  quads[2] = right_quad4(b, w);
-  quads[3] = left_quad4(b, w);
-  quads[4] = back_quad4(b, w);
-  quads[5] = bot_quad4(b, w);
+  quads[FACE_TOP] = top_quad4(b, w);
+  quads[FACE_FRONT] = front_quad4(b, w);
+  quads[FACE_RIGHT] = right_quad4(b, w);
+  quads[FACE_LEFT] = left_quad4(b, w);
+  quads[FACE_BACK] = back_quad4(b, w);
+  quads[FACE_BOTTOM] = bot_quad4(b, w);
 }
 
 //
@@ -567,6 +594,23 @@ static inline Quad4 to_quad4(AlignedRect r, float w = 0) {
   q.verts[1] = vec4(p2.x, p1.y, 0, w);
   q.verts[2] = vec4(p2, 0, w);
   q.verts[3] = vec4(p1.x, p2.y, 0, w);
+  return q;
+}
+
+static inline Quad4 to_quad4(AlignedRect3 r, FaceIndex idx, float w = 0) {
+  V3 p1 = r.center - r.offset;
+  V3 p3 = r.center + r.offset;
+  V3 tangent = aabb_tangents[idx];
+  V3 cotangent = aabb_cotangents[idx];
+  V3 reverse_offset = -r.offset * tangent + r.offset * cotangent;
+  V3 p2 = r.center - reverse_offset;
+  V3 p4 = r.center + reverse_offset;
+
+  Quad4 q;
+  q.verts[0] = vec4(p1, w);
+  q.verts[1] = vec4(p2, w);
+  q.verts[2] = vec4(p3, w);
+  q.verts[3] = vec4(p4, w);
   return q;
 }
 

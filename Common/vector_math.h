@@ -119,6 +119,7 @@ union V4 {
   float elements[4];
 };
 
+// TODO consider defining Assert::print_variable
 #define PRINT_V4(name) printf(#name " : (%f,%f,%f,%f)\n", name.x, name.y, name.z, name.w);
 
 static inline V4 vec4(float f) {
@@ -420,6 +421,10 @@ V3 min(V3 a, V3 b) {
     min(a.z, b.z)
   };
   return result;
+}
+
+static inline V3 abs(V3 v) {
+  return vec3(abs(v.x), abs(v.y), abs(v.z));
 }
 
 static inline float dot(V2 a, V2 b) {
