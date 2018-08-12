@@ -109,27 +109,33 @@ enum RenderType : u32 {
 struct RenderElement {
   RenderElement *next;
   RenderType type;
+  u32 flags;
 };
+
 
 struct RenderElementTextureQuads {
   RenderElement head;
-  u32 texture_id;
-  u32 normal_map_id;
+
   int vertex_index;
   int quad_count;
+
+  u32 texture_id;
   float texture_width;
   float texture_height;
-  bool use_low_res_uv;
+
+  u32 normal_map_id;
+  V2 normal_map_uv_offset;
 };
 
 struct RenderElementHud {
   RenderElement head;
-  u32 texture_id;
+
   int vertex_index;
   int quad_count;
+
+  u32 texture_id;
   float texture_width;
   float texture_height;
-  bool use_low_res_uv;
 };
 
 
@@ -174,19 +180,13 @@ struct RenderStage {
   Flags flags;
 };
 
+
 static void init_render_stage(RenderStage *stage, RenderStage::ProjectionType projection, RenderStage::ViewType view, u16 flags) {
   *stage = {};
   stage->projection = projection;
   stage->view = view;
   stage->flags = RenderStage::Flags(flags);
 }
-
-enum RenderStageNum {
-  RENDER_STAGE_BASE,
-  RENDER_STAGE_TRANSPARENT,
-  RENDER_STAGE_HUD,
-  RENDER_STAGE_COUNT,
-};
 
 
 struct RenderBuffer {
@@ -324,6 +324,7 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 s
 
   elem->next = NULL;
   elem->type = type;
+  elem->flags = 0;
 
   auto render_stage = buffer->stages + stage;
   if (!render_stage->first) render_stage->first = elem;
@@ -402,7 +403,7 @@ struct VertexQuad {
   inline operator VertexArray&() { return array; }
 };
 
-constexpr int VertexQuad::IDXS[VertexQuad::COUNT];
+constexpr int VertexQuad::IDXS[COUNT];
 
 static inline VertexArray push_vertices(RenderBuffer *buffer, u32 count) {
   if (buffer->max_vertices - buffer->vertex_count < count) {
@@ -505,6 +506,15 @@ static inline void set_positions(VertexQuad &verts, Quad4 *quad) {
   SHIFT_SET(verts.attribute_flags, VERTEX_POSITION);
 }
 
+static inline void set_positions(VertexQuad &verts, AlignedRect3 rect, FaceIndex face) {
+  int const *idxs = verts.IDXS;
+  Quad4 quad = to_quad4(rect, face);
+  for (u32 i = 0; i < verts.count; i++) {
+    verts.verts[i].position = quad.verts[idxs[i]];
+  }
+  SHIFT_SET(verts.attribute_flags, VERTEX_POSITION);
+}
+
 static inline void finalize(VertexQuad &verts) {
   if (!SHIFT_TEST(verts.attribute_flags, VERTEX_POSITION)) 
     FAILURE("Vertex position must be set", verts.attribute_flags);
@@ -525,6 +535,7 @@ static inline void finalize(VertexQuad &verts) {
   }
 }
 
+// TODO Delete basically all of this :
 
 struct VertexSOA {
   V4 *p, *c;
@@ -555,10 +566,6 @@ static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
 }
 
 
-// TODO Expand on these functions and use them throughout the file
-//
-// UPDATE : Actually, delete these and add setter functions to VertexSOA.
-// Stuff like : verts.color(c); verts.tangent(t); or something
 inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V4 c) {
   // NOTE for gamma correction :
   //c.rgb *= c.rgb;
@@ -649,11 +656,12 @@ inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V3 n, V3 t,
 
 
 
+// TODO Rework this to better interface with VertexArray
 
 // FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
 // it will probably break stuff.
 // UPDATE : This might be fixed now, should test it soon.
-static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, RenderStageNum render_stage, bool is_sprite = true) {
+static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, RenderStageNum render_stage, bool is_sprite = true, V2 normal_map_uv_offset = vec2(0)) {
   TIMED_FUNCTION();
 
   // TODO reenable this when I want to optimize things and I've fixed the bug above
@@ -675,24 +683,27 @@ static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id,
   switch (render_type) {
     case RenderType_RenderElementTextureQuads : {
       auto elem = push_element(buffer, RenderElementTextureQuads, render_stage);
+      if (is_sprite) elem->head.flags |= RenderInfo::LOW_RES;
       elem->texture_id = texture_id;
       elem->normal_map_id = normal_map_id;
       elem->quad_count = count;
       elem->vertex_index = buffer->vertex_count - count * 6;
       elem->texture_width = texture_width;
       elem->texture_height = texture_height;
-      elem->use_low_res_uv = is_sprite;
+      elem->normal_map_uv_offset = normal_map_uv_offset;
+      //elem->use_low_res_uv = is_sprite;
     } break;
 
     case RenderType_RenderElementHud : {
       auto elem = push_element(buffer, RenderElementHud, render_stage);
+      if (is_sprite) elem->head.flags |= RenderInfo::LOW_RES;
       assert(!normal_map_id);
       elem->texture_id = texture_id;
       elem->quad_count = count;
       elem->vertex_index = buffer->vertex_count - count * 6;
       elem->texture_width = texture_width;
       elem->texture_height = texture_height;
-      elem->use_low_res_uv = is_sprite;
+      //elem->use_low_res_uv = is_sprite;
     } break;
 
     default : assert(!"Error."); break;
@@ -739,7 +750,8 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, u32 texture
 }
 #endif
 
-
+// TODO This should be combined with render_tiled_box to some degree. Note that this
+// should only be used for untextured boxes.
 static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID texture_asset_id, float scale, u32 normal_map_id = 0) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
@@ -1088,7 +1100,7 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
 
 
   u32 bitmap_id = info.bitmap_id;
-  u32 normal_map_id = (info.normal_map_uv == vec4(0)) ? 0 : info.bitmap_id;
+  u32 normal_map_id = info.normal_map_id;
 
   GameCamera *camera = buffer->camera;
 
@@ -1161,36 +1173,31 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
 
 static TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIndex face_idx, u32 tile_idx);
 
-// TODO This should be factored differently, since get_render_info needs to know
-// what part of the box its drawing. Its fine for now since we draw every part of
-// the box the same way.
 static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, FaceIndex face_idx, u32 tile_idx) {
-  TIMED_FUNCTION();
 
   // TODO pull some of this info out a level
   TileRenderInfo info = get_tile_render_info(buffer->assets, e, face_idx, tile_idx);
-  // info.normal_map_uv; // TODO
+  u32 normal_map_id = info.normal_map_id;
   u32 bitmap_id = info.bitmap_id;
   float tex_width = info.texture_width;
   float tex_height = info.texture_height;
   // TODO handle cubes without a texture
   ASSERT(tex_width); ASSERT(tex_height);
 
-  Quad4 quad = to_quad4(tile, face_idx);
-  V3 normal = aabb_normals[face_idx];
-  V3 tangent = aabb_tangents[face_idx];
+  const V3 normal  = aabb_normals[face_idx];
+  const V3 tangent = aabb_tangents[face_idx];
 
   VertexQuad verts = push_vertices(buffer, 6);
   set_colors(verts, info.color);
   set_uv(verts, info.texture_uv);
   set_normals(verts, normal);
   set_tangents(verts, tangent);
-  set_positions(verts, &quad);
+  set_positions(verts, tile, face_idx);
+  //set_positions(verts, &quad);
   finalize(verts);
-
-  
+ 
   auto stage = (info.color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
-  append_quads(buffer, 1, bitmap_id, tex_width, tex_height, 0, stage);
+  append_quads(buffer, 1, bitmap_id, tex_width, tex_height, normal_map_id, stage, info.flags & RenderInfo::LOW_RES, info.normal_map_uv_offset);
 }
 
 // TODO add debug colors
@@ -1239,19 +1246,6 @@ static void render_tiled_rect(RenderBuffer *buffer, Entity *e, AlignedRect3 rect
   }
 }
 
-// TODO Finish implementing this. We can't actually have the cube textures stretch
-// like we did before since they will be pulled from a sprite sheet. Instead, we 
-// need to manually loop them somehow (or just make each cube be a real cube 
-// instead of a long rectangular prism).
-//
-// UPDATE : I'm now leaning towards doing this in the shader. We could just 
-// manually restrict the uv range by specifying the sprite width and height as 
-// uniforms. However, we still need to add a border to the texture to prevent
-// it from blending wrong around the edges.
-//
-// UPDATE 2 : Actually, I think that I should break the box up into separate cubes.
-// Each cube is likely to have a different texture (because of corners) in 
-// practice, so they can't even share vertices.
 static void render_tiled_box(RenderBuffer *buffer, Entity *e) {
   TIMED_FUNCTION();
 
@@ -1364,6 +1358,7 @@ static GLuint texture_sampler_id;
 static GLuint texture_width_id;
 static GLuint texture_height_id;
 static GLuint use_low_res_uv_filter_id;
+static GLuint normal_map_uv_offset_id;
 
 static inline void _gl_check_error(const char *file_name, int line_num) {
   GLenum err;
@@ -1372,7 +1367,7 @@ static inline void _gl_check_error(const char *file_name, int line_num) {
   }
 }
 
-static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, bool use_low_res_uv) {
+static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, V2 normal_map_uv_offset, bool use_low_res_uv) {
   TIMED_FUNCTION();
 
   assert(texture_id);
@@ -1394,6 +1389,7 @@ static void draw_vertices(int vertex_idx, int count, u32 texture_id, float textu
   if (has_normal_map) {
     glActiveTexture(GL_TEXTURE0 + 1);
     glBindTexture(GL_TEXTURE_2D, normal_map_id);
+    glUniform2fv(normal_map_uv_offset_id, 1, normal_map_uv_offset.elements);
   }
   
   glEnableVertexAttribArray(VERTEX_POSITION);
@@ -1609,7 +1605,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
           set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
           if (e->texture_id) texture_id = e->texture_id;
 
-          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, e->normal_map_id, e->use_low_res_uv);
+          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, e->normal_map_id, e->normal_map_uv_offset, e->head.flags & RenderInfo::LOW_RES);
         } break;
 
         case RenderType_RenderElementHud : {
@@ -1618,7 +1614,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
           set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
           if (e->texture_id) texture_id = e->texture_id;
 
-          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, 0, e->use_low_res_uv);
+          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, 0, vec2(0), e->head.flags & RenderInfo::LOW_RES);
         } break;
 
         case RenderType_RenderElementClear : {

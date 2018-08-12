@@ -241,7 +241,32 @@ static float get_sprite_depth(TextureGroup *group, int sprite_index) {
   return group->sprite_depth;
 }
 
-static TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIndex face_idx, u32 tile_idx) {
+inline void init_render_info(RenderInfo *info, Entity *e, TextureGroup *group, V4 uv) {
+  info->texture_uv = uv;
+  info->color = get_color(e);
+
+  info->texture_width = group->bitmap.width;
+  info->texture_height = group->bitmap.height;
+
+  if (info->color.a < 1) info->render_stage = RENDER_STAGE_TRANSPARENT;
+  // TODO this should also consider whether the bitmap has transparency
+  else info->render_stage = RENDER_STAGE_BASE;
+
+  info->bitmap_id = group->render_id;
+
+  if (has_normal_map(group)) {
+    // NOTE : This assumes that the normal map is in the same bitmap and that
+    // it is offset by half the height.
+    info->normal_map_uv_offset = vec2(0, 0.5);
+    info->normal_map_id = info->bitmap_id;
+  }
+
+  // TODO store this information in the group maybe?
+  info->flags |= RenderInfo::LOW_RES;
+}
+
+inline TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIndex face_idx, u32 tile_idx) {
+
   UNUSED(tile_idx);
   TextureGroup *group = get_texture_group(assets, e->texture_group_id);
   if (!group) return {};
@@ -253,13 +278,8 @@ static TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIn
   if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
 
   TileRenderInfo result = {};
-  result.bitmap_id = group->render_id;
-  result.texture_uv = get_sprite_uv(group, sprite_index, false);
-  if (has_normal_map(group)) 
-    result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2, false);
-  result.color = get_color(e);
-  result.texture_width = group->bitmap.width;
-  result.texture_height = group->bitmap.height;
+  V4 texture_uv = get_sprite_uv(group, sprite_index, false);
+  init_render_info(&result, e, group, texture_uv);
 
   return result;
 }
@@ -284,19 +304,15 @@ static SpriteRenderInfo get_sprite_render_info(GameAssets *assets, Entity *e) {
   }
   if (sprite_index < 0) sprite_index = 0; // TODO I'm not sure what I should do for this...
 
+  V4 texture_uv = get_sprite_uv(group, sprite_index, reversed);
   SpriteRenderInfo result = {};
-  result.bitmap_id = group->render_id;
-  result.texture_uv = get_sprite_uv(group, sprite_index, reversed);
-  if (has_normal_map(group)) 
-    result.normal_map_uv = get_sprite_uv(group, sprite_index + group->sprite_count / 2, reversed);
-  result.color = get_color(e);
+  init_render_info(&result, e, group, texture_uv);
+  result.render_stage = RENDER_STAGE_TRANSPARENT;
   result.offset = get_sprite_offset(group);
   result.sprite_depth = get_sprite_depth(group, sprite_index);
   result.scale = get_sprite_scale(e);
   result.width = group->sprite_width;
   result.height = group->sprite_height;
-  result.texture_width = group->bitmap.width;
-  result.texture_height = group->bitmap.height;
 
   return result;
 }
@@ -555,7 +571,8 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer);
   GLint swizzle_mask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
   glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
   FontInfo info;
   info.bitmap = bitmap;

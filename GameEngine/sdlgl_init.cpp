@@ -14,7 +14,7 @@ void MessageCallback( GLenum source,
 }
 #endif
 
-static void init_opengl(RenderInfo *info) {
+static void init_opengl(PlatformWindow *info) {
 
   info->glcontext = SDL_GL_CreateContext(info->window);
   if (!info->glcontext) {
@@ -82,6 +82,7 @@ static void init_opengl(RenderInfo *info) {
   texture_width_id = glGetUniformLocation(program_id, "TEXTURE_WIDTH");
   texture_height_id = glGetUniformLocation(program_id, "TEXTURE_HEIGHT");
   use_low_res_uv_filter_id = glGetUniformLocation(program_id, "USE_LOW_RES_UV_FILTER");
+  normal_map_uv_offset_id = glGetUniformLocation(program_id, "NORMAL_MAP_UV_OFFSET");
   gl_check_error();
 
   auto buf = info->render_buffer;
@@ -92,7 +93,7 @@ static void init_opengl(RenderInfo *info) {
   gl_check_error();
 }
 
-static void display_buffer(RenderInfo render_info) {
+static void display_buffer(PlatformWindow render_info) {
   TIMED_FUNCTION();
 
   //int pixel_bytes = 4;
@@ -113,9 +114,9 @@ static void display_buffer(RenderInfo render_info) {
   SDL_GL_SwapWindow(render_info.window);
 }
 
-static RenderInfo init_screen(RenderBuffer *buffer, int width, int height) {
+static PlatformWindow init_screen(RenderBuffer *buffer, int width, int height) {
 
-  RenderInfo result = {};
+  PlatformWindow result = {};
 
   //
   // INIT RENDER BUFFER

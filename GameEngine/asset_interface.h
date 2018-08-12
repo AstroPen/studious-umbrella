@@ -64,35 +64,42 @@ enum TextureGroupID {
   TEXTURE_GROUP_COUNT
 };
 
-// TODO This might replace VisualInfo
-// TODO Rename the thing called RenderInfo to 'PlatformWindow' or something
-struct SpriteRenderInfo {
+enum RenderStageNum {
+  RENDER_STAGE_BASE,
+  RENDER_STAGE_TRANSPARENT,
+  RENDER_STAGE_HUD,
+  RENDER_STAGE_COUNT,
+};
+
+struct RenderInfo {
+  enum Flags : u32 {
+    LOW_RES = 1,
+  };
+
   // NOTE : {0,0,0,0} means no texture or normal_map
   V4 texture_uv; 
-  V4 normal_map_uv;
   V4 color;
+  // NOTE : Undefined if normal_map_id is 0
+  V2 normal_map_uv_offset;   
+  float texture_width, texture_height;
+
+  RenderStageNum render_stage;
+
+  u32 bitmap_id; // NOTE : This is an OpenGL texture id
+  u32 normal_map_id; // NOTE : This is an OpenGL texture id
+  u32 flags;
+};
+
+// TODO This might replace VisualInfo
+struct SpriteRenderInfo : RenderInfo {
   V3 offset;
   float sprite_depth; // TODO This should maybe become a V4 or something
   float scale;
-  u32 width;
+  u32 width; // Sprite width/depth in pixels (I think???)
   u32 height;
-  float texture_width;
-  float texture_height;
-
-  u32 bitmap_id; // NOTE : This is an OpenGL texture id
 };
 
-struct TileRenderInfo {
-  // NOTE : {0,0,0,0} means no texture or normal_map
-  V4 texture_uv; 
-  V4 normal_map_uv;
-  V4 color;
-  //u32 width;
-  //u32 height;
-  float texture_width;
-  float texture_height;
-
-  u32 bitmap_id; // NOTE : This is an OpenGL texture id
+struct TileRenderInfo : RenderInfo {
 };
 
 // Specifies how to enumerate a texture into different sprites
@@ -130,13 +137,13 @@ enum Direction {
   DIRECTION_INVALID,
 };
 
-static Direction flip_direction(Direction dir) {
+inline Direction flip_direction(Direction dir) {
   switch (dir) {
     case LEFT : return RIGHT;
     case RIGHT : return LEFT;
     case UP : return DOWN;
     case DOWN : return UP;
-    default : assert(!"Invalid direction.");
+    default : INVALID_SWITCH_CASE(dir);
   }
   
   return DIRECTION_INVALID;

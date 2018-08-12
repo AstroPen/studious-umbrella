@@ -14,12 +14,12 @@ out VertexData {
   smooth out vec3 bitangent;
   smooth out vec3 p;
   smooth out vec3 camera_p;
-  smooth out vec2 scaled_uv;
 } v_out;
 
-//uniform mat4x4 transform;
 uniform mat4x4 VIEW_MATRIX;
 uniform mat4x4 PROJECTION_MATRIX;
+
+uniform bool USE_LOW_RES_UV_FILTER;
 
 uniform float TEXTURE_WIDTH;
 uniform float TEXTURE_HEIGHT;
@@ -37,11 +37,16 @@ void main() {
   v_out.tangent = vertex_tangent; //vec3(1,0,0); // TODO pass this in for real
   v_out.bitangent = cross(vertex_normal, vertex_tangent);
   v_out.camera_p = vec3(inverse(VIEW_MATRIX) * vec4(0,0,0,1));
-  v_out.uv = vertex_uv;
   // NOTE : Premultiplied alpha
   v_out.color = vertex_color;
   v_out.color.rgb *= vertex_color.a;
-  v_out.scaled_uv = vertex_uv * vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+
+  // NOTE : If this condition is set the uv coordinates are scaled to the texture
+  // size in pixels.
+  if (USE_LOW_RES_UV_FILTER) 
+    v_out.uv = vertex_uv * vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  else 
+    v_out.uv = vertex_uv;
 }
 
 )__";

@@ -8,7 +8,6 @@ in VertexData {
   smooth in vec3 bitangent;
   smooth in vec3 p;
   smooth in vec3 camera_p;
-  smooth in vec2 scaled_uv;
 } v_in;
 
 out vec4 pixel_color;
@@ -21,6 +20,9 @@ uniform vec3 LIGHT_P;
 uniform float TEXTURE_WIDTH;
 uniform float TEXTURE_HEIGHT;
 uniform bool USE_LOW_RES_UV_FILTER;
+
+// TODO : Actually use this.
+uniform vec2 NORMAL_MAP_UV_OFFSET; 
 
 const mediump vec3 perception = vec3(0.299, 0.587, 0.114);
 
@@ -55,12 +57,12 @@ vec2 get_custom_uv() {
   if (!USE_LOW_RES_UV_FILTER) return v_in.uv;
 
   vec2 alpha = vec2(0.07); // TODO This should vary based on the distance
-  vec2 x = fract(v_in.scaled_uv);
+  vec2 x = fract(v_in.uv);
   vec2 x_ = clamp(0.5 / alpha * x, 0.0, 0.5) +
             clamp(0.5 / alpha * (x - 1.0) + 0.5,
                   0.0, 0.5);
  
-  return (floor(v_in.scaled_uv) + x_) / vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+  return (floor(v_in.uv) + x_) / vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
 }
 
 vec3 point_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, vec3 light_p, vec3 light_color, vec3 abc, float shininess) {
@@ -122,7 +124,8 @@ void main() {
   vec3 N;
   if (HAS_NORMAL_MAP) {
 
-    vec3 offset_normal = texture(NORMAL_SAMPLER, custom_uv).xyz;
+    vec2 normal_uv = custom_uv + NORMAL_MAP_UV_OFFSET;
+    vec3 offset_normal = texture(NORMAL_SAMPLER, normal_uv).xyz;
     offset_normal = normalize(offset_normal * 2 - 1);
     //offset_normal.y *= -1;
     //offset_normal.z *= -1;

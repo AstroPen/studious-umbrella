@@ -245,6 +245,7 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
   //
 
   Entity *player = add_player(g, vec3(5,5,0), ANIM_IDLE, DOWN);
+  UNUSED(player);
 
   //
   // INIT WALLS
@@ -264,9 +265,14 @@ static inline void init_game_state(GameMemory memory, WorkQueue *queue, RenderBu
 }
 
 static void render_frame_rate_text(GameState *g, float dt) {
-  V2 text_p = {1.f/16,15.f/16};
+  static float old_dt = 16;
+  float new_dt = dt;
+  dt = (old_dt + new_dt) / 2;
+  old_dt = dt;
+
+  V2 text_p = vec2(1,15) / 16;
   char *frame_rate_text = ALLOC_ARRAY(&g->temp_allocator, char, 8);
-  sprintf(frame_rate_text, "%d ms", (int)(dt * 1000.0f));
+  sprintf(frame_rate_text, "%.1f ms", (dt * 1000.0f));
   render_shadowed_text_screen_space(g->render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD);
 }
 

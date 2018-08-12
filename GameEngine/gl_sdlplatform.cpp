@@ -33,7 +33,7 @@
 
 #include "game.h"
 
-struct RenderInfo {
+struct PlatformWindow {
   RenderBuffer *render_buffer;
   SDL_Window *window;
   SDL_GLContext glcontext;
