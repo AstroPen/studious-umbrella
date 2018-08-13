@@ -15,6 +15,38 @@ static inline u32 get_texture_id(GameAssets *assets, BitmapID id) {
   return texture->texture_id;
 }
 
+static inline u32 get_texture_id(GameAssets *assets, TextureGroupID id) {
+  assert(id);
+  assert(id < TEXTURE_GROUP_COUNT);
+  auto texture = assets->texture_groups + id;
+  if (!texture->bitmap.buffer) return 0;
+  return texture->render_id;
+}
+
+static inline TextureInfo get_texture_info(GameAssets *assets, BitmapID id) {
+  assert(id);
+  assert(id < BITMAP_COUNT);
+  auto bitmap = get_bitmap(assets, id);
+  if (!bitmap) return {};
+  TextureInfo result = {};
+  result.id = bitmap->texture_id;
+  result.width = bitmap->width;
+  result.height = bitmap->height;
+  return result;
+}
+
+static inline TextureInfo get_texture_info(GameAssets *assets, TextureGroupID id) {
+  assert(id);
+  assert(id < TEXTURE_GROUP_COUNT);
+  auto group = get_texture_group(assets, id);
+  if (!group) return {};
+  TextureInfo result = {};
+  result.id = group->render_id;
+  result.width = group->bitmap.width;
+  result.height = group->bitmap.height;
+  return result;
+}
+
 static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id) {
   assert(id);
   assert(id < BITMAP_COUNT);
@@ -245,20 +277,20 @@ inline void init_render_info(RenderInfo *info, Entity *e, TextureGroup *group, V
   info->texture_uv = uv;
   info->color = get_color(e);
 
-  info->texture_width = group->bitmap.width;
-  info->texture_height = group->bitmap.height;
+  info->texture.width = group->bitmap.width;
+  info->texture.height = group->bitmap.height;
 
   if (info->color.a < 1) info->render_stage = RENDER_STAGE_TRANSPARENT;
   // TODO this should also consider whether the bitmap has transparency
   else info->render_stage = RENDER_STAGE_BASE;
 
-  info->bitmap_id = group->render_id;
+  info->texture.id = group->render_id;
 
   if (has_normal_map(group)) {
     // NOTE : This assumes that the normal map is in the same bitmap and that
     // it is offset by half the height.
-    info->normal_map_uv_offset = vec2(0, 0.5);
-    info->normal_map_id = info->bitmap_id;
+    info->normal_map.uv_offset = vec2(0, 0.5);
+    info->normal_map.id = info->texture.id;
   }
 
   // TODO store this information in the group maybe?
@@ -307,7 +339,7 @@ static SpriteRenderInfo get_sprite_render_info(GameAssets *assets, Entity *e) {
   V4 texture_uv = get_sprite_uv(group, sprite_index, reversed);
   SpriteRenderInfo result = {};
   init_render_info(&result, e, group, texture_uv);
-  result.render_stage = RENDER_STAGE_TRANSPARENT;
+  result.render_stage = RENDER_STAGE_TRANSPARENT; // TODO remove this?
   result.offset = get_sprite_offset(group);
   result.sprite_depth = get_sprite_depth(group, sprite_index);
   result.scale = get_sprite_scale(e);

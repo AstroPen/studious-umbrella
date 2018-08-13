@@ -98,49 +98,36 @@ static inline void draw_gradient_background(GameState *g, WorkQueue *queue) {
 //
 
 enum RenderType : u32 {
-  // TODO switch to RenderElementTextureTris
+  // TODO rename these appropriately
   RenderType_RenderElementTextureQuads,
   RenderType_RenderElementClear,
   RenderType_RenderElementHud,
-  // TODO
-  //RenderType_RenderElementTransform
 };
 
 struct RenderElement {
   RenderElement *next;
   RenderType type;
-  u32 flags;
+  u32 flags; // TODO maybe these flags shouldn't be in the header?
+};
+
+struct VertexInfo {
+  int index;
+  int count;
+};
+
+struct RenderElementTextureQuads : RenderElement {
+  VertexInfo vertex;
+  TextureInfo texture;
+  NormalMapInfo normal_map;
+};
+
+struct RenderElementHud : RenderElement {
+  VertexInfo vertex;
+  TextureInfo texture;
 };
 
 
-struct RenderElementTextureQuads {
-  RenderElement head;
-
-  int vertex_index;
-  int quad_count;
-
-  u32 texture_id;
-  float texture_width;
-  float texture_height;
-
-  u32 normal_map_id;
-  V2 normal_map_uv_offset;
-};
-
-struct RenderElementHud {
-  RenderElement head;
-
-  int vertex_index;
-  int quad_count;
-
-  u32 texture_id;
-  float texture_width;
-  float texture_height;
-};
-
-
-struct RenderElementClear {
-  RenderElement head;
+struct RenderElementClear : RenderElement {
   V4 color;
   float depth;
 };
@@ -318,7 +305,7 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 s
   assert(stage < RENDER_STAGE_COUNT);
   auto elem = (RenderElement *) alloc_size(&buffer->allocator, size);
   if (!elem) {
-    assert(!"RenderElement allocator is full.");
+    FAILURE("RenderElement allocator is full.");
     return NULL;
   }
 
@@ -329,32 +316,11 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 s
   auto render_stage = buffer->stages + stage;
   if (!render_stage->first) render_stage->first = elem;
   if (render_stage->tail) {
-    assert(!render_stage->tail->next);
+    ASSERT(!render_stage->tail->next);
     render_stage->tail->next = elem;
   }
   render_stage->tail = elem;
   render_stage->element_count++;
-
-#if 0
-  if (is_hud) {
-    if (!buffer->first_hud_element) buffer->first_hud_element = elem;
-    if (buffer->hud_tail) {
-      assert(!buffer->hud_tail->next);
-      buffer->hud_tail->next = elem;
-    }
-    buffer->hud_tail = elem;
-    buffer->hud_element_count++;
-  } else {
-
-    if (!buffer->first_element) buffer->first_element = elem;
-    if (buffer->tail) {
-      assert(!buffer->tail->next);
-      buffer->tail->next = elem;
-    }
-    buffer->tail = elem;
-    buffer->element_count++;
-  }
-#endif
 
   return elem;
 }
@@ -369,7 +335,10 @@ enum VertexAttribute {
   VERTEX_COLOR,
   VERTEX_NORMAL,
   VERTEX_TANGENT,
+
+  VERTEX_ATTRIBUTE_COUNT
 };
+
 
 /*
 enum VertexMode : u16 {
@@ -380,27 +349,25 @@ enum VertexMode : u16 {
 
 struct VertexArray {
   Vertex *verts;
+  TextureInfo *texture;
+  NormalMapInfo *normal_map;
+  RenderStageNum stage;
   u32 count;
   u32 attribute_flags;
+  u32 element_flags;
 };
 
 // TODO add VertexTriangle, VertexTriangleFan, etc
-struct VertexQuad {
-  union {
-    VertexArray array;
-    struct {
-      Vertex *verts;
-      u32 count;
-      u32 attribute_flags;
-    };
-  };
+struct VertexQuad : VertexArray {
   // NOTE Wraps counter clockwise around each triangle
   static constexpr u32 COUNT = 6;
   static constexpr int IDXS[COUNT] = {0,1,2,0,2,3};
 
   VertexQuad() = default;
-  inline VertexQuad(VertexArray a) { ASSERT_EQUAL(a.count, COUNT); array = a; }
-  inline operator VertexArray&() { return array; }
+  inline VertexQuad(VertexArray a) { 
+    ASSERT_EQUAL(a.count, COUNT); 
+    *this = *(VertexQuad *)&a;
+  }
 };
 
 constexpr int VertexQuad::IDXS[COUNT];
@@ -412,16 +379,11 @@ static inline VertexArray push_vertices(RenderBuffer *buffer, u32 count) {
   }
   auto vert = buffer->vertices + buffer->vertex_count;
   buffer->vertex_count += count;
-  return VertexArray{vert, count, 0};
-}
-
-static inline Vertex *push_vertex(RenderBuffer *buffer) {
-  return push_vertices(buffer, 1).verts;
-}
-
-static inline void push_vertex(RenderBuffer *buffer, Vertex v) {
-  auto vert = push_vertex(buffer);
-  if (vert) *vert = v;
+  VertexArray result = {};
+  result.stage = RENDER_STAGE_BASE;
+  result.count = count;
+  result.verts = vert;
+  return result;
 }
 
 static inline void set_colors(VertexArray &verts, V4 color) {
@@ -450,6 +412,22 @@ static inline void set_tangents(VertexArray &verts, V3 tangent) {
     verts.verts[i].tangent = tangent;
   }
   SHIFT_SET(verts.attribute_flags, VERTEX_TANGENT);
+}
+
+static inline void set_texture(VertexArray &verts, TextureInfo *texture) {
+  verts.texture = texture;
+}
+
+static inline void set_normal_map(VertexArray &verts, NormalMapInfo *normal_map) {
+  verts.normal_map = normal_map;
+}
+
+static inline void set_flags(VertexArray &verts, u32 flags) {
+  verts.element_flags = flags;
+}
+
+static inline void set_stage(VertexArray &verts, RenderStageNum stage) {
+  verts.stage = stage;
 }
 
 static inline void set_colors(VertexQuad &verts, V4 *colors) {
@@ -515,7 +493,40 @@ static inline void set_positions(VertexQuad &verts, AlignedRect3 rect, FaceIndex
   SHIFT_SET(verts.attribute_flags, VERTEX_POSITION);
 }
 
-static inline void finalize(VertexQuad &verts) {
+static inline void push_render_element(RenderBuffer *buffer, VertexArray &verts) {
+  RenderType render_type = RenderType_RenderElementHud;
+  if (verts.normal_map) render_type = RenderType_RenderElementTextureQuads;
+
+  switch (render_type) {
+    case RenderType_RenderElementTextureQuads : {
+      auto elem = push_element(buffer, RenderElementTextureQuads, verts.stage);
+      elem->flags = verts.element_flags;
+      elem->vertex.index = buffer->vertex_count - verts.count;
+      elem->vertex.count = verts.count;
+      if (verts.texture) {
+        elem->texture = *verts.texture;
+      } else {
+        elem->texture.id = 0;
+        elem->texture.width = 1;
+        elem->texture.height = 1;
+      }
+      elem->normal_map = *verts.normal_map;
+      ASSERT(verts.normal_map->id);
+    } break;
+
+    case RenderType_RenderElementHud : {
+      auto elem = push_element(buffer, RenderElementHud, verts.stage);
+      elem->flags = verts.element_flags;
+      elem->vertex.index = buffer->vertex_count - verts.count;
+      elem->vertex.count = verts.count;
+      elem->texture = *verts.texture;
+    } break;
+
+    default : INVALID_SWITCH_CASE(render_type);
+  }
+}
+
+static inline void finalize(RenderBuffer *buffer, VertexQuad &verts) {
   if (!SHIFT_TEST(verts.attribute_flags, VERTEX_POSITION)) 
     FAILURE("Vertex position must be set", verts.attribute_flags);
   if (!SHIFT_TEST(verts.attribute_flags, VERTEX_COLOR)) 
@@ -533,10 +544,12 @@ static inline void finalize(VertexQuad &verts) {
       set_uv(verts, vec2(0));
     }
   }
+
+  push_render_element(buffer, verts);
 }
 
 // TODO Delete basically all of this :
-
+#if 0
 struct VertexSOA {
   V4 *p, *c;
   V2 *uv;
@@ -653,7 +666,7 @@ inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V3 n, V3 t,
 
   push_quad_vertices(buffer, verts);
 }
-
+#endif
 
 
 // TODO Rework this to better interface with VertexArray
@@ -663,52 +676,40 @@ inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V3 n, V3 t,
 // UPDATE : This might be fixed now, should test it soon.
 static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, RenderStageNum render_stage, bool is_sprite = true, V2 normal_map_uv_offset = vec2(0)) {
   TIMED_FUNCTION();
+  return;
 
-  // TODO reenable this when I want to optimize things and I've fixed the bug above
-#if 0
-  auto stage = buffer->stages + render_stage;
-  auto prev = stage->tail;
-  if (prev && prev->type == RenderType_RenderElementTextureQuads) {
-    auto old_quads = (RenderElementTextureQuads *) prev;
-    if (old_quads->texture_id == texture_id && old_quads->normal_map_id == normal_map_id && old_quads->use_low_res_uv == is_sprite) {
-      old_quads->quad_count += count;
-      return;
-    }
-  }
-#endif
-//static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 stage, u32 size) {
   RenderType render_type = RenderType_RenderElementTextureQuads;
   if (normal_map_id == 0) render_type = RenderType_RenderElementHud;
 
   switch (render_type) {
     case RenderType_RenderElementTextureQuads : {
       auto elem = push_element(buffer, RenderElementTextureQuads, render_stage);
-      if (is_sprite) elem->head.flags |= RenderInfo::LOW_RES;
-      elem->texture_id = texture_id;
-      elem->normal_map_id = normal_map_id;
-      elem->quad_count = count;
-      elem->vertex_index = buffer->vertex_count - count * 6;
-      elem->texture_width = texture_width;
-      elem->texture_height = texture_height;
-      elem->normal_map_uv_offset = normal_map_uv_offset;
-      //elem->use_low_res_uv = is_sprite;
+      if (is_sprite) elem->flags |= RenderInfo::LOW_RES;
+      elem->texture.id = texture_id;
+      elem->normal_map.id = normal_map_id;
+      elem->vertex.count = count * 6;
+      elem->vertex.index = buffer->vertex_count - count * 6;
+      elem->texture.width = texture_width;
+      elem->texture.height = texture_height;
+      elem->normal_map.uv_offset = normal_map_uv_offset;
     } break;
 
     case RenderType_RenderElementHud : {
       auto elem = push_element(buffer, RenderElementHud, render_stage);
-      if (is_sprite) elem->head.flags |= RenderInfo::LOW_RES;
+      if (is_sprite) elem->flags |= RenderInfo::LOW_RES;
       assert(!normal_map_id);
-      elem->texture_id = texture_id;
-      elem->quad_count = count;
-      elem->vertex_index = buffer->vertex_count - count * 6;
-      elem->texture_width = texture_width;
-      elem->texture_height = texture_height;
-      //elem->use_low_res_uv = is_sprite;
+      elem->texture.id = texture_id;
+      elem->vertex.count = count * 6;
+      elem->vertex.index = buffer->vertex_count - count * 6;
+      elem->texture.width = texture_width;
+      elem->texture.height = texture_height;
     } break;
 
     default : assert(!"Error."); break;
   }
 }
+
+
 
 //
 // High level renderer calls ---
@@ -759,8 +760,7 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
   V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 #endif
 
-  auto texture = get_bitmap(buffer->assets, texture_asset_id);
-  auto texture_id = get_texture_id(buffer->assets, texture_asset_id);
+  auto texture = get_texture_info(buffer->assets, texture_asset_id);
 
   auto b = box;
 
@@ -802,20 +802,21 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID te
     set_normals(verts, n[i]);
     set_tangents(verts, t[i]);
     set_uv(verts, uv);
-    finalize(verts);
+    set_texture(verts, &texture);
+    auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
+    if (normal_map_id) set_normal_map(verts, &normal_map);
+    finalize(buffer, verts);
   }
   
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
-  append_quads(buffer, 6, texture_id, texture->width, texture->height, normal_map_id, stage);
+  append_quads(buffer, 6, texture.id, texture.width, texture.height, normal_map_id, stage);
 #undef DEBUG_COLORS
 }
 
 static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id, u32 normal_map_id = 0, bool is_sprite = true) {
   TIMED_FUNCTION();
 
-  auto texture_id = get_texture_id(buffer->assets, bitmap_id);
-  auto texture = get_bitmap(buffer->assets, bitmap_id);
-
+  auto texture = get_texture_info(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
   // TODO calculate this for non-axis-aligned rectangles
@@ -827,11 +828,14 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
   set_positions(verts, &quad);
   set_normals(verts, n);
   set_tangents(verts, t);
-  finalize(verts);
+  set_texture(verts, &texture);
+  auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
+  if (normal_map_id) set_normal_map(verts, &normal_map);
+  finalize(buffer, verts);
 
   auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
 
-  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, stage, is_sprite);
+  append_quads(buffer, 1, texture.id, texture.width, texture.height, normal_map_id, stage, is_sprite);
 }
 
 // NOTE : Mostly intended for debugging purposes
@@ -866,8 +870,8 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
 
   set_positions(verts1, &quad);
   set_positions(verts2, &quad2);
-  finalize(verts1);
-  finalize(verts2);
+  finalize(buffer, verts1);
+  finalize(buffer, verts2);
 
   append_quads(buffer, 2, bitmap_id, 1, 1, normal_map_id, RENDER_STAGE_BASE);
 }
@@ -882,16 +886,18 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
   //float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
   //buffer->z_bias_accum += Z_BIAS_EPSILON;
 
-  auto texture_id = get_texture_id(buffer->assets, bitmap_id);
-  auto texture = get_bitmap(buffer->assets, bitmap_id);
+  auto texture = get_texture_info(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
   VertexQuad verts = push_vertices(buffer, 6);
   set_colors(verts, color);
   set_positions(verts, &quad);
-  finalize(verts);
+  set_stage(verts, RENDER_STAGE_HUD);
+  set_texture(verts, &texture);
+  set_flags(verts, RenderInfo::LOW_RES);
+  finalize(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, texture->width, texture->height, 0, RENDER_STAGE_HUD, true);
+  append_quads(buffer, 1, texture.id, texture.width, texture.height, 0, RENDER_STAGE_HUD, true);
 }
 
 inline void render_pixel_space(RenderBuffer *buffer, AlignedRect rect, V4 color, BitmapID bitmap_id) {
@@ -935,6 +941,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
 
   float font_width  = font_info->bitmap.width;
   float font_height = font_info->bitmap.height;
+  TextureInfo texture = {font_info->bitmap.texture_id, font_width, font_height};
   while (*text) {
     if (*text >= ' ' && *text <= '~') {
       auto b = get_baked_char(font_info, *text);
@@ -958,7 +965,9 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
         set_colors(verts, shadow_color);
         set_uv(verts, uv);
         set_positions(verts, &quad);
-        finalize(verts);
+        set_texture(verts, &texture);
+        set_stage(verts, RENDER_STAGE_HUD);
+        finalize(buffer, verts);
         num_quads++;
         translate(&quad, -shadow_offset);
       }
@@ -967,17 +976,19 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
       set_colors(verts, color);
       set_uv(verts, uv);
       set_positions(verts, &quad);
-      finalize(verts);
+      set_texture(verts, &texture);
+      set_stage(verts, RENDER_STAGE_HUD);
+      finalize(buffer, verts);
 
       num_quads++;
       pixel_p.x += b->xadvance;
 
     } else {
-      assert(!"Text character not in range.");
+      FAILURE("Text character not in range.", *text);
     }
     text++;
   }
-  append_quads(buffer, num_quads, font_info->bitmap.texture_id, font_width, font_height, 0, RENDER_STAGE_HUD, true);
+  append_quads(buffer, num_quads, font_info->bitmap.texture_id, font_width, font_height, 0, RENDER_STAGE_HUD, false);
 }
 
 inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) {
@@ -1096,11 +1107,7 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
   SpriteRenderInfo info = get_sprite_render_info(buffer->assets, e);
   if (info.texture_uv == vec4(0)) return;
   //PRINT_V4(info.texture_uv);
-  assert(info.bitmap_id);
-
-
-  u32 bitmap_id = info.bitmap_id;
-  u32 normal_map_id = info.normal_map_id;
+  assert(info.texture.id);
 
   GameCamera *camera = buffer->camera;
 
@@ -1162,8 +1169,13 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
   set_normals(verts, n);
   set_tangents(verts, t);
   set_positions(verts, &quad);
+  set_stage(verts, info.render_stage);
+  set_texture(verts, &info.texture);
+  if (info.normal_map.id) set_normal_map(verts, &info.normal_map);
+  set_flags(verts, info.flags);
+  finalize(buffer, verts);
 
-  append_quads(buffer, 1, bitmap_id, info.texture_width, info.texture_height, normal_map_id, RENDER_STAGE_TRANSPARENT);
+  append_quads(buffer, 1, info.texture.id, info.texture.width, info.texture.height, info.normal_map.id, info.render_stage);
 
 #if DEBUG_CUBES
   push_box(buffer, box, vec4(0.9, 1, 0, 0.2), BITMAP_WHITE, 1);
@@ -1177,15 +1189,12 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, Face
 
   // TODO pull some of this info out a level
   TileRenderInfo info = get_tile_render_info(buffer->assets, e, face_idx, tile_idx);
-  u32 normal_map_id = info.normal_map_id;
-  u32 bitmap_id = info.bitmap_id;
-  float tex_width = info.texture_width;
-  float tex_height = info.texture_height;
   // TODO handle cubes without a texture
-  ASSERT(tex_width); ASSERT(tex_height);
 
   const V3 normal  = aabb_normals[face_idx];
   const V3 tangent = aabb_tangents[face_idx];
+
+  auto stage = (info.color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
 
   VertexQuad verts = push_vertices(buffer, 6);
   set_colors(verts, info.color);
@@ -1193,11 +1202,13 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, Face
   set_normals(verts, normal);
   set_tangents(verts, tangent);
   set_positions(verts, tile, face_idx);
-  //set_positions(verts, &quad);
-  finalize(verts);
+  set_stage(verts, stage);
+  set_texture(verts, &info.texture);
+  set_normal_map(verts, &info.normal_map);
+  set_flags(verts, info.flags);
+  finalize(buffer, verts);
  
-  auto stage = (info.color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
-  append_quads(buffer, 1, bitmap_id, tex_width, tex_height, normal_map_id, stage, info.flags & RenderInfo::LOW_RES, info.normal_map_uv_offset);
+  append_quads(buffer, 1, info.texture.id, info.texture.width, info.texture.height, info.normal_map.id, stage, info.flags, info.normal_map.uv_offset);
 }
 
 // TODO add debug colors
@@ -1276,9 +1287,10 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 #define DEBUG_CUBES 0
   TIMED_FUNCTION();
 
-  auto texture = get_bitmap(buffer->assets, visual_info.texture_id);
-  auto texture_id = get_texture_id(buffer->assets, visual_info.texture_id);
+  
+  auto texture = get_texture_info(buffer->assets, visual_info.texture_id);
   auto normal_map_id = get_texture_id(buffer->assets, visual_info.normal_map_id);
+  auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
 
   GameCamera *camera = buffer->camera;
 
@@ -1286,8 +1298,8 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   V3 X = camera->right;
   V3 Y = camera->up;
 
-  float width  = texture->width  * METERS_PER_PIXEL * visual_info.scale;
-  float height = texture->height * METERS_PER_PIXEL * visual_info.scale;
+  float width  = texture.width  * METERS_PER_PIXEL * visual_info.scale;
+  float height = texture.height * METERS_PER_PIXEL * visual_info.scale;
 
   Rectangle r;
   auto offset = visual_info.offset;
@@ -1331,9 +1343,12 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   set_normals(verts, n);
   set_tangents(verts, t);
   set_positions(verts, &quad);
-  finalize(verts);
+  set_texture(verts, &texture);
+  set_normal_map(verts, &normal_map);
+  set_stage(verts, RENDER_STAGE_TRANSPARENT);
+  finalize(buffer, verts);
 
-  append_quads(buffer, 1, texture_id, texture->width, texture->height, normal_map_id, RENDER_STAGE_TRANSPARENT);
+  append_quads(buffer, 1, texture.id, texture.width, texture.height, normal_map.id, RENDER_STAGE_TRANSPARENT);
 
 #if DEBUG_CUBES
   push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
@@ -1370,7 +1385,7 @@ static inline void _gl_check_error(const char *file_name, int line_num) {
 static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, V2 normal_map_uv_offset, bool use_low_res_uv) {
   TIMED_FUNCTION();
 
-  assert(texture_id);
+  ASSERT(texture_id);
   //glUniform1i(texture_sampler_id, texture_id);
   gl_check_error();
   glActiveTexture(GL_TEXTURE0 + 0);
@@ -1403,7 +1418,7 @@ static void draw_vertices(int vertex_idx, int count, u32 texture_id, float textu
   glEnableVertexAttribArray(VERTEX_TANGENT);
   gl_check_error();
 
-  // NOTE : the boolean is "normalized"
+  // NOTE : the boolean argument is "normalized"
   glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
       sizeof(Vertex), (void *)(offsetof(Vertex, position) + vertex_idx));
   gl_check_error();
@@ -1602,19 +1617,21 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
         case RenderType_RenderElementTextureQuads : {
           auto e = (RenderElementTextureQuads *) elem;
 
-          set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
-          if (e->texture_id) texture_id = e->texture_id;
+          // TODO Investigate this? What the heck is this?
+          set_vertex_buffer(buffer, e->vertex.index, e->vertex.count);
+          if (e->texture.id) texture_id = e->texture.id;
 
-          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, e->normal_map_id, e->normal_map_uv_offset, e->head.flags & RenderInfo::LOW_RES);
+          // TODO Figure out why I'm passing zero here?
+          draw_vertices(0, e->vertex.count, texture_id, e->texture.width, e->texture.height, e->normal_map.id, e->normal_map.uv_offset, e->flags & RenderInfo::LOW_RES);
         } break;
 
         case RenderType_RenderElementHud : {
           auto e = (RenderElementHud *) elem;
 
-          set_vertex_buffer(buffer, e->vertex_index, e->quad_count * 6);
-          if (e->texture_id) texture_id = e->texture_id;
+          set_vertex_buffer(buffer, e->vertex.index, e->vertex.count);
+          if (e->texture.id) texture_id = e->texture.id;
 
-          draw_vertices(0, e->quad_count * 6, texture_id, e->texture_width, e->texture_height, 0, vec2(0), e->head.flags & RenderInfo::LOW_RES);
+          draw_vertices(0, e->vertex.count, texture_id, e->texture.width, e->texture.height, 0, vec2(0), e->flags & RenderInfo::LOW_RES);
         } break;
 
         case RenderType_RenderElementClear : {

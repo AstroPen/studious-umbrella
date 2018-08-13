@@ -71,7 +71,20 @@ enum RenderStageNum {
   RENDER_STAGE_COUNT,
 };
 
+struct TextureInfo {
+  u32 id;
+  float width;
+  float height;
+};
+
+struct NormalMapInfo {
+  u32 id;
+  V2 uv_offset;
+};
+
+
 struct RenderInfo {
+  // NOTE : These must be actual flags for now.
   enum Flags : u32 {
     LOW_RES = 1,
   };
@@ -79,14 +92,9 @@ struct RenderInfo {
   // NOTE : {0,0,0,0} means no texture or normal_map
   V4 texture_uv; 
   V4 color;
-  // NOTE : Undefined if normal_map_id is 0
-  V2 normal_map_uv_offset;   
-  float texture_width, texture_height;
-
+  TextureInfo texture;
+  NormalMapInfo normal_map;
   RenderStageNum render_stage;
-
-  u32 bitmap_id; // NOTE : This is an OpenGL texture id
-  u32 normal_map_id; // NOTE : This is an OpenGL texture id
   u32 flags;
 };
 
