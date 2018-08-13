@@ -224,19 +224,6 @@ static inline void push_entity(GameState *g, RenderBuffer *render_buffer, Entity
     texture_id = texture->texture_id;
   }
 
-  if (e->flags & ENTITY_CUBOID) {
-    if (e->flags & ENTITY_TEXTURE_REPEAT) {
-      push_box(render_buffer, e->collision_box, e->visual.color, texture_asset_id, e->visual.scale, normal_map_id);
-      return;
-    }
-
-    // TODO TODO FIXME Turn this back on
-    //push_box(render_buffer, e->collision_box, e->visual.color, texture->texture_id);
-    assert(false);
-    return;
-  }
-
-
   if (e->flags & ENTITY_SPRITE) { 
     // NOTE : push_sprite is depreciated, sprites should be drawn using render_entity
     push_sprite(render_buffer, e->collision_box, e->visual);

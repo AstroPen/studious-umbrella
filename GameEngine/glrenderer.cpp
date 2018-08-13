@@ -497,20 +497,23 @@ static inline void push_render_element(RenderBuffer *buffer, VertexArray &verts)
   RenderType render_type = RenderType_RenderElementHud;
   if (verts.normal_map) render_type = RenderType_RenderElementTextureQuads;
 
+  TextureInfo texture;
+  if (verts.texture) {
+    texture = *verts.texture;
+  } else {
+    texture.id = 0;
+    texture.width = 1;
+    texture.height = 1;
+  }
+
   switch (render_type) {
     case RenderType_RenderElementTextureQuads : {
       auto elem = push_element(buffer, RenderElementTextureQuads, verts.stage);
       elem->flags = verts.element_flags;
       elem->vertex.index = buffer->vertex_count - verts.count;
       elem->vertex.count = verts.count;
-      if (verts.texture) {
-        elem->texture = *verts.texture;
-      } else {
-        elem->texture.id = 0;
-        elem->texture.width = 1;
-        elem->texture.height = 1;
-      }
       elem->normal_map = *verts.normal_map;
+      elem->texture = texture;
       ASSERT(verts.normal_map->id);
     } break;
 
@@ -519,7 +522,7 @@ static inline void push_render_element(RenderBuffer *buffer, VertexArray &verts)
       elem->flags = verts.element_flags;
       elem->vertex.index = buffer->vertex_count - verts.count;
       elem->vertex.count = verts.count;
-      elem->texture = *verts.texture;
+      elem->texture = texture;
     } break;
 
     default : INVALID_SWITCH_CASE(render_type);
@@ -548,268 +551,47 @@ static inline void finalize(RenderBuffer *buffer, VertexQuad &verts) {
   push_render_element(buffer, verts);
 }
 
-// TODO Delete basically all of this :
-#if 0
-struct VertexSOA {
-  V4 *p, *c;
-  V2 *uv;
-  V3 *n, *t;
-};
-
-static inline Vertex get(VertexSOA verts, u32 index) {
-  Vertex vert;
-  vert.position = verts.p[index];
-  vert.color = verts.c[index];
-  vert.uv = verts.uv[index];
-  vert.normal = verts.n[index];
-  vert.tangent = verts.t[index];
-  return vert;
-}
-
-static inline void push_quad_vertices(RenderBuffer *buffer, VertexSOA verts) {
-  TIMED_FUNCTION();
-
-  // NOTE Wraps counter clockwise around each triangle
-  int idxs[6] = {0,1,2,0,2,3};
-
-  for (int i = 0; i < 6; i++) {
-    int idx = idxs[i];
-    push_vertex(buffer, get(verts, idx));
-  }
-}
-
-
-inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V4 c) {
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V2 uv4[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n = {0,0,1};
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad->verts;
-  verts.uv = uv4;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
-}
-
-inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V4 c) {
-  assert(uv);
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n = {0,0,1};
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t = {1,0,0};
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad->verts;
-  verts.uv = uv;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
-}
-
-inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V2 *uv, V3 n, V3 t, V4 c) {
-  assert(uv);
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad->verts;
-  verts.uv = uv;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
-}
-
-inline void push_quad_vert_helper(RenderBuffer *buffer, Quad4 *quad, V3 n, V3 t, V4 c) {
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
- 
-  V2 uv4[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  V4 c4[4] = {c,c,c,c};
-
-  V3 n4[4] = {n,n,n,n};
-
-  V3 t4[4] = {t,t,t,t};
-
-  VertexSOA verts;
-  verts.p = quad->verts;
-  verts.uv = uv4;
-  verts.c = c4;
-  verts.n = n4;
-  verts.t = t4;
-
-  push_quad_vertices(buffer, verts);
-}
-#endif
-
-
-// TODO Rework this to better interface with VertexArray
-
-// FIXME TODO This is super broken, but I don't care that much at the moment. If you push any non-hud elements after pushing hud elements,
-// it will probably break stuff.
-// UPDATE : This might be fixed now, should test it soon.
-static inline void append_quads(RenderBuffer *buffer, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, RenderStageNum render_stage, bool is_sprite = true, V2 normal_map_uv_offset = vec2(0)) {
-  TIMED_FUNCTION();
-  return;
-
-  RenderType render_type = RenderType_RenderElementTextureQuads;
-  if (normal_map_id == 0) render_type = RenderType_RenderElementHud;
-
-  switch (render_type) {
-    case RenderType_RenderElementTextureQuads : {
-      auto elem = push_element(buffer, RenderElementTextureQuads, render_stage);
-      if (is_sprite) elem->flags |= RenderInfo::LOW_RES;
-      elem->texture.id = texture_id;
-      elem->normal_map.id = normal_map_id;
-      elem->vertex.count = count * 6;
-      elem->vertex.index = buffer->vertex_count - count * 6;
-      elem->texture.width = texture_width;
-      elem->texture.height = texture_height;
-      elem->normal_map.uv_offset = normal_map_uv_offset;
-    } break;
-
-    case RenderType_RenderElementHud : {
-      auto elem = push_element(buffer, RenderElementHud, render_stage);
-      if (is_sprite) elem->flags |= RenderInfo::LOW_RES;
-      assert(!normal_map_id);
-      elem->texture.id = texture_id;
-      elem->vertex.count = count * 6;
-      elem->vertex.index = buffer->vertex_count - count * 6;
-      elem->texture.width = texture_width;
-      elem->texture.height = texture_height;
-    } break;
-
-    default : assert(!"Error."); break;
-  }
-}
-
-
 
 //
 // High level renderer calls ---
 //
 
-#if 0
-// TODO maybe combine this with the other function
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, u32 texture_id, u32 normal_map_id = 0) {
-  TIMED_FUNCTION();
-#define DEBUG_COLORS 0
-#if DEBUG_COLORS
-  V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
-#endif
-
-  auto b = box;
-  Quad faces[6] = {top_quad(b), front_quad(b), right_quad(b), 
-                   left_quad(b), back_quad(b), bot_quad(b)};
-
-  auto c = color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
-  
-  V2 t[4] = {{0,1}, {1,1}, {1,0}, {0,0}};
-  V3 *n = aabb_normals;
-
-  for (int i = 0; i < 6; i++) {
-
-#if DEBUG_COLORS
-    c = debug_colors[i];
-#endif
-    V4 c4[4] = {c,c,c,c};
-    V3 n4[4] = {n[i],n[i],n[i],n[i]};
-    //c.rgb *= 0.8;
-    push_quad_vertices(buffer, faces[i].verts, t, c4, n4);
-  }
-  
-  append_quads(buffer, 6, texture_id);
-#undef DEBUG_COLORS
-}
-#endif
 
 // TODO This should be combined with render_tiled_box to some degree. Note that this
 // should only be used for untextured boxes.
-static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color, BitmapID texture_asset_id, float scale, u32 normal_map_id = 0) {
+static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color) {
   TIMED_FUNCTION();
 #define DEBUG_COLORS 0
 #if DEBUG_COLORS
   V4 debug_colors[6] = {{1,0,0,1},{0,1,0,1},{0,0,1,1},{1,0.5,0,1},{0,1,0.5,1},{0.5,0,1,1}};
 #endif
-
-  auto texture = get_texture_info(buffer->assets, texture_asset_id);
-
-  auto b = box;
 
   Quad4 quads[6];
   to_quad4s(box, quads);
 
-  AlignedRect rects[6] = {top_rect(b), front_rect(b), right_rect(b), 
-                          left_rect(b), back_rect(b), bot_rect(b)};
-
   auto c = color;
-  // NOTE for gamma correction :
-  //c.rgb *= c.rgb;
   
-  float x_scale = 1;
-  float y_scale = 1;
-
   V3 const *n = aabb_normals;
   V3 const *t = aabb_tangents;
 
-  for (int i = 0; i < 6; i++) {
-    auto dim = rects[i].offset;
+  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
 
-    float x_repeats = abs(dim.x);
-    float y_repeats = abs(dim.y);
-    if (texture_asset_id && texture_asset_id != BITMAP_WHITE) {
-      x_scale = x_repeats * scale;
-      y_scale = y_repeats * scale;
-    }
+  for (int i = 0; i < 6; i++) {
 
 #if DEBUG_COLORS
     c = debug_colors[i];
 #endif
-
-    V2 uv[4] = {{0,y_scale}, {x_scale,y_scale}, {x_scale,0}, {0,0}};
 
     VertexQuad verts = push_vertices(buffer, 6);
     set_positions(verts, quads + i);
     set_colors(verts, c);
     set_normals(verts, n[i]);
     set_tangents(verts, t[i]);
-    set_uv(verts, uv);
-    set_texture(verts, &texture);
-    auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
-    if (normal_map_id) set_normal_map(verts, &normal_map);
+    set_stage(verts, stage);
     finalize(buffer, verts);
   }
-  
-  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
-  append_quads(buffer, 6, texture.id, texture.width, texture.height, normal_map_id, stage);
+
+  // TODO we should push all of these as one element
 #undef DEBUG_COLORS
 }
 
@@ -823,6 +605,8 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
   V3 n = {0,0,1};
   V3 t = {1,0,0};
 
+  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
+
   VertexQuad verts = push_vertices(buffer, 6);
   set_colors(verts, color);
   set_positions(verts, &quad);
@@ -831,11 +615,9 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
   set_texture(verts, &texture);
   auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
   if (normal_map_id) set_normal_map(verts, &normal_map);
+  set_stage(verts, stage);
+  if (is_sprite) set_flags(verts, RenderInfo::LOW_RES);
   finalize(buffer, verts);
-
-  auto stage = (color.a < 1) ? RENDER_STAGE_TRANSPARENT : RENDER_STAGE_BASE;
-
-  append_quads(buffer, 1, texture.id, texture.width, texture.height, normal_map_id, stage, is_sprite);
 }
 
 // NOTE : Mostly intended for debugging purposes
@@ -859,9 +641,6 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   r2.offsets[1] = vec3(0, 0, width);
   auto quad2 = to_quad4(r2);
 
-  u32 bitmap_id = get_texture_id(buffer->assets, BITMAP_WHITE);
-  u32 normal_map_id = 0;
-
   VertexQuad verts1 = push_vertices(buffer, 6);
   VertexQuad verts2 = push_vertices(buffer, 6);
   V4 colors[4] = {color, color, vec4(1,1,1,1), color};
@@ -872,8 +651,6 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   set_positions(verts2, &quad2);
   finalize(buffer, verts1);
   finalize(buffer, verts2);
-
-  append_quads(buffer, 2, bitmap_id, 1, 1, normal_map_id, RENDER_STAGE_BASE);
 }
 
 //
@@ -894,10 +671,8 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
   set_positions(verts, &quad);
   set_stage(verts, RENDER_STAGE_HUD);
   set_texture(verts, &texture);
-  set_flags(verts, RenderInfo::LOW_RES);
+  //set_flags(verts, RenderInfo::LOW_RES);
   finalize(buffer, verts);
-
-  append_quads(buffer, 1, texture.id, texture.width, texture.height, 0, RENDER_STAGE_HUD, true);
 }
 
 inline void render_pixel_space(RenderBuffer *buffer, AlignedRect rect, V4 color, BitmapID bitmap_id) {
@@ -988,7 +763,8 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
     }
     text++;
   }
-  append_quads(buffer, num_quads, font_info->bitmap.texture_id, font_width, font_height, 0, RENDER_STAGE_HUD, false);
+  // TODO We should push all text as a single render element, 
+  // but there is no way to do that yet.
 }
 
 inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) {
@@ -1175,10 +951,8 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
   set_flags(verts, info.flags);
   finalize(buffer, verts);
 
-  append_quads(buffer, 1, info.texture.id, info.texture.width, info.texture.height, info.normal_map.id, info.render_stage);
-
 #if DEBUG_CUBES
-  push_box(buffer, box, vec4(0.9, 1, 0, 0.2), BITMAP_WHITE, 1);
+  push_box(buffer, box, vec4(0.9, 1, 0, 0.2));
 #endif
 #undef DEBUG_CUBES
 }
@@ -1206,9 +980,7 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, Face
   set_texture(verts, &info.texture);
   set_normal_map(verts, &info.normal_map);
   set_flags(verts, info.flags);
-  finalize(buffer, verts);
- 
-  append_quads(buffer, 1, info.texture.id, info.texture.width, info.texture.height, info.normal_map.id, stage, info.flags, info.normal_map.uv_offset);
+  finalize(buffer, verts); 
 }
 
 // TODO add debug colors
@@ -1348,10 +1120,8 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   set_stage(verts, RENDER_STAGE_TRANSPARENT);
   finalize(buffer, verts);
 
-  append_quads(buffer, 1, texture.id, texture.width, texture.height, normal_map.id, RENDER_STAGE_TRANSPARENT);
-
 #if DEBUG_CUBES
-  push_box(buffer, box, vec4(0.9, 1, 0, 0.5), BITMAP_WHITE, 1);
+  push_box(buffer, box, vec4(0.9, 1, 0, 0.5));
 #endif
 #undef DEBUG_CUBES
 }
@@ -1549,7 +1319,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
 
   auto light_p_id = glGetUniformLocation(program_id, "LIGHT_P");
   V3 light_p = debug_global_memory.game_state->pointer_world_p + vec3(0,0,0.5);
-  push_box(buffer, aligned_box(light_p, 1), vec4(1, 1, 0, 0.2), BITMAP_WHITE, 1);
+  push_box(buffer, aligned_box(light_p, 1), vec4(1, 1, 0, 0.2));
   
   //V3 light_p = {7,9,2};
   glUniform3fv(light_p_id, 1, light_p.elements);
