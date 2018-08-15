@@ -64,12 +64,38 @@ enum TextureGroupID {
   TEXTURE_GROUP_COUNT
 };
 
+enum FontID {
+  FONT_INVALID,
+  FONT_ARIAL,
+  FONT_COURIER_NEW_BOLD,
+  FONT_DEBUG,
+  FONT_COUNT,
+};
+
 enum RenderStageNum {
   RENDER_STAGE_BASE,
   RENDER_STAGE_TRANSPARENT,
   RENDER_STAGE_HUD,
   RENDER_STAGE_COUNT,
 };
+
+enum TextureIndex : u32 {
+  TEXTURE_INDEX_INVALID,
+  TEXTURE_INDEX_MAX = TEXTURE_GROUP_COUNT + BITMAP_COUNT + FONT_COUNT
+};
+
+// NOTE : Order is bitmaps, groups, fonts
+inline TextureIndex get_texture_index(BitmapID id) {
+  return TextureIndex(id);
+}
+
+inline TextureIndex get_texture_index(TextureGroupID id) {
+  return TextureIndex(id + BITMAP_COUNT);
+}
+
+inline TextureIndex get_texture_index(FontID id) {
+  return TextureIndex(id + TEXTURE_GROUP_COUNT + BITMAP_COUNT);
+}
 
 struct TextureInfo {
   u32 id;
@@ -175,14 +201,6 @@ union TextureLayout {
   struct { // For LAYOUT_TERRAIN
     u16 cube_face_index[6];
   };
-};
-
-enum FontID {
-  FONT_INVALID,
-  FONT_ARIAL,
-  FONT_COURIER_NEW_BOLD,
-  FONT_DEBUG,
-  FONT_COUNT,
 };
 
 struct BakedChar;

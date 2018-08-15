@@ -103,6 +103,7 @@ struct GameAssets {
 
   TextureGroup texture_groups[TEXTURE_GROUP_COUNT];
   TextureLayout texture_layouts[LAYOUT_COUNT];
+  TextureInfo texture_infos[TEXTURE_INDEX_MAX];
 };
 
 static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);

@@ -97,17 +97,31 @@ static inline void draw_gradient_background(GameState *g, WorkQueue *queue) {
 // Renderer type definitions ---
 //
 
-enum RenderType : u32 {
-  // TODO rename these appropriately
-  RenderType_RenderElementTextureQuads,
-  RenderType_RenderElementClear,
-  RenderType_RenderElementHud,
+
+#define MAX_RENDERER_VERTICES (4096 * 16)
+
+union RenderType {
+  enum VertMode : u8 {
+    TRIANGLES,
+  };
+  enum Command : u8 {
+    VERTEX,
+    CLEAR,
+  };
+
+  struct {
+    Command command;
+    VertMode mode;
+    u16 flags; // RenderInfo::Flags
+  };
+
+  u32 value;
 };
+
 
 struct RenderElement {
   RenderElement *next;
   RenderType type;
-  u32 flags; // TODO maybe these flags shouldn't be in the header?
 };
 
 struct VertexInfo {
@@ -115,22 +129,39 @@ struct VertexInfo {
   int count;
 };
 
-struct RenderElementTextureQuads : RenderElement {
+struct RenderElementVertex : RenderElement {
   VertexInfo vertex;
-  TextureInfo texture;
-  NormalMapInfo normal_map;
+  TextureIndex texture;
+  u32 normal_map; // TODO Remove dumb hack
 };
-
-struct RenderElementHud : RenderElement {
-  VertexInfo vertex;
-  TextureInfo texture;
-};
-
 
 struct RenderElementClear : RenderElement {
   V4 color;
   float depth;
 };
+
+inline u32 get_size(RenderType type) {
+  switch (type.command) {
+    case RenderType::VERTEX : return sizeof(RenderElementVertex);
+    case RenderType::CLEAR : return sizeof(RenderElementClear);
+    default : INVALID_SWITCH_CASE(type.command);
+  }
+  return 0;
+}
+
+inline TextureIndex get_texture(RenderElement *elem) {
+  if (elem->type.command != RenderType::VERTEX) return TEXTURE_INDEX_INVALID;
+  auto e = (RenderElementVertex *) elem;
+  return e->texture;
+}
+
+inline VertexInfo *get_vertices(RenderElement *elem) {
+  if (elem->type.command != RenderType::VERTEX) return NULL;
+  auto e = (RenderElementVertex *) elem;
+  ASSERT(e->vertex.count > 0);
+  ASSERT(e->vertex.index >= 0 && e->vertex.index < MAX_RENDERER_VERTICES);
+  return &e->vertex;
+}
 
 struct Vertex {
   V4 position;
@@ -200,6 +231,11 @@ struct RenderBuffer {
 // Basic RenderBuffer operations ---
 //
 
+inline TextureInfo *get_texture(RenderBuffer *buffer, TextureIndex index) {
+  ASSERT(index > 0 && index < TEXTURE_INDEX_MAX);
+  return buffer->assets->texture_infos + index;
+}
+
 static inline void clear(RenderBuffer *buffer) {
   clear(&buffer->allocator);
   buffer->vertex_count = 0;
@@ -220,7 +256,7 @@ static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
   buffer->screen_height = height;
 
   // TODO maybe pass in the memory from outside?
-  buffer->max_vertices = 4096 * 16;
+  buffer->max_vertices = MAX_RENDERER_VERTICES;
   buffer->vertex_count = 0;
   int vertex_buffer_size = buffer->max_vertices * sizeof(Vertex);
   int total_buffer_size = vertex_buffer_size + 4096 * 128;
@@ -248,62 +284,11 @@ static void init_render_buffer(RenderBuffer *buffer, int width, int height) {
   clear(buffer);
 }
 
-#if 0
-static void print_render_buffer(RenderBuffer *buffer) {
-  printf("Printing RenderBuffer ::\n\n");
-  printf("screen : %d by %d pixels\n", buffer->screen_width, buffer->screen_height);
-  printf("camera : %f by %f meters\n", buffer->camera_width, buffer->camera_height);
-  printf("element_count : %d\n", buffer->element_count);
-  printf("max_size : %d\n", buffer->allocator.max_size);
-  printf("bytes_allocated : %d\n\n", buffer->allocator.bytes_allocated);
-
-  auto elem = (RenderElement *) buffer->allocator.memory;
-
-  for (int i = 0; i < buffer->element_count; i++) {
-    printf("Element %d, at address %p : \n", i, elem);
-    switch (elem->type) {
-      case RenderType_RenderElementRect : {
-        auto e = (RenderElementRect *) elem;
-        printf("Type : RenderElementRect\n");
-        /* TODO
-        auto r = e->rect;
-        printf("Rect : (%f,%f),(%f,%f)\n", min_x(r), min_y(r), max_x(r), max_y(r));
-        */
-        auto c = e->color;
-        printf("Color : (%f, %f, %f, %f)\n", c.r, c.g, c.b, c.a);
-      } break;
-
-      case RenderType_RenderElementTexture : {
-        auto e = (RenderElementTexture *) elem;
-        printf("Type : RenderElementTexture\n");
-        /* TODO
-        auto r = e->rect;
-        printf("Rect : (%f,%f),(%f,%f)\n", min_x(r), min_y(r), max_x(r), max_y(r));
-        */
-        printf("Texture id : %d, size : %d by %d pixels\n", e->texture.texture_id, e->texture.width,  e->texture.height);
-      } break;
-
-      case RenderType_RenderElementBox : {
-      } break;
-
-      case RenderType_RenderElementTextureQuads : {
-      } break;
-
-    };
-    printf("Next : %p\n\n", elem->next);
-    elem = elem->next;
-  }
-
-  printf("Tail : %p\n\n", buffer->tail);
-}
-#endif
-
-#define push_element(render_buffer, type, stage) ((type *) push_element_((render_buffer), RenderType_##type, stage, sizeof(type)))
-static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 stage, u32 size) {
+static RenderElement *push_element(RenderBuffer *buffer, RenderType type, u32 stage) {
   TIMED_FUNCTION();
 
   assert(stage < RENDER_STAGE_COUNT);
-  auto elem = (RenderElement *) alloc_size(&buffer->allocator, size);
+  auto elem = (RenderElement *) alloc_size(&buffer->allocator, get_size(type));
   if (!elem) {
     FAILURE("RenderElement allocator is full.");
     return NULL;
@@ -311,7 +296,6 @@ static RenderElement *push_element_(RenderBuffer *buffer, RenderType type, u32 s
 
   elem->next = NULL;
   elem->type = type;
-  elem->flags = 0;
 
   auto render_stage = buffer->stages + stage;
   if (!render_stage->first) render_stage->first = elem;
@@ -340,17 +324,11 @@ enum VertexAttribute {
 };
 
 
-/*
-enum VertexMode : u16 {
-  VERTEX_TRIANGLE,
-  VERTEX_QUAD,
-};
-*/
 
 struct VertexArray {
   Vertex *verts;
-  TextureInfo *texture;
   NormalMapInfo *normal_map;
+  TextureIndex texture;
   RenderStageNum stage;
   u32 count;
   u32 attribute_flags;
@@ -414,8 +392,8 @@ static inline void set_tangents(VertexArray &verts, V3 tangent) {
   SHIFT_SET(verts.attribute_flags, VERTEX_TANGENT);
 }
 
-static inline void set_texture(VertexArray &verts, TextureInfo *texture) {
-  verts.texture = texture;
+static inline void set_texture(VertexArray &verts, TextureIndex index) {
+  verts.texture = index;
 }
 
 static inline void set_normal_map(VertexArray &verts, NormalMapInfo *normal_map) {
@@ -494,39 +472,31 @@ static inline void set_positions(VertexQuad &verts, AlignedRect3 rect, FaceIndex
 }
 
 static inline void push_render_element(RenderBuffer *buffer, VertexArray &verts) {
-  RenderType render_type = RenderType_RenderElementHud;
-  if (verts.normal_map) render_type = RenderType_RenderElementTextureQuads;
+  if (!verts.count) return;
+  if (!verts.verts) return;
 
-  TextureInfo texture;
+  RenderType render_type = {};
+  render_type.command = RenderType::VERTEX;
+  render_type.mode = RenderType::TRIANGLES;
+  render_type.flags = verts.element_flags;
+
+  auto elem = (RenderElementVertex *) push_element(buffer, render_type, verts.stage);
+
   if (verts.texture) {
-    texture = *verts.texture;
+    elem->texture = verts.texture;
   } else {
-    texture.id = 0;
-    texture.width = 1;
-    texture.height = 1;
+    elem->texture = get_texture_index(BITMAP_WHITE);
   }
 
-  switch (render_type) {
-    case RenderType_RenderElementTextureQuads : {
-      auto elem = push_element(buffer, RenderElementTextureQuads, verts.stage);
-      elem->flags = verts.element_flags;
-      elem->vertex.index = buffer->vertex_count - verts.count;
-      elem->vertex.count = verts.count;
-      elem->normal_map = *verts.normal_map;
-      elem->texture = texture;
-      ASSERT(verts.normal_map->id);
-    } break;
-
-    case RenderType_RenderElementHud : {
-      auto elem = push_element(buffer, RenderElementHud, verts.stage);
-      elem->flags = verts.element_flags;
-      elem->vertex.index = buffer->vertex_count - verts.count;
-      elem->vertex.count = verts.count;
-      elem->texture = texture;
-    } break;
-
-    default : INVALID_SWITCH_CASE(render_type);
+  if (verts.normal_map) {
+    ASSERT(verts.normal_map->id);
+    elem->normal_map = verts.normal_map->id;
+  } else {
+    elem->normal_map = 0;
   }
+
+  elem->vertex.index = verts.verts - buffer->vertices;
+  elem->vertex.count = verts.count;
 }
 
 static inline void finalize(RenderBuffer *buffer, VertexQuad &verts) {
@@ -598,7 +568,6 @@ static void push_box(RenderBuffer *buffer, AlignedBox box, V4 color) {
 static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, BitmapID bitmap_id, u32 normal_map_id = 0, bool is_sprite = true) {
   TIMED_FUNCTION();
 
-  auto texture = get_texture_info(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
   // TODO calculate this for non-axis-aligned rectangles
@@ -612,7 +581,7 @@ static void push_rectangle(RenderBuffer *buffer, Rectangle rect, V4 color, Bitma
   set_positions(verts, &quad);
   set_normals(verts, n);
   set_tangents(verts, t);
-  set_texture(verts, &texture);
+  set_texture(verts, get_texture_index(bitmap_id));
   auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
   if (normal_map_id) set_normal_map(verts, &normal_map);
   set_stage(verts, stage);
@@ -651,6 +620,10 @@ static void render_arrow(RenderBuffer *buffer, V3 p1, V3 p2, V4 color, float wid
   set_positions(verts2, &quad2);
   finalize(buffer, verts1);
   finalize(buffer, verts2);
+
+  // TODO This is broken because finalize doesn't actually use the vertex pointer
+  // in verts yet. It still does the thing where it assumes the most recent vertices
+  // belong to it.
 }
 
 //
@@ -663,14 +636,13 @@ static void render_pixel_space(RenderBuffer *buffer, Rectangle rect, V4 color, B
   //float z_bias = buffer->camera->p.z - buffer->camera->near_dist + buffer->z_bias_accum;
   //buffer->z_bias_accum += Z_BIAS_EPSILON;
 
-  auto texture = get_texture_info(buffer->assets, bitmap_id);
   auto quad = to_quad4(rect);
 
   VertexQuad verts = push_vertices(buffer, 6);
   set_colors(verts, color);
   set_positions(verts, &quad);
   set_stage(verts, RENDER_STAGE_HUD);
-  set_texture(verts, &texture);
+  set_texture(verts, get_texture_index(bitmap_id));
   //set_flags(verts, RenderInfo::LOW_RES);
   finalize(buffer, verts);
 }
@@ -697,7 +669,7 @@ inline void render_circle_screen_space(RenderBuffer *buffer, V2 p, float width, 
 // Text rendering ---
 //
 
-static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, u32 font_id) { 
+static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, FontID font_id) { 
   // TODO figure out a way to time this that doesn't interfere with drawing debug text
   //TIMED_FUNCTION();
 
@@ -716,7 +688,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
 
   float font_width  = font_info->bitmap.width;
   float font_height = font_info->bitmap.height;
-  TextureInfo texture = {font_info->bitmap.texture_id, font_width, font_height};
+  auto texture_index = get_texture_index(font_id);
   while (*text) {
     if (*text >= ' ' && *text <= '~') {
       auto b = get_baked_char(font_info, *text);
@@ -740,7 +712,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
         set_colors(verts, shadow_color);
         set_uv(verts, uv);
         set_positions(verts, &quad);
-        set_texture(verts, &texture);
+        set_texture(verts, texture_index);
         set_stage(verts, RENDER_STAGE_HUD);
         finalize(buffer, verts);
         num_quads++;
@@ -751,7 +723,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
       set_colors(verts, color);
       set_uv(verts, uv);
       set_positions(verts, &quad);
-      set_texture(verts, &texture);
+      set_texture(verts, texture_index);
       set_stage(verts, RENDER_STAGE_HUD);
       finalize(buffer, verts);
 
@@ -767,16 +739,16 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
   // but there is no way to do that yet.
 }
 
-inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) {
+inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, FontID font_id) {
   render_shadowed_text_pixel_space(buffer, text_p, text, color, vec4(0), 0, font_id);
 }
 
-inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, u32 font_id) { 
+inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, FontID font_id) { 
   V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
   render_shadowed_text_pixel_space(buffer, text_p_pixel_space, text, color, shadow_color, shadow_depth, font_id);
 }
 
-inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, u32 font_id) { 
+inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, FontID font_id) { 
   V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
   render_text_pixel_space(buffer, text_p_pixel_space, text, color, font_id);
 }
@@ -946,7 +918,7 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
   set_tangents(verts, t);
   set_positions(verts, &quad);
   set_stage(verts, info.render_stage);
-  set_texture(verts, &info.texture);
+  set_texture(verts, get_texture_index(e->texture_group_id));
   if (info.normal_map.id) set_normal_map(verts, &info.normal_map);
   set_flags(verts, info.flags);
   finalize(buffer, verts);
@@ -977,7 +949,7 @@ static void render_tile(RenderBuffer *buffer, Entity *e, AlignedRect3 tile, Face
   set_tangents(verts, tangent);
   set_positions(verts, tile, face_idx);
   set_stage(verts, stage);
-  set_texture(verts, &info.texture);
+  set_texture(verts, get_texture_index(e->texture_group_id));
   set_normal_map(verts, &info.normal_map);
   set_flags(verts, info.flags);
   finalize(buffer, verts); 
@@ -1059,8 +1031,8 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
 #define DEBUG_CUBES 0
   TIMED_FUNCTION();
 
-  
-  auto texture = get_texture_info(buffer->assets, visual_info.texture_id);
+  auto texture_index = get_texture_index(visual_info.texture_id);
+  auto texture = get_texture(buffer, texture_index);
   auto normal_map_id = get_texture_id(buffer->assets, visual_info.normal_map_id);
   auto normal_map = NormalMapInfo{normal_map_id, vec2(0)};
 
@@ -1070,8 +1042,8 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   V3 X = camera->right;
   V3 Y = camera->up;
 
-  float width  = texture.width  * METERS_PER_PIXEL * visual_info.scale;
-  float height = texture.height * METERS_PER_PIXEL * visual_info.scale;
+  float width  = texture->width  * METERS_PER_PIXEL * visual_info.scale;
+  float height = texture->height * METERS_PER_PIXEL * visual_info.scale;
 
   Rectangle r;
   auto offset = visual_info.offset;
@@ -1115,7 +1087,7 @@ static void push_sprite(RenderBuffer *buffer, AlignedBox box, VisualInfo visual_
   set_normals(verts, n);
   set_tangents(verts, t);
   set_positions(verts, &quad);
-  set_texture(verts, &texture);
+  set_texture(verts, texture_index);
   set_normal_map(verts, &normal_map);
   set_stage(verts, RENDER_STAGE_TRANSPARENT);
   finalize(buffer, verts);
@@ -1144,12 +1116,74 @@ static GLuint texture_width_id;
 static GLuint texture_height_id;
 static GLuint use_low_res_uv_filter_id;
 static GLuint normal_map_uv_offset_id;
+static GLuint has_normal_map_id;
 
 static inline void _gl_check_error(const char *file_name, int line_num) {
   GLenum err;
   while ((err = glGetError()) != GL_NO_ERROR) {
     printf("OpenGL error: 0x%x in file %s, on line %d\n", err, file_name, line_num);
   }
+}
+
+static inline void gl_push_normal_map(NormalMapInfo *normal_map) {
+  bool has_normal_map = normal_map ? true : false;
+  glUniform1i(has_normal_map_id, has_normal_map);
+  if (!normal_map) return;
+  glActiveTexture(GL_TEXTURE0 + 1);
+  glBindTexture(GL_TEXTURE_2D, normal_map->id);
+  glUniform2fv(normal_map_uv_offset_id, 1, normal_map->uv_offset.elements);
+  gl_check_error();
+}
+
+static inline void gl_push_texture(TextureInfo *texture) {
+  if (!texture) return;
+  glActiveTexture(GL_TEXTURE0 + 0);
+  glBindTexture(GL_TEXTURE_2D, texture->id);
+  glUniform1f(texture_width_id, texture->width);
+  glUniform1f(texture_height_id, texture->height);
+  gl_check_error();
+}
+
+static inline void gl_push_flags(u16 flags) {
+  bool use_low_res_uv = (flags & RenderInfo::LOW_RES) != 0;
+  glUniform1i(use_low_res_uv_filter_id, use_low_res_uv);
+  gl_check_error();
+}
+
+static inline void gl_draw_vertices(VertexInfo *vertex) {
+  if (!vertex) return;
+  glDrawArrays(GL_TRIANGLES, vertex->index, vertex->count);
+  gl_check_error();
+}
+
+static void gl_set_vertex_attribute_pointers() {
+  glEnableVertexAttribArray(VERTEX_POSITION);
+  glEnableVertexAttribArray(VERTEX_COLOR);
+  glEnableVertexAttribArray(VERTEX_UV);
+  glEnableVertexAttribArray(VERTEX_NORMAL);
+  glEnableVertexAttribArray(VERTEX_TANGENT);
+
+  // TODO Not sure I'm doing this right. Further reading :
+  // https://www.khronos.org/opengl/wiki/Vertex_Specification_Best_Practices
+  // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming
+
+  // NOTE : the boolean argument is "normalized"
+  glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
+      sizeof(Vertex), (void *)(offsetof(Vertex, position)));
+
+  // TODO switch this to GL_UNSIGNED_BYTE
+  glVertexAttribPointer(VERTEX_COLOR, 4, GL_FLOAT, false, 
+      sizeof(Vertex), (void *)(offsetof(Vertex, color)));
+
+  glVertexAttribPointer(VERTEX_UV, 2, GL_FLOAT, false, 
+      sizeof(Vertex), (void *)(offsetof(Vertex, uv)));
+
+  glVertexAttribPointer(VERTEX_NORMAL, 3, GL_FLOAT, false,
+      sizeof(Vertex), (void *)(offsetof(Vertex, normal)));
+
+  glVertexAttribPointer(VERTEX_TANGENT, 3, GL_FLOAT, false,
+      sizeof(Vertex), (void *)(offsetof(Vertex, tangent)));
+  gl_check_error();
 }
 
 static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, V2 normal_map_uv_offset, bool use_low_res_uv) {
@@ -1176,57 +1210,23 @@ static void draw_vertices(int vertex_idx, int count, u32 texture_id, float textu
     glBindTexture(GL_TEXTURE_2D, normal_map_id);
     glUniform2fv(normal_map_uv_offset_id, 1, normal_map_uv_offset.elements);
   }
-  
-  glEnableVertexAttribArray(VERTEX_POSITION);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_COLOR);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_UV);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_NORMAL);
-  gl_check_error();
-  glEnableVertexAttribArray(VERTEX_TANGENT);
+ 
+
+  glDrawArrays(GL_TRIANGLES, vertex_idx, count);
   gl_check_error();
 
-  // NOTE : the boolean argument is "normalized"
-  glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
-      sizeof(Vertex), (void *)(offsetof(Vertex, position) + vertex_idx));
-  gl_check_error();
-
-  // TODO switch this to GL_UNSIGNED_BYTE
-  glVertexAttribPointer(VERTEX_COLOR, 4, GL_FLOAT, false, 
-      sizeof(Vertex), (void *)(offsetof(Vertex, color) + vertex_idx));
-  gl_check_error();
-
-  glVertexAttribPointer(VERTEX_UV, 2, GL_FLOAT, false, 
-      sizeof(Vertex), (void *)(offsetof(Vertex, uv) + vertex_idx));
-  gl_check_error();
-
-  glVertexAttribPointer(VERTEX_NORMAL, 3, GL_FLOAT, false,
-      sizeof(Vertex), (void *)(offsetof(Vertex, normal) + vertex_idx));
-  gl_check_error();
-
-  glVertexAttribPointer(VERTEX_TANGENT, 3, GL_FLOAT, false,
-      sizeof(Vertex), (void *)(offsetof(Vertex, tangent) + vertex_idx));
-  gl_check_error();
-
-  glDrawArrays(GL_TRIANGLES, 0, count);
-  gl_check_error();
-
-  glDisableVertexAttribArray(VERTEX_POSITION);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_COLOR);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_UV);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_NORMAL);
-  gl_check_error();
-  glDisableVertexAttribArray(VERTEX_TANGENT);
-  gl_check_error();
 }
 
-static void set_vertex_buffer(RenderBuffer *buffer, int start_idx, int vertex_count) {
-  auto vertices = buffer->vertices + start_idx;
+// TODO Instead of calling glBufferData every frame, consider calling
+// it once to allocate, and then call this once per frame :
+//    glBufferSubData(GL_ARRAY_BUFFER, 0, total_vertex_size, vertices);
+//
+// However, this might be slower due to implicit synchronization.
+// See : https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming
+//
+// We should still only call this once per frame though.
+
+static void gl_set_vertex_buffer(Vertex *vertices, int vertex_count) {
   u32 size = sizeof(Vertex) * vertex_count;
   glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STREAM_DRAW);
 }
@@ -1294,13 +1294,11 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
     T.x, T.y, T.z, 1,
   };
 
-  // TODO make the input coordinates be in the right place...
   float identity_mat[] = {
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1,
-    //-8, -6, -10, 1,
   };
 
   glClearColor(0.5,0.5,0,1);
@@ -1332,6 +1330,8 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   //
 
   auto default_texture_id = get_texture_id(buffer->assets, BITMAP_WHITE);
+  gl_set_vertex_buffer(buffer->vertices, buffer->vertex_count);
+  gl_set_vertex_attribute_pointers(); // TODO Don't know if I need to call this every frame
 
   for (u32 i = 0; i < RENDER_STAGE_COUNT; i++) {
     auto stage = buffer->stages + i;
@@ -1362,7 +1362,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       case RenderStage::INFINITE_FAR_PLANE :
         glUniformMatrix4fv(projection_matrix_id, 1, GL_FALSE, infinite_proj); break;
       default :
-        assert(!"Invalid stage projection.");
+        INVALID_SWITCH_CASE(stage->projection);
     }
 
     switch (stage->view) {
@@ -1380,42 +1380,22 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       assert(elem);
       gl_check_error();
 
-      u32 texture_id = default_texture_id;
+      // TODO inline all these accessors once I'm done experimenting
+      gl_push_flags(elem->type.flags);
 
-      switch (elem->type) {
-
-        case RenderType_RenderElementTextureQuads : {
-          auto e = (RenderElementTextureQuads *) elem;
-
-          // TODO Investigate this? What the heck is this?
-          set_vertex_buffer(buffer, e->vertex.index, e->vertex.count);
-          if (e->texture.id) texture_id = e->texture.id;
-
-          // TODO Figure out why I'm passing zero here?
-          draw_vertices(0, e->vertex.count, texture_id, e->texture.width, e->texture.height, e->normal_map.id, e->normal_map.uv_offset, e->flags & RenderInfo::LOW_RES);
-        } break;
-
-        case RenderType_RenderElementHud : {
-          auto e = (RenderElementHud *) elem;
-
-          set_vertex_buffer(buffer, e->vertex.index, e->vertex.count);
-          if (e->texture.id) texture_id = e->texture.id;
-
-          draw_vertices(0, e->vertex.count, texture_id, e->texture.width, e->texture.height, 0, vec2(0), e->flags & RenderInfo::LOW_RES);
-        } break;
-
-        case RenderType_RenderElementClear : {
-          //auto e = (RenderElementClear *) elem;
-          // TODO
-
-        } break;
-
-        default : {
-          printf("Invalid element : %d, index : %d\n", elem->type, i);
-
-          assert(!"Invalid element.");
-        };
+      if (elem->type.command == RenderType::VERTEX) {
+        auto vert_elem = (RenderElementVertex *) elem;
+        TextureInfo *texture = get_texture(buffer, vert_elem->texture);
+        // TODO remove dumb hack
+        NormalMapInfo normal_map = {vert_elem->normal_map};
+        gl_push_texture(texture);
+        if (texture && texture->id == vert_elem->normal_map) {
+          normal_map.uv_offset = vec2(0, 0.5);
+        }
+        gl_push_normal_map(normal_map.id ? &normal_map : NULL);
+        gl_draw_vertices(&vert_elem->vertex);
       }
+
 
       // TODO figure out why this crashes when I don't check first?
       if (elem->next) {
@@ -1527,6 +1507,10 @@ static void update_texture(GameAssets *assets, BitmapID bitmap_id, TextureFormat
   // NOTE switch to GL_SRGB8_ALPHA8 if you want srgb (gamma correction)
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texture->width, texture->height, 0,
                to_gl_format_specifier(pixel_format), GL_UNSIGNED_BYTE, texture->buffer);
+  
+  // NOTE : It is a bit weird to put this here, but it makes things simpler for now.
+  TextureIndex index = get_texture_index(bitmap_id);
+  assets->texture_infos[index] = {texture->texture_id, float(texture->width), float(texture->height)};
 }
 
 static void update_texture(GameAssets *assets, TextureGroupID id, TextureFormatSpecifier pixel_format = BGRA) {
@@ -1539,6 +1523,10 @@ static void update_texture(GameAssets *assets, TextureGroupID id, TextureFormatS
   // NOTE switch to GL_SRGB8_ALPHA8 if you want srgb (gamma correction)
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, texture->bitmap.width, texture->bitmap.height, 0,
                to_gl_format_specifier(pixel_format), GL_UNSIGNED_BYTE, texture->bitmap.buffer);
+  
+  // NOTE : It is a bit weird to put this here, but it makes things simpler for now.
+  TextureIndex index = get_texture_index(id);
+  assets->texture_infos[index] = {texture->render_id, float(texture->bitmap.width), float(texture->bitmap.height)};
 }
 
 // TODO delete this when I finish switching to the new asset path

@@ -43,6 +43,7 @@ static inline u64 get_alignment_offset(u8 *memory, u32 bytes_allocated, u64 alig
 static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
   TIMED_FUNCTION();
 
+  if (!size) return NULL;
   // NOTE : this will loop until the allocator is full or it successfully allocates
   while (true) {
     u32 bytes_allocated = allocator->bytes_allocated;
@@ -65,6 +66,7 @@ static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
 static void *alloc_size(PushAllocator *allocator, u32 size, u64 alignment = 1) {
   TIMED_FUNCTION();
 
+  if (!size) return NULL;
   u32 bytes_allocated = allocator->bytes_allocated;
   auto alignment_offset = get_alignment_offset(allocator->memory, bytes_allocated, alignment);
 

@@ -83,6 +83,7 @@ static void init_opengl(PlatformWindow *info) {
   texture_height_id = glGetUniformLocation(program_id, "TEXTURE_HEIGHT");
   use_low_res_uv_filter_id = glGetUniformLocation(program_id, "USE_LOW_RES_UV_FILTER");
   normal_map_uv_offset_id = glGetUniformLocation(program_id, "NORMAL_MAP_UV_OFFSET");
+  has_normal_map_id = glGetUniformLocation(program_id, "HAS_NORMAL_MAP");
   gl_check_error();
 
   auto buf = info->render_buffer;

@@ -610,7 +610,7 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
   info.bitmap = bitmap;
   info.bitmap.texture_id = font_id;
   info.baked_chars = baked_chars;
-
+  
   return info;
 }
 
@@ -687,6 +687,10 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
 
   auto font = get_font_location(assets, id);
   *font = load_font_file(filename, pixel_height, perm_allocator, temp_allocator);
+
+  // NOTE : It is a bit weird to put this here, but it makes things simpler for now.
+  TextureIndex index = get_texture_index(id);
+  assets->texture_infos[index] = {font->bitmap.texture_id, float(font->bitmap.width), float(font->bitmap.height)};
 }
 #endif
 
