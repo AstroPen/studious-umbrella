@@ -10,6 +10,8 @@ struct PackedAssetHeader {
   u32 data_offset;
 };
 
+static_assert(sizeof(PackedAssetHeader) % 8 == 0,"");
+
 struct PackedAnimation {
   u16 animation_type;
   u16 frame_count;
@@ -20,9 +22,13 @@ struct PackedAnimation {
   u32 flags;
 };
 
+static_assert(sizeof(PackedAnimation) % 8 == 0,"");
+
 struct PackedFaces {
   u16 sprite_index[8];
 };
+
+static_assert(sizeof(PackedFaces) % 8 == 0,"");
 
 struct PackedTextureLayout {
   u32 layout_type;
@@ -37,6 +43,8 @@ struct PackedTextureLayout {
     };
   };
 };
+
+static_assert(sizeof(PackedTextureLayout) % 8 == 0,"");
 
 enum PackedGroupFlags {
   GROUP_HAS_NORMAL_MAP = 1,
@@ -65,5 +73,7 @@ struct PackedTextureGroup {
   float offset_z;
   float sprite_depth; // TODO I'd like to be able to specify this more generally
 };
+
+static_assert(sizeof(PackedTextureGroup) % 8 == 0,"");
 
 #endif

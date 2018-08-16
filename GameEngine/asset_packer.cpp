@@ -35,6 +35,7 @@ enum CommandKeyword {
   COMMAND_FACE,
   COMMAND_SET,
   COMMAND_BITMAP,
+  COMMAND_FONT,
 
   COMMAND_COUNT,
   COMMAND_INVALID,
@@ -53,6 +54,7 @@ enum AttributeKeyword {
   ATTRIBUTE_OFFSET,
   ATTRIBUTE_SPRITE_DEPTH,
   ATTRIBUTE_SPRITE_INDEX,
+  ATTRIBUTE_CHARACTER_RANGE,
 
   ATTRIBUTE_COUNT,
   ATTRIBUTE_INVALID,
@@ -72,6 +74,7 @@ struct StringTable {
   hstring clamp_mode_hstrings[CLAMP_COUNT];
   hstring direction_hstrings[DIRECTION_COUNT];
   hstring face_index_hstrings[FACE_COUNT];
+  hstring font_id_hstrings[FONT_COUNT];
 } string_table_;
 
 StringTable * const string_table = &string_table_;
@@ -89,6 +92,7 @@ static void init_string_table() {
     ADD_COMMAND_HASH(FACE);
     ADD_COMMAND_HASH(BITMAP);
     ADD_COMMAND_HASH(SET);
+    ADD_COMMAND_HASH(FONT);
     ASSERT_EQUAL(i, COMMAND_COUNT);
 #undef ADD_COMMAND_HASH
   }
@@ -106,6 +110,7 @@ static void init_string_table() {
     ADD_ATTRIBUTE_HASH(OFFSET);
     ADD_ATTRIBUTE_HASH(SPRITE_DEPTH);
     ADD_ATTRIBUTE_HASH(SPRITE_INDEX);
+    ADD_ATTRIBUTE_HASH(CHARACTER_RANGE);
     ASSERT_EQUAL(i, ATTRIBUTE_COUNT);
 #undef ADD_ATTRIBUTE_HASH
   }
@@ -189,6 +194,17 @@ static void init_string_table() {
 #undef ADD_FACE_HASH
   }
 
+  {
+#define ADD_FONT_HASH(type) \
+    string_table->font_id_hstrings[FONT_##type] = hash_string(#type); i++;
+    u32 i = 1;
+    ADD_FONT_HASH(COURIER_NEW_BOLD);
+    ADD_FONT_HASH(ARIAL);
+    ADD_FONT_HASH(DEBUG);
+    ASSERT_EQUAL(i, FONT_COUNT);
+#undef ADD_ANIM_HASH
+  }
+
 #if 0
   for (u32 i = 0; i < ANIM_COUNT; i++) {
     print_hstring(string_table->animation_type_hstrings[i]);
@@ -232,6 +248,7 @@ MAKE_LOOKUP_FUNCTION(TextureFormatSpecifier, blend_mode, BLEND, 0, BLEND_FIRST);
 MAKE_LOOKUP_FUNCTION(TextureFormatSpecifier, clamp_mode, CLAMP, 0, CLAMP_FIRST);
 MAKE_LOOKUP_FUNCTION(Direction, direction, DIRECTION, 0, 0);
 MAKE_LOOKUP_FUNCTION(FaceIndex, face_index, FACE, 0, 0);
+MAKE_LOOKUP_FUNCTION(FontID, font_id, FONT, 1, 0);
 
 #undef MAKE_LOOKUP_FUNCTION
 
@@ -254,6 +271,7 @@ enum TokenError : u32 {
 
   EMPTY_STRING,
   MISSING_END_QUOTE,
+  MISSING_END_SINGLE_QUOTE,
   UNEXPECTED_ADDITIONAL_ARGUMENTS,
 
   // NUMBERS :
@@ -274,6 +292,8 @@ enum TokenError : u32 {
   INVALID_CLAMP_MODE,
   INVALID_DIRECTION,
   INVALID_FACE_NAME,
+  INVALID_FONT_ID,
+
   ANIMATION_BEFORE_LAYOUT_SPECIFIED,
   FACE_BEFORE_LAYOUT_SPECIFIED,
   BITMAP_BEFORE_LAYOUT_SPECIFIED,
@@ -349,6 +369,8 @@ struct Token {
 
   inline operator bool() { return (type != TOKEN_ERROR); }
 };
+
+#undef MAKE_TOKEN_FUNCTIONS
 
 static Token parse_string(lstring line) {
   u32 i;
@@ -497,7 +519,6 @@ struct VersionArgs {
   TokenError error;
 };
 
-// TODO I think the hstrings here should actually be interned for fast comparison
 struct LayoutArgs {
   hstring name;
   TextureLayoutType type;
@@ -536,13 +557,21 @@ struct SetArgs {
   TokenError error;
 };
 
-// TODO I may want to allow people to set more than this...
+// TODO I want to reorder these so that id comes before filename.
+// TODO Remove sprite_count probably.
 struct BitmapArgs {
   lstring filename;
   TextureGroupID id;
   u16 sprite_count;
   u16 sprite_width;
   u16 sprite_height;
+
+  TokenError error;
+};
+
+struct FontArgs {
+  FontID id;
+  lstring filename;
 
   TokenError error;
 };
@@ -570,6 +599,7 @@ MAKE_INVALID_ERROR_FUNCTIONS(CommandKeyword, COMMAND, COMMAND_NAME);
 MAKE_INVALID_ERROR_FUNCTIONS(AttributeKeyword, ATTRIBUTE, ATTRIBUTE_NAME);
 MAKE_INVALID_ERROR_FUNCTIONS(Direction, DIRECTION, DIRECTION);
 MAKE_INVALID_ERROR_FUNCTIONS(FaceIndex, FACE, FACE_NAME);
+MAKE_INVALID_ERROR_FUNCTIONS(FontID, FONT, FONT_ID);
 
 inline TextureFormatSpecifier invalid_of(TextureFormatSpecifier spec) { 
   if (spec == BLEND_INVALID) return BLEND_INVALID;
@@ -738,6 +768,13 @@ static BitmapArgs parse_bitmap_args(lstring args) {
   return result;
 }
 
+static FontArgs parse_font_args(lstring args) {
+  FontArgs result = {};
+  HANDLE_ARG_LOOKUP(id, font_id);
+  HANDLE_ARG_QUOTE(filename);
+  return result;
+}
+
 static Token parse_command(lstring line) {
   line = remove_whitespace(line);
   if (!line) return Token().set(COMMAND_NONE);
@@ -756,6 +793,7 @@ static Token parse_command(lstring line) {
   return Token().set(command_num, command.remainder);
 }
 
+// TODO add nested comments
 static Token parse_comment_end(lstring line) {
   line = remove_whitespace(line);
   if (!line) return Token().set(COMMAND_NONE);
@@ -792,8 +830,11 @@ int main(int argc, char *argv[]) {
   printf("Packing assets from %s\n", build_filename);
 
   init_string_table();
-  char directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
-  lstring directory_name = length_string(directory_buffer);
+  char bitmap_directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
+  lstring bitmap_directory_name = length_string(bitmap_directory_buffer);
+
+  char font_directory_buffer[DIRECTORY_BUFFER_SIZE] = "/Library/Fonts/";
+  lstring font_directory_name = length_string(font_directory_buffer);
 
   auto allocator_ = new_push_allocator(2048 * 4);
   auto allocator = &allocator_;
@@ -998,10 +1039,10 @@ int main(int argc, char *argv[]) {
         group->offset_z = current_offset.z;
         group->sprite_depth = current_sprite_depth;
 
-        lstring bitmap_filename = append(directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
+        lstring bitmap_filename = append(bitmap_directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
         zero_terminate(bitmap_filename);
-        print_lstring(bitmap_filename); // TODO DELETE ME
-        printf("%s\n", bitmap_filename.str);
+        //print_lstring(bitmap_filename); 
+        printf("Loading %s\n", bitmap_filename.str);
         PixelBuffer bitmap = load_image_file(bitmap_filename.str);
         if (!is_initialized(&bitmap)) 
           print_error("Failed to load bitmap", build_filename, line_number, next_line);
@@ -1010,6 +1051,15 @@ int main(int argc, char *argv[]) {
         current_data_offset += bitmap.width * bitmap.height * 4;
         push(loaded_bitmaps, bitmap);
 
+      } break;
+
+      case COMMAND_FONT : {
+        auto args = parse_font_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number, next_line);
+        printf("Got a font!\n");
+        lstring font_filename = append(font_directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
+        zero_terminate(font_filename);
+        printf("Loading %s\n", font_filename.str);
       } break;
 
       case COMMAND_INVALID : {
@@ -1079,80 +1129,6 @@ int main(int argc, char *argv[]) {
 
     write_pack_file(dest_allocator, loaded_bitmaps);
   }
-
-#if 0
-
-  PixelBuffer buffer = load_image_file("assets/lttp_link.png");
-  assert(is_initialized(&buffer));
-
-  // TODO replace all this with values from the spec file
-  
-  u32 layout_count = 1; // LAYOUT_COUNT
-  u32 animation_count = 1; // ANIM_COUNT
-  u32 group_count = 1; // TEXTURE_GROUP_COUNT
-  u64 pre_data_size = 
-    sizeof(PackedAssetHeader) + 
-    sizeof(PackedTextureLayout) * layout_count + 
-    sizeof(PackedAnimation) * animation_count +
-    sizeof(PackedTextureGroup) * group_count;
-
-  // TODO for convenience, I should make a dynamic push allocator
-  PushAllocator dest_allocator_ = new_push_allocator(pre_data_size);
-  auto dest_allocator = &dest_allocator_;
-
-  PackedAssetHeader *asset_header = ALLOC_STRUCT(dest_allocator, PackedAssetHeader);
-  asset_header->magic = 'PACK';
-  asset_header->version = 0;
-  asset_header->total_size = pre_data_size;
-  asset_header->layout_count = 1;
-  asset_header->texture_group_count = 1;
-  asset_header->data_offset = pre_data_size;
-
-  PackedTextureLayout *character_layout = ALLOC_STRUCT(dest_allocator, PackedTextureLayout);
-  character_layout->layout_type = LAYOUT_CHARACTER;
-  character_layout->animation_count = 1;
-
-  PackedAnimation *anim0 = ALLOC_STRUCT(dest_allocator, PackedAnimation);
-  anim0->animation_type = ANIM_IDLE;
-  anim0->frame_count = 1;
-  anim0->duration = 1;
-  //anim0->animation_start_index = {}; // All zeroes for now
-
-  PackedTextureGroup *link_group = ALLOC_STRUCT(dest_allocator, PackedTextureGroup);
-  link_group->width = buffer.width;
-  link_group->height = buffer.height;
-  link_group->texture_group_id = TEXTURE_GROUP_LINK;
-  link_group->layout_type = LAYOUT_CHARACTER;
-  link_group->sprite_count = 1;
-  link_group->sprite_width = buffer.width; // TODO needs to be per sprite
-  link_group->sprite_height = buffer.height;
-  link_group->flags = 0; // No normal map for now
-  link_group->min_blend = LINEAR_BLEND;
-  link_group->max_blend = NEAREST_BLEND;
-  link_group->s_clamp = CLAMP_TO_EDGE;
-  link_group->t_clamp = CLAMP_TO_EDGE;
-  link_group->offset_x = 0; // Copied from game.cpp
-  link_group->offset_y = 0.40;
-  link_group->offset_z = 0.06;
-  link_group->sprite_depth = 0.3;
-  link_group->bitmap_offset = 0; //dest_allocator->bytes_allocated; // TODO maybe consider alignment
-  
-  u64 bitmap_size = u64(buffer.width) * buffer.height * 4;
-  asset_header->total_size += bitmap_size;
-
-
-  // TODO I might want to make my own version of this, but this is fine for now
-  FILE *pack_file = fopen("assets/packed_assets.pack", "wb");
-  assert(pack_file);
-  auto written = fwrite(dest_allocator->memory, 1, dest_allocator->bytes_allocated, pack_file);
-  assert(written == dest_allocator->bytes_allocated);
-  written = fwrite(buffer.buffer, 1, bitmap_size, pack_file);
-  assert(written == bitmap_size);
-  printf("Packed in %ld bytes\n", ftell(pack_file));
-  printf("Calculated size is %u bytes\n", asset_header->total_size);
-  fclose(pack_file);
-#endif
-
 
   printf("Packing successful.\n");
   return 0;

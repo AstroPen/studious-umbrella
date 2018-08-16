@@ -993,7 +993,7 @@ static void render_sprite(RenderBuffer *buffer, Entity *e) {
 
 static TileRenderInfo get_tile_render_info(GameAssets *assets, Entity *e, FaceIndex face_idx, u32 tile_idx);
 
-static void render_tile(RenderBuffer *buffer, Entity *e, VertexQuad &verts, AlignedRect3 tile, FaceIndex face_idx, u32 tile_idx) {
+inline void render_tile(RenderBuffer *buffer, Entity *e, VertexQuad &verts, AlignedRect3 tile, FaceIndex face_idx, u32 tile_idx) {
 
   // TODO pull some of this info out a level
   TileRenderInfo info = get_tile_render_info(buffer->assets, e, face_idx, tile_idx);
@@ -1024,6 +1024,12 @@ static void render_tiled_rect(RenderBuffer *buffer, Entity *e, VertexQuad &verts
   V3 cotangent = aabb_cotangents[face_idx];
 
   if (CULL_REVERSE_FACES) {
+    // TODO What we actually want is to check that the normal is towards
+    // the diff vector for the camera and rect, and return otherwise.
+    //
+    // Also, we may want to do this with transparent cubes as well except that
+    // we would just draw the back faces first. For that reason, we may want to
+    // put this code in render_tiled_box and create a mask of which faces to draw.
     if (towards(buffer->camera->forward, normal)) return;
   }
 
@@ -1236,7 +1242,8 @@ static void gl_set_vertex_attribute_pointers() {
   // https://www.khronos.org/opengl/wiki/Vertex_Specification_Best_Practices
   // https://www.khronos.org/opengl/wiki/Buffer_Object_Streaming
 
-  // NOTE : the boolean argument is "normalized"
+  // NOTE : the boolean argument is "normalized" and causes 
+  // integers to be mapped to [-1,1] (or [0,1] if unsigned).
   glVertexAttribPointer(VERTEX_POSITION, 4, GL_FLOAT, false, 
       sizeof(Vertex), (void *)(offsetof(Vertex, position)));
 
@@ -1253,37 +1260,6 @@ static void gl_set_vertex_attribute_pointers() {
   glVertexAttribPointer(VERTEX_TANGENT, 3, GL_FLOAT, false,
       sizeof(Vertex), (void *)(offsetof(Vertex, tangent)));
   gl_check_error();
-}
-
-static void draw_vertices(int vertex_idx, int count, u32 texture_id, float texture_width, float texture_height, u32 normal_map_id, V2 normal_map_uv_offset, bool use_low_res_uv) {
-  TIMED_FUNCTION();
-
-  ASSERT(texture_id);
-  //glUniform1i(texture_sampler_id, texture_id);
-  gl_check_error();
-  glActiveTexture(GL_TEXTURE0 + 0);
-  glBindTexture(GL_TEXTURE_2D, texture_id);
-  glUniform1f(texture_width_id, texture_width);
-  glUniform1f(texture_height_id, texture_height);
-  gl_check_error();
-
-  //assert(use_low_res_uv);
-  glUniform1i(use_low_res_uv_filter_id, use_low_res_uv);
-  gl_check_error();
-
-  bool has_normal_map = normal_map_id ? true : false;
-  glUniform1i(glGetUniformLocation(program_id, "HAS_NORMAL_MAP"), has_normal_map);
-
-  if (has_normal_map) {
-    glActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_2D, normal_map_id);
-    glUniform2fv(normal_map_uv_offset_id, 1, normal_map_uv_offset.elements);
-  }
- 
-
-  glDrawArrays(GL_TRIANGLES, vertex_idx, count);
-  gl_check_error();
-
 }
 
 // TODO Instead of calling glBufferData every frame, consider calling
@@ -1398,7 +1374,6 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
   // Render Game
   //
 
-  auto default_texture_id = get_texture_id(buffer->assets, BITMAP_WHITE);
   gl_set_vertex_buffer(buffer->vertices, buffer->vertex_count);
   gl_set_vertex_attribute_pointers(); // TODO Don't know if I need to call this every frame
 
@@ -1440,7 +1415,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
       case RenderStage::CAMERA_VIEW :
         glUniformMatrix4fv(view_matrix_id, 1, GL_FALSE, view_mat); break;
       default :
-        assert(!"Invalid stage view.");
+        INVALID_SWITCH_CASE(stage->view);
     }
 
     auto elem = stage->first;
@@ -1473,7 +1448,7 @@ static void gl_draw_buffer(RenderBuffer *buffer) {
         break;
       }
     }
-    if (stage->element_count) assert(!elem->next);
+    if (stage->element_count) ASSERT(!elem->next);
   }
 }
 
