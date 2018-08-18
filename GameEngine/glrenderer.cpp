@@ -748,8 +748,8 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
   assert(font_info);
   if (!font_info) return;
 
-  float font_width  = font_info->bitmap.width;
-  float font_height = font_info->bitmap.height;
+  float font_width  = font_info->width;
+  float font_height = font_info->height;
   auto texture_index = get_texture_index(font_id);
   VertexQuad verts;
 
@@ -764,10 +764,10 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
       auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0);
 
       V2 uv[4] = {
-                 {b->x0 / font_width, b->y1 / font_height}, 
-                 {b->x1 / font_width, b->y1 / font_height}, 
-                 {b->x1 / font_width, b->y0 / font_height}, 
-                 {b->x0 / font_width, b->y0 / font_height},
+        {b->x0 / font_width, b->y1 / font_height}, 
+        {b->x1 / font_width, b->y1 / font_height}, 
+        {b->x1 / font_width, b->y0 / font_height}, 
+        {b->x0 / font_width, b->y0 / font_height},
       };
 
       if (is_shadowed) {

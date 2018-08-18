@@ -607,10 +607,16 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
   FontInfo info;
-  info.bitmap = bitmap;
-  info.bitmap.texture_id = font_id;
+  //info.bitmap = bitmap;
+  //info.bitmap.texture_id = font_id;
+  info.width = bitmap.width;
+  info.height = bitmap.height;
   info.baked_chars = baked_chars;
-  
+  info.start = ' ';
+  info.end = '~';
+  info.font_size = text_height;
+  info.texture_id = font_id;
+ 
   return info;
 }
 
@@ -688,9 +694,10 @@ static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, 
   auto font = get_font_location(assets, id);
   *font = load_font_file(filename, pixel_height, perm_allocator, temp_allocator);
 
+
   // NOTE : It is a bit weird to put this here, but it makes things simpler for now.
   TextureIndex index = get_texture_index(id);
-  assets->texture_infos[index] = {font->bitmap.texture_id, float(font->bitmap.width), float(font->bitmap.height)};
+  assets->texture_infos[index] = {font->texture_id, float(font->width), float(font->height)};
 }
 #endif
 

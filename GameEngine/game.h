@@ -99,11 +99,12 @@ struct GameAssets {
   WorkQueue *work_queue;
   HeapAllocator work_allocator;
   PixelBuffer bitmaps[BITMAP_COUNT];
-  FontInfo fonts[FONT_COUNT];
+  FontTypeInfo font_types[FONT_COUNT];
 
   TextureGroup texture_groups[TEXTURE_GROUP_COUNT];
   TextureLayout texture_layouts[LAYOUT_COUNT];
   TextureInfo texture_infos[TEXTURE_INDEX_MAX];
+  FontInfo fonts[FONT_COUNT];
 };
 
 static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);

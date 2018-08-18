@@ -36,6 +36,7 @@ enum CommandKeyword {
   COMMAND_SET,
   COMMAND_BITMAP,
   COMMAND_FONT,
+  COMMAND_SIZE,
 
   COMMAND_COUNT,
   COMMAND_INVALID,
@@ -93,6 +94,7 @@ static void init_string_table() {
     ADD_COMMAND_HASH(BITMAP);
     ADD_COMMAND_HASH(SET);
     ADD_COMMAND_HASH(FONT);
+    ADD_COMMAND_HASH(SIZE);
     ASSERT_EQUAL(i, COMMAND_COUNT);
 #undef ADD_COMMAND_HASH
   }
@@ -262,6 +264,7 @@ enum TokenType {
   TOKEN_LSTRING,
   TOKEN_INT,
   TOKEN_FLOAT,
+  TOKEN_CHAR,
   TOKEN_COMMAND,
   TOKEN_ATTRIBUTE,
 };
@@ -271,8 +274,12 @@ enum TokenError : u32 {
 
   EMPTY_STRING,
   MISSING_END_QUOTE,
+  MISSING_SINGLE_QUOTE,
   MISSING_END_SINGLE_QUOTE,
+  EMPTY_SINGLE_QUOTE,
+  UNEXPECTED_EXTRA_CHARACTER,
   UNEXPECTED_ADDITIONAL_ARGUMENTS,
+
 
   // NUMBERS :
   NON_NUMERIC_CHARACTER,
@@ -352,6 +359,7 @@ struct Token {
     lstring lstr;
     int i;
     float f;
+    char c;
     CommandKeyword command;
     AttributeKeyword attribute;
     TokenError error;
@@ -363,6 +371,7 @@ struct Token {
   MAKE_TOKEN_FUNCTIONS(lstr, lstring, LSTRING);
   MAKE_TOKEN_FUNCTIONS(i, int, INT);
   MAKE_TOKEN_FUNCTIONS(f, float, FLOAT);
+  MAKE_TOKEN_FUNCTIONS(c, char, CHAR);
   MAKE_TOKEN_FUNCTIONS(command, CommandKeyword, COMMAND);
   MAKE_TOKEN_FUNCTIONS(attribute, AttributeKeyword, ATTRIBUTE);
   MAKE_TOKEN_FUNCTIONS(error, TokenError, ERROR);
@@ -400,7 +409,6 @@ static Token pop_quote(lstring line) {
         lstring str = {line.str, i};
         if (!str) return Token().set(EMPTY_STRING);
         lstring remainder = line + i + 1;
-        ASSERT(!remainder || remainder[0] != '\"');
         return Token().set(str, remainder);
       }
     }
@@ -408,6 +416,33 @@ static Token pop_quote(lstring line) {
   }
 
   return parse_string(line);
+}
+
+static Token pop_char(lstring line) {
+  line = remove_whitespace(line);
+  if (!line) return Token().set(EMPTY_STRING);
+
+  if (line[0] != '\'') return Token().set(MISSING_SINGLE_QUOTE);
+  if (line.len < 2) return Token().set(MISSING_END_SINGLE_QUOTE);
+  if (line[1] == '\'') return Token().set(EMPTY_SINGLE_QUOTE);
+  if (line.len < 3) return Token().set(MISSING_END_SINGLE_QUOTE);
+  if (line[2] != '\'') return Token().set(UNEXPECTED_EXTRA_CHARACTER);
+
+  if (line[0] != '\'') return Token().set(MISSING_SINGLE_QUOTE);
+  line = line + 1;
+  u32 i;
+  for (i = 0; i < line.len; i++) {
+    if (line[i] == '\'') {
+      lstring str = {line.str, i};
+      if (!str) return Token().set(EMPTY_SINGLE_QUOTE);
+      if (str.len > 1) return Token().set(UNEXPECTED_EXTRA_CHARACTER);
+      lstring remainder = line + i + 1;
+      return Token().set(str[0], remainder);
+    }
+  }
+  return Token().set(MISSING_END_SINGLE_QUOTE);
+
+
 }
 
 static Token pop_hash(lstring line) {
@@ -552,6 +587,10 @@ struct SetArgs {
     V3 offset;
     float sprite_depth;
     u16 sprite_index;
+    struct {
+      char start_char;
+      char end_char;
+    };
   };
 
   TokenError error;
@@ -572,6 +611,12 @@ struct BitmapArgs {
 struct FontArgs {
   FontID id;
   lstring filename;
+
+  TokenError error;
+};
+
+struct SizeArgs {
+  u16 size;
 
   TokenError error;
 };
@@ -640,7 +685,7 @@ inline TokenError error_of(TextureFormatSpecifier spec) {
   Token name = pop_int(args); \
   args = name.remainder; \
   HANDLE_TOKEN_ERROR(name); \
-  if (int(name) > UINT16_MAX) { \
+  if (int(name) > UINT16_MAX || int(name) < 0) { \
     result.error = OVERFLOW_16_BIT_INTEGER; \
     return result; \
   } \
@@ -667,6 +712,12 @@ inline TokenError error_of(TextureFormatSpecifier spec) {
   HANDLE_TOKEN_ERROR(name); \
   result.name = lstring(name);
 
+#define HANDLE_ARG_CHAR(name) \
+  Token name = pop_char(args); \
+  args = name.remainder; \
+  HANDLE_TOKEN_ERROR(name); \
+  result.name = char(name);
+
 //
 // Spec file parsing ---
 //
@@ -688,7 +739,7 @@ static LayoutArgs parse_layout_args(lstring args) {
 static AnimationArgs parse_animation_args(lstring args) {
   AnimationArgs result = {};
   HANDLE_ARG_LOOKUP(type, animation_type);
-  HANDLE_ARG_INT(frames);
+  HANDLE_ARG_UINT16(frames);
   HANDLE_ARG_FLOAT(duration);
   HANDLE_ARG_LOOKUP(direction, direction);
   HANDLE_EXTRA_ARGS();
@@ -747,6 +798,11 @@ static SetArgs parse_set_args(lstring args) {
       HANDLE_ARG_UINT16(sprite_index);
     } break;
 
+    case ATTRIBUTE_CHARACTER_RANGE : {
+      HANDLE_ARG_CHAR(start_char);
+      HANDLE_ARG_CHAR(end_char);
+    } break;
+
     default : {
       INVALID_SWITCH_CASE(attribute);
     } break;
@@ -772,6 +828,14 @@ static FontArgs parse_font_args(lstring args) {
   FontArgs result = {};
   HANDLE_ARG_LOOKUP(id, font_id);
   HANDLE_ARG_QUOTE(filename);
+  HANDLE_EXTRA_ARGS();
+  return result;
+}
+
+static SizeArgs parse_size_args(lstring args) {
+  SizeArgs result = {};
+  HANDLE_ARG_UINT16(size);
+  HANDLE_EXTRA_ARGS();
   return result;
 }
 
@@ -820,6 +884,17 @@ static void write_pack_file(PushAllocator *header, darray<PixelBuffer> bitmaps) 
   printf("Packed in %ld bytes\n", ftell(pack_file));
   fclose(pack_file);
 }
+
+struct UnloadedFont {
+  lstring filename;
+  u32 packed_font_index;
+};
+
+// TODO use this instead of loading immediately
+struct UnloadedBitmap {
+  lstring filename;
+  u32 packed_group_index;
+};
 
 int main(int argc, char *argv[]) {
   if (argc > 2) usage(argv[0]);
@@ -894,6 +969,8 @@ int main(int argc, char *argv[]) {
   u8 current_t_clamp = CLAMP_TO_EDGE;
   V3 current_offset = vec3(0);
   float current_sprite_depth = 0;
+  char character_range_start = ' ';
+  char character_range_end = '~';
 
   u64 current_data_offset = 0;
 
@@ -1011,6 +1088,9 @@ int main(int argc, char *argv[]) {
             current_sprite_depth = args.sprite_depth; break;
           case ATTRIBUTE_SPRITE_INDEX :
             current_animation_index = args.sprite_index; break;
+          case ATTRIBUTE_CHARACTER_RANGE :
+            character_range_start = args.start_char;
+            character_range_end = args.end_char; break;
           default : INVALID_SWITCH_CASE(args.attribute);
         }
       } break;
@@ -1043,6 +1123,8 @@ int main(int argc, char *argv[]) {
         zero_terminate(bitmap_filename);
         //print_lstring(bitmap_filename); 
         printf("Loading %s\n", bitmap_filename.str);
+        // TODO I should do this later so that I can limit the number of
+        // files loaded at one time.
         PixelBuffer bitmap = load_image_file(bitmap_filename.str);
         if (!is_initialized(&bitmap)) 
           print_error("Failed to load bitmap", build_filename, line_number, next_line);
@@ -1060,6 +1142,13 @@ int main(int argc, char *argv[]) {
         lstring font_filename = append(font_directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
         zero_terminate(font_filename);
         printf("Loading %s\n", font_filename.str);
+      } break;
+
+      case COMMAND_SIZE : {
+        auto args = parse_size_args(command.remainder);
+        if (args.error) print_error(args.error, build_filename, line_number, next_line);
+
+        printf("Size : %u\n", args.size);
       } break;
 
       case COMMAND_INVALID : {

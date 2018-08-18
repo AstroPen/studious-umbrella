@@ -205,9 +205,28 @@ union TextureLayout {
 
 struct BakedChar;
 
-struct FontInfo {
+#if 0
+struct FontTypeInfo {
   PixelBuffer bitmap;
   BakedChar *baked_chars;
+};
+#endif
+
+struct FontInfo {
+  BakedChar *baked_chars;
+  u32 width;
+  u32 height;
+  char start;
+  char end;
+  u16 font_size;
+  u32 texture_id; // TODO delete this probably
+};
+
+struct FontTypeInfo {
+  u16 font_sizes_index;
+  u16 size_count;
+  u16 min_size;
+  u16 max_size;
 };
 
 // NOTE : WARNING : Clamping and blending values must be contiguous for the packer to work.
