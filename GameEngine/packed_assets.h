@@ -76,15 +76,15 @@ struct PackedTextureGroup {
 
 static_assert(sizeof(PackedTextureGroup) % 8 == 0,"");
 
-struct PackedFont {
+struct PackedFontType {
   u32 font_id;
   u32 size_count;
 };
 
-static_assert(sizeof(PackedFont) % 8 == 0,"");
+static_assert(sizeof(PackedFontType) % 8 == 0,"");
 
 
-struct PackedFontSize {
+struct PackedFont {
   u64 bitmap_offset;
 
   u32 font_size;
@@ -95,6 +95,6 @@ struct PackedFontSize {
   u16 char_count;
 };
 
-static_assert(sizeof(PackedFontSize) % 8 == 0,"");
+static_assert(sizeof(PackedFont) % 8 == 0,"");
 
 #endif

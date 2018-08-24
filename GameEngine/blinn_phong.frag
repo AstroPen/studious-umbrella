@@ -55,6 +55,7 @@ vec3 directional_light(vec3 diffuse_color, vec3 specular_color, vec3 N, vec3 V, 
 // Found here : https://csantosbh.wordpress.com/2014/01/25/manual-texture-filtering-for-pixelated-games-in-webgl/
 vec2 get_custom_uv() {
   if (!USE_LOW_RES_UV_FILTER) return v_in.uv;
+  // TODO clamp the uv here to min + 0.5 to max - 0.5
 
   vec2 alpha = vec2(0.07); // TODO This should vary based on the distance
   vec2 x = fract(v_in.uv);

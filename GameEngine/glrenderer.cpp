@@ -754,7 +754,7 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
   VertexQuad verts;
 
   while (*text) {
-    if (*text >= ' ' && *text <= '~') {
+    if (*text >= font_info->first_glyph && *text <= font_info->last_glyph) {
       auto b = get_baked_char(font_info, *text);
       auto p = round(pixel_p + V2{b->xoff, -b->yoff});
 
@@ -835,6 +835,7 @@ static void render_frame_records(RenderBuffer *buffer) {
 #define TAB "   "
  
   u32 const screen_lines = 28;
+  // TODO we could use font_info->font_size;
   float const newline_height = 1.0f / screen_lines;
   float left_margin = 1.f/12;
   u32 const max_lines = 26;

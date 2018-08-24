@@ -44,6 +44,7 @@ void main() {
   // NOTE : If this condition is set the uv coordinates are scaled to the texture
   // size in pixels.
   if (USE_LOW_RES_UV_FILTER) 
+    // TODO Use SPRITE_WIDTH and SPRITE_HEIGHT instead?
     v_out.uv = vertex_uv * vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
   else 
     v_out.uv = vertex_uv;

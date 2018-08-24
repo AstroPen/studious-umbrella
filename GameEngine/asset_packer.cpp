@@ -10,13 +10,52 @@
 #include "asset_interface.h"
 #include "packed_assets.h"
 
+struct SpecAttributes {
+  u16 animation_index = 0;
+  TextureLayoutType layout_type = LAYOUT_INVALID;
+  u16 group_flags = 0;
+  u8 min_blend = LINEAR_BLEND;
+  u8 max_blend = LINEAR_BLEND;
+  u8 s_clamp = CLAMP_TO_EDGE;
+  u8 t_clamp = CLAMP_TO_EDGE;
+  V3 offset = vec3(0);
+  float sprite_depth = 0;
+  char character_range_start = ' ';
+  char character_range_end = '~';
+} attributes;
 
-static void print_error(char *msg, char *filename, u32 line_num, lstring line = {}) {
-  printf("Error on line %u of %s : %s.\n", line_num, filename, msg);
+struct PackerState {
+  PushAllocator spec_allocator[1];
+
+  // Packed data :
+  PackedAssetHeader header;
+  darray<PackedTextureLayout> layouts;
+  darray<PackedAnimation> animations;
+  darray<PackedFaces> faces;
+  darray<PackedTextureGroup> groups;
+  darray<PackedFontType> font_types;
+  darray<PackedFont> fonts;
+  darray<lstring> font_filenames;
+  darray<lstring> bitmap_filenames;
+
+  u64 current_data_offset = 0;
+  File spec_file[1];
+  Stream spec_stream[1];
+  u32 line_number;
+} packer;
+
+// TODO rename to print_parse_error or something
+static void print_error(char *msg, lstring line = {}) {
+  printf("Error on line %u of %s : %s.\n", packer.line_number, packer.spec_file->filename, msg);
   if (line) {
     STACK_STRING(buf, line);
-    printf(KRED "%u    %s\n\n" KNRM, line_num, buf);
+    printf(KRED "%u    %s\n\n" KNRM, packer.line_number, buf);
   }
+  exit(1); // TODO should maybe close more cleanly
+}
+
+static void print_load_bitmap_error(char *filename) {
+  printf("Error loading bitmap %s\n", filename);
   exit(1); // TODO should maybe close more cleanly
 }
 
@@ -335,12 +374,13 @@ static char *to_string(TokenError error) {
   }
 }
 
-static void print_error(TokenError error, char *filename, u32 line_num, lstring line) {
+// TODO rename to print_parse_error or something
+static void print_error(TokenError error, lstring line) {
   ASSERT(error);
   auto msg = to_string(error);
-  printf("Error parsing line %u of %s : %s.\n", line_num, filename, msg);
+  printf("Error parsing line %u of %s : %s.\n", packer.line_number, packer.spec_file->filename, msg);
   STACK_STRING(buf, line);
-  printf(KRED "%u    %s\n\n" KNRM, line_num, buf);
+  printf(KRED "%u    %s\n\n" KNRM, packer.line_number, buf);
   exit(1); // TODO should maybe close more cleanly
 }
 
@@ -531,7 +571,7 @@ static Token parse_float(lstring line) {
 
 
   if (is_negative) result = -result;
-  printf("Float : %f\n", result); // TODO delete this
+  //printf("Float : %f\n", result); // TODO delete this
   return Token().set(result);
 }
 
@@ -787,7 +827,7 @@ static SetArgs parse_set_args(lstring args) {
       PARSE_ARG_FLOAT(offset_y);
       PARSE_ARG_FLOAT(offset_z);
       result.offset = vec3(float(offset_x), float(offset_y), float(offset_z));
-      print_vector(result.offset);
+      //print_vector(result.offset);
     } break;
 
     case ATTRIBUTE_SPRITE_DEPTH : {
@@ -866,134 +906,193 @@ static Token parse_comment_end(lstring line) {
   return Token().set(COMMAND_NONE);
 }
 
+
 #define DIRECTORY_BUFFER_SIZE 512
 
-static void write_pack_file(PushAllocator *header, darray<PixelBuffer> bitmaps) {
-  // TODO I might want to make my own version of this, but this is fine for now
-  FILE *pack_file = fopen("assets/packed_assets.pack", "wb");
-  //if (!pack_file) printf("Failed to open pack file for writing"); // TODO handle error better
-  ASSERT(pack_file);
-  u64 written = fwrite(header->memory, 1, header->bytes_allocated, pack_file);
-  ASSERT_EQUAL(written, header->bytes_allocated); // TODO handle error
-  for (u32 i = 0; i < count(bitmaps); i++) {
-    auto bitmap = bitmaps + i;
-    u64 bitmap_size = u64(bitmap->width) * bitmap->height * 4;
-    written = fwrite(bitmap->buffer, 1, bitmap_size, pack_file);
+static void write_fonts() {
+#if 0
+  for (u32 i = 0; i < count(to_load); i++) {
+    auto font = fonts + i;
+  }
+#endif
+}
+
+static void write_bitmaps(FILE *out) {
+
+  ASSERT_EQUAL(count(packer.bitmap_filenames), count(packer.groups));
+
+  char bitmap_directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
+  lstring bitmap_directory_name = length_string(bitmap_directory_buffer);
+
+  for (u32 i = 0; i < count(packer.bitmap_filenames); i++) {
+   
+    lstring filename = packer.bitmap_filenames[i];
+    auto group = packer.groups + i;
+    
+    lstring bitmap_filename = append(bitmap_directory_name, filename, DIRECTORY_BUFFER_SIZE - 1);
+    zero_terminate(bitmap_filename);
+    printf("Writing %s\n", bitmap_filename.str);
+    PixelBuffer bitmap = load_image_file(bitmap_filename.str);
+    if (!is_initialized(&bitmap)) print_load_bitmap_error(bitmap_filename.str);
+    group->bitmap_offset = packer.current_data_offset;
+    group->width = bitmap.width;
+    group->height = bitmap.height;
+
+    u64 bitmap_size = u64(bitmap.width) * bitmap.height * 4;
+    packer.current_data_offset += bitmap_size;
+
+    u64 written = fwrite(bitmap.buffer, 1, bitmap_size, out);
     ASSERT_EQUAL(written, bitmap_size); // TODO handle error
   }
+}
+
+static void write_header(FILE *out, u32 header_size) {
+  PushAllocator header_mem[1];
+  *header_mem = new_push_allocator(header_size);
+  ASSERT(is_initialized(header_mem));
+
+  packer.header.data_offset = header_size;
+  packer.header.layout_count = count(packer.layouts);
+  packer.header.texture_group_count = count(packer.groups);
+  packer.header.total_size = header_size + packer.current_data_offset;
+
+  PackedAssetHeader *asset_header = ALLOC_STRUCT(header_mem, PackedAssetHeader);
+  ASSERT(asset_header);
+  *asset_header = packer.header;
+
+  u32 packed_animation_index = 0;
+  u32 packed_face_index = 0;
+
+  for (u32 i = 0; i < packer.header.layout_count; i++) {
+    auto layout = ALLOC_STRUCT(header_mem, PackedTextureLayout);
+    ASSERT(layout);
+    *layout = packer.layouts[i];
+    switch (layout->layout_type) {
+      case LAYOUT_CHARACTER : {
+        u32 animation_count = layout->animation_count;
+        auto animations = ALLOC_ARRAY(header_mem, PackedAnimation, animation_count);
+        ASSERT(animations);
+        ASSERT_EQUAL(animations, layout->animations); // Check alignment
+        ASSERT(packed_animation_index + animation_count <= count(packer.animations));
+        array_copy(packer.animations + packed_animation_index, animations, animation_count);
+        packed_animation_index += animation_count;
+      } break;
+      case LAYOUT_TERRAIN : {
+        u32 face_count = layout->face_count;
+        auto face = ALLOC_STRUCT(header_mem, PackedFaces);
+        ASSERT(face);
+        ASSERT_EQUAL(face, layout->faces); // Check alignment
+        ASSERT(packed_face_index + 1 <= count(packer.faces));
+        *face = packer.faces[packed_face_index];
+        packed_face_index++;
+      } break;
+      default : INVALID_SWITCH_CASE(layout->layout_type);
+    }
+  }
+
+  auto groups = ALLOC_ARRAY(header_mem, PackedTextureGroup, packer.header.texture_group_count);
+  ASSERT(groups);
+  array_copy(packer.groups.p, groups, packer.header.texture_group_count);
+  ASSERT_EQUAL(header_mem->bytes_allocated, header_size);
+
+  u64 written = fwrite(header_mem->memory, 1, header_mem->bytes_allocated, out);
+  ASSERT_EQUAL(written, header_mem->bytes_allocated); // TODO handle error
+}
+
+static void write_pack_file() {
+
+  printf("Packing assets.\n");
+
+  u32 header_size = sizeof(PackedAssetHeader);
+  header_size += count(packer.layouts) * sizeof(PackedTextureLayout);
+  header_size += count(packer.animations) * sizeof(PackedAnimation);
+  header_size += count(packer.groups) * sizeof(PackedTextureGroup);
+  header_size += count(packer.faces) * sizeof(PackedFaces);
+
+
+  // TODO I might want to make my own version of this, but clib is fine for now
+  FILE *pack_file = fopen("assets/packed_assets.pack", "wb");
+  // TODO handle error better
+  ASSERT(pack_file);
+
+  fseek(pack_file, header_size, SEEK_SET);
+  write_bitmaps(pack_file);
+  fseek(pack_file, 0, SEEK_SET);
+  write_header(pack_file, header_size);
+
   printf("Packed in %ld bytes\n", ftell(pack_file));
   fclose(pack_file);
 }
 
-struct UnloadedFont {
-  lstring filename;
-  u32 packed_font_index;
-};
+static void parse_spec_file(char *filename) {
+  printf("Parsing %s.\n", filename);
 
-// TODO use this instead of loading immediately
-struct UnloadedBitmap {
-  lstring filename;
-  u32 packed_group_index;
-};
+  *packer.spec_file = open_file(filename);
 
-int main(int argc, char *argv[]) {
-  if (argc > 2) usage(argv[0]);
-  // TODO I may actually want it to just read all the files ending in .spec
-  char *build_filename = "assets/build.spec";
-  if (argc == 2) build_filename = argv[1];
-
-  printf("Packing assets from %s\n", build_filename);
-
-  init_string_table();
-  char bitmap_directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
-  lstring bitmap_directory_name = length_string(bitmap_directory_buffer);
-
-  char font_directory_buffer[DIRECTORY_BUFFER_SIZE] = "/Library/Fonts/";
-  lstring font_directory_name = length_string(font_directory_buffer);
-
-  auto allocator_ = new_push_allocator(2048 * 4);
-  auto allocator = &allocator_;
-
-  PackedAssetHeader packed_header = {};
-  packed_header.magic = 'PACK';
-  packed_header.version = 0;
-
-  darray<PackedTextureLayout> packed_layouts;
-  darray<PackedAnimation> packed_animations;
-  darray<PackedFaces> packed_faces;
-  darray<PackedTextureGroup> packed_groups;
-  darray<PixelBuffer> loaded_bitmaps;
-
-  // TODO read build file for info about what files to read and what to do with them
-  File build_file_ = open_file(build_filename);
-  File *build_file = &build_file_;
-
-  int error = read_entire_file(build_file, allocator);
+  int error = read_entire_file(packer.spec_file, packer.spec_allocator);
   ASSERT(!error);
-  close_file(build_file);
+  close_file(packer.spec_file);
 
-  auto build_stream_ = get_stream(build_file->buffer, build_file->size);
-  auto build_stream = &build_stream_;
-
-  u32 line_number = 0;
+  *packer.spec_stream = get_stream(packer.spec_file->buffer, packer.spec_file->size);
+  packer.line_number = 0;
 
   //
   // Parse the first line, which must be the version number :
   //
 
-  lstring version_ln = pop_line(build_stream);
-  line_number++;
+  lstring version_ln = pop_line(packer.spec_stream);
+  packer.line_number++;
 
   Token command = parse_command(version_ln);
-  if (!command) print_error(command.error, build_filename, line_number, version_ln);
+  if (!command) print_error(command.error, version_ln);
   if (CommandKeyword(command) != COMMAND_VERSION) {
-    print_error("VERSION not specified", build_filename, line_number);
+    print_error("VERSION not specified");
   }
   auto args = parse_version_args(command.remainder);
-  if (args.error) print_error(args.error, build_filename, line_number, version_ln);
+  if (args.error) print_error(args.error, version_ln);
 
   if (args.version_number != 0) {
-    print_error("Only version number 0 is currently accepted", build_filename, line_number, version_ln);
+    print_error("Only version number 0 is currently accepted", version_ln);
   }
 
   //
   // Set up attributes to their default values :
   //
 
-  u16 current_animation_index = 0;
-  TextureLayoutType current_layout_type = LAYOUT_INVALID;
-  u16 current_group_flags = 0;
-  u8 current_min_blend = LINEAR_BLEND;
-  u8 current_max_blend = LINEAR_BLEND;
-  u8 current_s_clamp = CLAMP_TO_EDGE;
-  u8 current_t_clamp = CLAMP_TO_EDGE;
-  V3 current_offset = vec3(0);
-  float current_sprite_depth = 0;
-  char character_range_start = ' ';
-  char character_range_end = '~';
+  attributes.animation_index = 0;
+  attributes.layout_type = LAYOUT_INVALID;
+  attributes.group_flags = 0;
+  attributes.min_blend = LINEAR_BLEND;
+  attributes.max_blend = LINEAR_BLEND;
+  attributes.s_clamp = CLAMP_TO_EDGE;
+  attributes.t_clamp = CLAMP_TO_EDGE;
+  attributes.offset = vec3(0);
+  attributes.sprite_depth = 0;
+  attributes.character_range_start = ' ';
+  attributes.character_range_end = '~';
 
-  u64 current_data_offset = 0;
+  //packer.current_data_offset = 0;
 
-  while (has_remaining(build_stream)) {
+  while (has_remaining(packer.spec_stream)) {
 
     //
     // Parse each command, then its arguments, then push the result to a dynamic array
     //
 
-    lstring next_line = pop_line(build_stream);
-    line_number++;
+    lstring next_line = pop_line(packer.spec_stream);
+    packer.line_number++;
 
     Token command = parse_command(next_line);
-    if (!command) print_error(command.error, build_filename, line_number, next_line);
+    if (!command) print_error(command.error, next_line);
 
     CommandKeyword command_num = CommandKeyword(command);
     switch (command_num) {
       case COMMAND_NONE    : { // Comment or newline, do nothing
       } break;
       case COMMAND_COMMENT_BEGIN : {
-        while (has_remaining(build_stream)) {
-          lstring next_line = pop_line(build_stream);
-          line_number++;
+        while (has_remaining(packer.spec_stream)) {
+          lstring next_line = pop_line(packer.spec_stream);
+          packer.line_number++;
 
           Token comment_token = parse_comment_end(next_line);
           if (!comment_token) FAILURE("Error during comment.", comment_token.error);
@@ -1006,19 +1105,19 @@ int main(int argc, char *argv[]) {
       } break;
 
       case COMMAND_VERSION : {
-        print_error("VERSION command repeated", build_filename, line_number, next_line);
+        print_error("VERSION command repeated", next_line);
       } break; 
 
 #define DO_LAYOUT() \
         auto args = parse_layout_args(command.remainder); \
-        if (args.error) print_error(args.error, build_filename, line_number, next_line); \
-        auto layout = push(packed_layouts); \
+        if (args.error) print_error(args.error, next_line); \
+        auto layout = push(packer.layouts); \
         layout->layout_type = args.type;
 
       case COMMAND_ANIMATION_LAYOUT  : {
         DO_LAYOUT();
         layout->animation_count = 0;
-        current_animation_index = 0;
+        attributes.animation_index = 0;
       } break; 
 
       case COMMAND_CUBE_LAYOUT : {
@@ -1028,34 +1127,34 @@ int main(int argc, char *argv[]) {
 
       case COMMAND_ANIMATION : {
         auto args = parse_animation_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number, next_line);
-        auto layout = peek(packed_layouts);
-        if (!layout) print_error(ANIMATION_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
+        if (args.error) print_error(args.error, next_line);
+        auto layout = peek(packer.layouts);
+        if (!layout) print_error(ANIMATION_BEFORE_LAYOUT_SPECIFIED, next_line);
         // TODO handle this error for real
         ASSERT(layout->layout_type == LAYOUT_CHARACTER);
-        auto animation = push(packed_animations);
+        auto animation = push(packer.animations);
         *animation = {};
         layout->animation_count++;
         animation->animation_type = args.type;
         animation->frame_count = args.frames;
         animation->duration = args.duration;
         animation->direction = args.direction;
-        animation->start_index = current_animation_index;
-        current_animation_index += args.frames;
+        animation->start_index = attributes.animation_index;
+        attributes.animation_index += args.frames;
       } break;
 
       case COMMAND_FACE : {
         auto args = parse_face_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number, next_line);
-        auto layout = peek(packed_layouts);
-        if (!layout) print_error(FACE_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
+        if (args.error) print_error(args.error, next_line);
+        auto layout = peek(packer.layouts);
+        if (!layout) print_error(FACE_BEFORE_LAYOUT_SPECIFIED, next_line);
         // TODO handle this error for real
         ASSERT(layout->layout_type == LAYOUT_TERRAIN);
         PackedFaces *face;
         if (layout->face_count) {
-          face = peek(packed_faces);
+          face = peek(packer.faces);
         } else {
-          face = push(packed_faces);
+          face = push(packer.faces);
           *face = {};
         }
         layout->face_count++;
@@ -1064,95 +1163,89 @@ int main(int argc, char *argv[]) {
 
       case COMMAND_SET : {
         auto args = parse_set_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number, next_line);
+        if (args.error) print_error(args.error, next_line);
 
         switch (args.attribute) {
           case ATTRIBUTE_LAYOUT : 
-            current_layout_type = args.layout; break;
+            attributes.layout_type = args.layout; break;
           case ATTRIBUTE_HAS_NORMAL_MAP :
             if (args.has_normal_map)
-              current_group_flags |= GROUP_HAS_NORMAL_MAP;
+              attributes.group_flags |= GROUP_HAS_NORMAL_MAP;
             else
-              current_group_flags &= ~GROUP_HAS_NORMAL_MAP; break;
+              attributes.group_flags &= ~GROUP_HAS_NORMAL_MAP; break;
           case ATTRIBUTE_MIN_BLEND : 
-            current_min_blend = args.blend_mode; break;
+            attributes.min_blend = args.blend_mode; break;
           case ATTRIBUTE_MAX_BLEND :
-            current_max_blend = args.blend_mode; break;
+            attributes.max_blend = args.blend_mode; break;
           case ATTRIBUTE_S_CLAMP :
-            current_s_clamp = args.clamp_mode; break;
+            attributes.s_clamp = args.clamp_mode; break;
           case ATTRIBUTE_T_CLAMP :
-            current_t_clamp = args.clamp_mode; break;
+            attributes.t_clamp = args.clamp_mode; break;
           case ATTRIBUTE_OFFSET :
-            current_offset = args.offset; break;
+            attributes.offset = args.offset; break;
           case ATTRIBUTE_SPRITE_DEPTH :
-            current_sprite_depth = args.sprite_depth; break;
+            attributes.sprite_depth = args.sprite_depth; break;
           case ATTRIBUTE_SPRITE_INDEX :
-            current_animation_index = args.sprite_index; break;
+            attributes.animation_index = args.sprite_index; break;
           case ATTRIBUTE_CHARACTER_RANGE :
-            character_range_start = args.start_char;
-            character_range_end = args.end_char; break;
+            attributes.character_range_start = args.start_char;
+            attributes.character_range_end = args.end_char; break;
           default : INVALID_SWITCH_CASE(args.attribute);
         }
       } break;
 
       case COMMAND_BITMAP : {
         auto args = parse_bitmap_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number, next_line);
-        if (current_layout_type == LAYOUT_INVALID)
-          print_error(BITMAP_BEFORE_LAYOUT_SPECIFIED, build_filename, line_number, next_line);
+        if (args.error) print_error(args.error, next_line);
+        if (attributes.layout_type == LAYOUT_INVALID)
+          print_error(BITMAP_BEFORE_LAYOUT_SPECIFIED, next_line);
         
-        auto group = push(packed_groups);
-        group->bitmap_offset = current_data_offset;
+        auto group = push(packer.groups);
+        //group->bitmap_offset = packer.current_data_offset;
         group->texture_group_id = args.id;
-        group->layout_type = current_layout_type;
+        group->layout_type = attributes.layout_type;
         group->sprite_count = args.sprite_count;
         group->sprite_width = args.sprite_width;
         group->sprite_height = args.sprite_height;
 
-        group->flags = current_group_flags;
-        group->min_blend = current_min_blend;
-        group->max_blend = current_max_blend;
-        group->s_clamp = current_s_clamp;
-        group->t_clamp = current_t_clamp;
-        group->offset_x = current_offset.x;
-        group->offset_y = current_offset.y;
-        group->offset_z = current_offset.z;
-        group->sprite_depth = current_sprite_depth;
+        group->flags = attributes.group_flags;
+        group->min_blend = attributes.min_blend;
+        group->max_blend = attributes.max_blend;
+        group->s_clamp = attributes.s_clamp;
+        group->t_clamp = attributes.t_clamp;
+        group->offset_x = attributes.offset.x;
+        group->offset_y = attributes.offset.y;
+        group->offset_z = attributes.offset.z;
+        group->sprite_depth = attributes.sprite_depth;
 
-        lstring bitmap_filename = append(bitmap_directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
-        zero_terminate(bitmap_filename);
-        //print_lstring(bitmap_filename); 
-        printf("Loading %s\n", bitmap_filename.str);
-        // TODO I should do this later so that I can limit the number of
-        // files loaded at one time.
-        PixelBuffer bitmap = load_image_file(bitmap_filename.str);
-        if (!is_initialized(&bitmap)) 
-          print_error("Failed to load bitmap", build_filename, line_number, next_line);
-        group->width = bitmap.width;
-        group->height = bitmap.height;
-        current_data_offset += bitmap.width * bitmap.height * 4;
-        push(loaded_bitmaps, bitmap);
+        push(packer.bitmap_filenames, args.filename);
 
+        int max_len = args.filename.len;
+        printf("Loading %*.*s\n", args.filename.len, max_len, args.filename.str);
       } break;
 
       case COMMAND_FONT : {
         auto args = parse_font_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number, next_line);
+        if (args.error) print_error(args.error, next_line);
         printf("Got a font!\n");
+#if 0
         lstring font_filename = append(font_directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
         zero_terminate(font_filename);
         printf("Loading %s\n", font_filename.str);
+#endif
+        // TODO push unloaded font and font type
       } break;
 
       case COMMAND_SIZE : {
         auto args = parse_size_args(command.remainder);
-        if (args.error) print_error(args.error, build_filename, line_number, next_line);
+        if (args.error) print_error(args.error, next_line);
 
         printf("Size : %u\n", args.size);
+        // TODO push font size
       } break;
 
       case COMMAND_INVALID : {
-        print_error(INVALID_COMMAND_NAME, build_filename, line_number, next_line);
+        print_error(INVALID_COMMAND_NAME, next_line);
       } break;
 
       default : {
@@ -1162,62 +1255,29 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  {
-    u32 pre_data_size = sizeof(PackedAssetHeader);
-    pre_data_size += count(packed_layouts) * sizeof(PackedTextureLayout);
-    pre_data_size += count(packed_animations) * sizeof(PackedAnimation);
-    pre_data_size += count(packed_groups) * sizeof(PackedTextureGroup);
-    pre_data_size += count(packed_faces) * sizeof(PackedFaces);
-    packed_header.data_offset = pre_data_size;
-    packed_header.layout_count = count(packed_layouts);
-    packed_header.texture_group_count = count(packed_groups);
+  printf("Parsing complete.\n");
+}
 
-    packed_header.total_size = pre_data_size + current_data_offset;
+int main(int argc, char *argv[]) {
+  if (argc > 2) usage(argv[0]);
+  // TODO I may actually want it to just read all the files ending in .spec
+  char *build_filename = "assets/build.spec";
+  if (argc == 2) build_filename = argv[1];
 
-    PushAllocator dest_allocator_ = new_push_allocator(pre_data_size);
-    auto dest_allocator = &dest_allocator_;
+  init_string_table();
+  *packer.spec_allocator = new_push_allocator(2048 * 4);
+  packer.header.magic = 'PACK';
+  packer.header.version = 0;
 
-    PackedAssetHeader *asset_header = ALLOC_STRUCT(dest_allocator, PackedAssetHeader);
-    ASSERT(asset_header);
-    *asset_header = packed_header;
+  // TODO move this to write_font
+  char font_directory_buffer[DIRECTORY_BUFFER_SIZE] = "/Library/Fonts/";
+  lstring font_directory_name = length_string(font_directory_buffer);
 
-    u32 packed_animation_index = 0;
-    u32 packed_face_index = 0;
 
-    for (u32 i = 0; i < packed_header.layout_count; i++) {
-      auto layout = ALLOC_STRUCT(dest_allocator, PackedTextureLayout);
-      ASSERT(layout);
-      *layout = packed_layouts[i];
-      switch (layout->layout_type) {
-        case LAYOUT_CHARACTER : {
-          u32 animation_count = layout->animation_count;
-          auto animations = ALLOC_ARRAY(dest_allocator, PackedAnimation, animation_count);
-          ASSERT(animations);
-          ASSERT_EQUAL(animations, layout->animations); // Check alignment
-          ASSERT(packed_animation_index + animation_count <= count(packed_animations));
-          array_copy(packed_animations + packed_animation_index, animations, animation_count);
-          packed_animation_index += animation_count;
-        } break;
-        case LAYOUT_TERRAIN : {
-          u32 face_count = layout->face_count;
-          auto face = ALLOC_STRUCT(dest_allocator, PackedFaces);
-          ASSERT(face);
-          ASSERT_EQUAL(face, layout->faces); // Check alignment
-          ASSERT(packed_face_index + 1 <= count(packed_faces));
-          *face = packed_faces[packed_face_index];
-          packed_face_index++;
-        } break;
-        default : INVALID_SWITCH_CASE(layout->layout_type);
-      }
-    }
+  parse_spec_file(build_filename);
 
-    auto groups = ALLOC_ARRAY(dest_allocator, PackedTextureGroup, packed_header.texture_group_count);
-    ASSERT(groups);
-    array_copy(packed_groups.p, groups, packed_header.texture_group_count);
-    ASSERT_EQUAL(dest_allocator->bytes_allocated, pre_data_size);
 
-    write_pack_file(dest_allocator, loaded_bitmaps);
-  }
+  write_pack_file();
 
   printf("Packing successful.\n");
   return 0;

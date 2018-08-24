@@ -216,9 +216,9 @@ struct FontInfo {
   BakedChar *baked_chars;
   u32 width;
   u32 height;
-  char start;
-  char end;
-  u16 font_size;
+  char first_glyph;
+  char last_glyph;
+  u16 font_size; // height
   u32 texture_id; // TODO delete this probably
 };
 

@@ -612,8 +612,8 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
   info.width = bitmap.width;
   info.height = bitmap.height;
   info.baked_chars = baked_chars;
-  info.start = ' ';
-  info.end = '~';
+  info.first_glyph = ' ';
+  info.last_glyph = '~';
   info.font_size = text_height;
   info.texture_id = font_id;
  
