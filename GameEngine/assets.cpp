@@ -369,6 +369,7 @@ static void unpack_assets(GameAssets *assets) {
 
   u32 layout_count = header->layout_count;
   u32 texture_group_count = header->texture_group_count;
+  u32 font_type_count = header->font_type_count;
   uint8_t *data = file_buffer + header->data_offset;
 
   assert(file_buffer == temporary->memory); // TODO delete these :
@@ -454,6 +455,25 @@ static void unpack_assets(GameAssets *assets) {
     init_texture(assets, group_id, param);
 
     file_buffer += sizeof(PackedTextureGroup);
+  }
+
+  u16 font_index = 0;
+  for (u32 i = 0; i < font_type_count; i++) {
+    auto packed_font_type = (PackedFontType *) file_buffer;
+    FontID font_id = (FontID) packed_font_type->font_id;
+    ASSERT(font_id > FONT_INVALID && font_id < FONT_COUNT);
+
+    FontTypeInfo *font_type = assets->font_types + i;
+    font_type->font_sizes_index = font_index;
+    font_type->min_size = UINT16_MAX;
+    font_type->max_size = 0;
+
+    for (u32 j = 0; j < packed_font_type->size_count; j++) {
+      file_buffer += sizeof(PackedFont);
+    }
+
+    font_index += packed_font_type->size_count;
+    file_buffer += sizeof(PackedFontType);
   }
 }
 
