@@ -457,6 +457,7 @@ static void unpack_assets(GameAssets *assets) {
   }
 }
 
+
 struct LoadBitmapWork {
   GameAssets *assets;
   char const *filename;

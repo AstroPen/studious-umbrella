@@ -5,7 +5,8 @@ struct PackedAssetHeader {
   u32 magic;
   u32 version;
   u32 total_size; // TODO make this and data_offset u64s
-  u32 layout_count;
+  u16 layout_count;
+  u16 font_type_count;
   u32 texture_group_count;
   u32 data_offset;
   u64 baked_char_offset;
@@ -77,14 +78,6 @@ struct PackedTextureGroup {
 
 static_assert(sizeof(PackedTextureGroup) % 8 == 0,"");
 
-struct PackedFontType {
-  u32 font_id;
-  u32 size_count;
-};
-
-static_assert(sizeof(PackedFontType) % 8 == 0,"");
-
-
 struct PackedFont {
   u64 bitmap_offset;
 
@@ -97,5 +90,13 @@ struct PackedFont {
 };
 
 static_assert(sizeof(PackedFont) % 8 == 0,"");
+
+struct PackedFontType {
+  u32 font_id;
+  u32 size_count;
+  PackedFont sizes[0];
+};
+
+static_assert(sizeof(PackedFontType) % 8 == 0,"");
 
 #endif

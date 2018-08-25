@@ -1023,6 +1023,7 @@ static void write_header(FILE *out, u32 header_size) {
 
   packer.header.data_offset = header_size;
   packer.header.layout_count = count(packer.layouts);
+  packer.header.font_type_count = count(packer.font_types);
   packer.header.texture_group_count = count(packer.groups);
   packer.header.total_size = header_size + packer.current_data_offset;
 
@@ -1064,6 +1065,20 @@ static void write_header(FILE *out, u32 header_size) {
   ASSERT(groups);
   array_copy(packer.groups.p, groups, packer.header.texture_group_count);
 
+  u32 packed_font_index = 0;
+
+  for (u32 i = 0; i < packer.header.font_type_count; i++) {
+    auto font_type = ALLOC_STRUCT(header_mem, PackedFontType);
+    ASSERT(font_type);
+    *font_type = packer.font_types[i];
+    auto sizes = ALLOC_ARRAY(header_mem, PackedFont, font_type->size_count);
+    ASSERT(sizes);
+    ASSERT_EQUAL(sizes, font_type->sizes); // Check alignment
+    ASSERT(packed_font_index + font_type->size_count <= count(packer.fonts));
+    array_copy(packer.fonts + packed_font_index, sizes, font_type->size_count);
+    packed_font_index += font_type->size_count;
+  }
+
   auto baked_chars = ALLOC_ARRAY(header_mem, BakedChar, count(packer.baked_chars));
   ASSERT(baked_chars);
   array_copy(packer.baked_chars.p, baked_chars, count(packer.baked_chars));
@@ -1083,6 +1098,8 @@ static void write_pack_file() {
   header_size += count(packer.groups) * sizeof(PackedTextureGroup);
   header_size += count(packer.faces) * sizeof(PackedFaces);
   header_size += packer.total_char_count * sizeof(BakedChar);
+  header_size += count(packer.fonts) * sizeof(PackedFont);
+  header_size += count(packer.font_types) * sizeof(PackedFontType);
 
 
   // TODO I might want to make my own version of this, but clib is fine for now
