@@ -43,6 +43,10 @@ namespace Assert {
     fprintf(log, "%s : %f", variable_name, variable);
   }
 
+  inline void print_variable(FILE *log, const char *variable_name, const char *variable) {
+    fprintf(log, "%s : %s", variable_name, variable);
+  }
+
   inline void print_variable(FILE *log, const char *variable_name, void *variable) {
     fprintf(log, "%s : %p", variable_name, variable);
   }

@@ -30,12 +30,12 @@ inline uint32_t count(darray<T> arr) {
 }
 
 template <typename T>
-inline uint32_t total_size(darray<T> arr, uint32_t count) {
+inline uint32_t total_size(darray<T> arr, u32 count) {
   return sizeof(T) * count + sizeof(darray_head);
 }
 
 template <typename T>
-inline bool initialize(darray<T> &arr, uint32_t max_count = 10) {
+inline bool initialize(darray<T> &arr, u32 max_count = 10) {
   ASSERT(!arr); // TODO possibly remove this?
   if (!max_count) return true;
   auto head = (darray_head *) malloc(total_size(arr, max_count));
@@ -47,7 +47,7 @@ inline bool initialize(darray<T> &arr, uint32_t max_count = 10) {
 }
 
 template <typename T>
-inline bool expand(darray<T> &arr, uint32_t amount) {
+inline bool expand(darray<T> &arr, u32 amount) {
   if (!amount) return true;
   if (!arr) return initialize(arr, amount);
   auto head = header(arr);
@@ -75,10 +75,11 @@ inline T *push(darray<T> &arr) {
 
   ASSERT(head->count <= head->max_count);
   // TODO consider expanding by 1 on failure?
-  if (head->count == head->max_count)
+  if (head->count == head->max_count) {
     if (!expand(arr)) return NULL;
+    head = header(arr);
+  }
 
-  head = header(arr);
   head->count++;
   return arr + head->count - 1;
 }
@@ -91,13 +92,32 @@ inline T *push(darray<T> &arr, T entry) {
 
   ASSERT(head->count <= head->max_count);
   // TODO consider expanding by 1 on failure?
-  if (head->count == head->max_count)
+  if (head->count == head->max_count) {
     if (!expand(arr)) return NULL;
+    head = header(arr);
+  }
 
-  head = header(arr);
   arr.p[head->count] = entry;
   head->count++;
   return arr + head->count;
+}
+
+template <typename T>
+inline T *push_count(darray<T> &arr, u32 count) {
+  if (!arr) initialize(arr);
+  if (!arr) return NULL;
+  auto head = header(arr);
+
+  ASSERT(head->count <= head->max_count);
+  if (head->count + count > head->max_count) {
+    u32 expand_amount = head->max_count;
+    if (expand_amount < count) expand_amount = count;
+    if (!expand(arr, count)) return NULL;
+    head = header(arr);
+  }
+
+  head->count += count;
+  return arr + head->count - count;
 }
 
 template <typename T>
@@ -194,6 +214,21 @@ static void dynamic_array_test() {
   VERIFY(push(ints, 5));
   assert(count(ints) == 2);
   assert(ints[1] == 5);
+
+  darray<float> floats;
+  float *f = push_count(floats, 5);
+  ASSERT(f == floats);
+  ASSERT(count(floats) == 5);
+
+  f = push_count(floats, 200);
+  ASSERT(f);
+  ASSERT(f == floats + 5);
+  ASSERT(count(floats) == 205);
+
+  f = push_count(floats, 10);
+  ASSERT(f);
+  ASSERT(f == floats + 205);
+  ASSERT(count(floats) == 215);
 
   printf("Dynamic array test successful.\n\n");
 }

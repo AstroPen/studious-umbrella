@@ -146,7 +146,7 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
   int fd = open(filename, O_RDONLY);
   if (fd < 0) {
     if (error) *error = 1;
-    else assert(!FILE_IO_ERROR_MSG_1);
+    else FAILURE(FILE_IO_ERROR_MSG_1, filename);
     return NULL;
   }
 
@@ -154,7 +154,7 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
   int stat_error = fstat(fd, &stat_buf);
   if (stat_error < 0) {
     if (error) *error = 2;
-    else assert(!FILE_IO_ERROR_MSG_2);
+    else FAILURE(FILE_IO_ERROR_MSG_2);
     return NULL;
   }
 
@@ -162,7 +162,7 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
   auto buffer = alloc_size(allocator, size, alignment);
   if (!buffer) {
     if (error) *error = 3;
-    else assert(!FILE_IO_ERROR_MSG_3);
+    else FAILURE(FILE_IO_ERROR_MSG_3);
     return NULL;
   }
 
@@ -172,14 +172,14 @@ static uint8_t *read_entire_file(const char *filename, PushAllocator *allocator,
     bytes_read += read_result;
     if (read_result <= 0) {
       if (error) *error = 4;
-      else assert(!FILE_IO_ERROR_MSG_4);
+      else FAILURE(FILE_IO_ERROR_MSG_4);
       // NOTE : The memory is lost here, so only use temporary allocators 
       // to store file data from this function
       return NULL;
     }
   }
 
-  assert(close(fd) == 0);
+  ASSERT(close(fd) == 0);
   if (error) *error = 0;
   return (uint8_t *) buffer;
 }

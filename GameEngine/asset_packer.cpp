@@ -37,6 +37,8 @@ struct PackerState {
   darray<PackedFont> fonts;
   darray<lstring> font_filenames;
   darray<lstring> bitmap_filenames;
+  darray<BakedChar> baked_chars;
+  u32 total_char_count;
 
   u64 current_data_offset = 0;
   File spec_file[1];
@@ -909,31 +911,95 @@ static Token parse_comment_end(lstring line) {
 
 #define DIRECTORY_BUFFER_SIZE 512
 
-static void write_fonts() {
-#if 0
-  for (u32 i = 0; i < count(to_load); i++) {
-    auto font = fonts + i;
+
+static void write_fonts(FILE *out) {
+
+  char directory_buffer[DIRECTORY_BUFFER_SIZE] = "/Library/Fonts/";
+  lstring directory_name = length_string(directory_buffer);
+  darray<u8> buffer;
+  PushAllocator file_allocator[1];
+  *file_allocator = new_push_allocator(2048 * 512);
+
+  ASSERT_EQUAL(count(packer.font_types), count(packer.font_filenames));
+
+
+  for (u32 i = 0; i < count(packer.font_types); i++) {
+    lstring filename = packer.font_filenames[i];
+    lstring full_filename = append(directory_name, filename, DIRECTORY_BUFFER_SIZE - 1);
+    zero_terminate(full_filename);
+    printf("Reading %s\n", full_filename.str);
+
+    u8 *file_buffer = read_entire_file(full_filename.str, file_allocator);
+    ASSERT(file_buffer); // TODO handle error
+
+    auto font_type = packer.font_types + i;
+
+    for (u32 j = 0; j < font_type->size_count; j++) {
+
+      ASSERT(j < count(packer.fonts));
+      auto font = packer.fonts + j;
+
+      int first_glyph = font->start;
+      int num_glyphs = font->end - font->start;
+      u32 font_height = font->font_size;
+      u32 bitmap_dim = next_power_2(sqrt(num_glyphs) * font_height);
+
+      int pixel_bytes = 1;
+      BakedChar *baked_chars = push_count(packer.baked_chars, num_glyphs);
+      ASSERT(count(packer.baked_chars) < UINT16_MAX);
+      push_count(buffer, bitmap_dim * bitmap_dim * pixel_bytes);
+
+      // if return is positive, the first unused row of the bitmap
+      // if return is negative, returns the negative of the number of characters that fit
+      // if return is 0, no characters fit and no rows were used
+      int result = bake_font_bitmap(file_buffer, 0, font_height, buffer, bitmap_dim, bitmap_dim, first_glyph, num_glyphs, baked_chars);
+      ASSERT(result > 0); // TODO handle error
+
+      font->bitmap_offset = packer.current_data_offset;
+      font->width = bitmap_dim;
+      font->height = bitmap_dim;
+      font->char_index = baked_chars - packer.baked_chars;
+
+      int first_unused_row = result;
+      if (first_unused_row < bitmap_dim / 2) {
+        u32 new_height = next_power_2(first_unused_row);
+        ASSERT(new_height <= bitmap_dim);
+        if (new_height < bitmap_dim) {
+          font_height = new_height;
+        }
+      }
+
+      u64 bitmap_size = u64(font->width) * font->height * pixel_bytes;
+      packer.current_data_offset += bitmap_size;
+
+      u64 written = fwrite(buffer, 1, bitmap_size, out);
+      ASSERT_EQUAL(written, bitmap_size); // TODO handle error
+
+      clear(buffer);
+    }
+    clear(file_allocator);
   }
-#endif
+  dfree(buffer);
+  free(file_allocator->memory);
 }
 
 static void write_bitmaps(FILE *out) {
 
   ASSERT_EQUAL(count(packer.bitmap_filenames), count(packer.groups));
 
-  char bitmap_directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
-  lstring bitmap_directory_name = length_string(bitmap_directory_buffer);
+  char directory_buffer[DIRECTORY_BUFFER_SIZE] = "assets/";
+  lstring directory_name = length_string(directory_buffer);
 
   for (u32 i = 0; i < count(packer.bitmap_filenames); i++) {
    
     lstring filename = packer.bitmap_filenames[i];
     auto group = packer.groups + i;
     
-    lstring bitmap_filename = append(bitmap_directory_name, filename, DIRECTORY_BUFFER_SIZE - 1);
-    zero_terminate(bitmap_filename);
-    printf("Writing %s\n", bitmap_filename.str);
-    PixelBuffer bitmap = load_image_file(bitmap_filename.str);
-    if (!is_initialized(&bitmap)) print_load_bitmap_error(bitmap_filename.str);
+    lstring full_filename = append(directory_name, filename, DIRECTORY_BUFFER_SIZE - 1);
+    zero_terminate(full_filename);
+    printf("Writing %s\n", full_filename.str);
+    PixelBuffer bitmap = load_image_file(full_filename.str);
+    if (!is_initialized(&bitmap)) print_load_bitmap_error(full_filename.str);
     group->bitmap_offset = packer.current_data_offset;
     group->width = bitmap.width;
     group->height = bitmap.height;
@@ -943,6 +1009,7 @@ static void write_bitmaps(FILE *out) {
 
     u64 written = fwrite(bitmap.buffer, 1, bitmap_size, out);
     ASSERT_EQUAL(written, bitmap_size); // TODO handle error
+    free(bitmap.buffer);
   }
 }
 
@@ -950,6 +1017,9 @@ static void write_header(FILE *out, u32 header_size) {
   PushAllocator header_mem[1];
   *header_mem = new_push_allocator(header_size);
   ASSERT(is_initialized(header_mem));
+
+  packer.header.magic = 'PACK';
+  packer.header.version = 0;
 
   packer.header.data_offset = header_size;
   packer.header.layout_count = count(packer.layouts);
@@ -993,6 +1063,10 @@ static void write_header(FILE *out, u32 header_size) {
   auto groups = ALLOC_ARRAY(header_mem, PackedTextureGroup, packer.header.texture_group_count);
   ASSERT(groups);
   array_copy(packer.groups.p, groups, packer.header.texture_group_count);
+
+  auto baked_chars = ALLOC_ARRAY(header_mem, BakedChar, count(packer.baked_chars));
+  ASSERT(baked_chars);
+  array_copy(packer.baked_chars.p, baked_chars, count(packer.baked_chars));
   ASSERT_EQUAL(header_mem->bytes_allocated, header_size);
 
   u64 written = fwrite(header_mem->memory, 1, header_mem->bytes_allocated, out);
@@ -1008,6 +1082,7 @@ static void write_pack_file() {
   header_size += count(packer.animations) * sizeof(PackedAnimation);
   header_size += count(packer.groups) * sizeof(PackedTextureGroup);
   header_size += count(packer.faces) * sizeof(PackedFaces);
+  header_size += packer.total_char_count * sizeof(BakedChar);
 
 
   // TODO I might want to make my own version of this, but clib is fine for now
@@ -1017,6 +1092,7 @@ static void write_pack_file() {
 
   fseek(pack_file, header_size, SEEK_SET);
   write_bitmaps(pack_file);
+  write_fonts(pack_file);
   fseek(pack_file, 0, SEEK_SET);
   write_header(pack_file, header_size);
 
@@ -1220,28 +1296,37 @@ static void parse_spec_file(char *filename) {
 
         push(packer.bitmap_filenames, args.filename);
 
-        int max_len = args.filename.len;
-        printf("Loading %*.*s\n", args.filename.len, max_len, args.filename.str);
+        printf("Loading bitmap : %.*s\n", args.filename.len, args.filename.str);
       } break;
 
       case COMMAND_FONT : {
         auto args = parse_font_args(command.remainder);
         if (args.error) print_error(args.error, next_line);
-        printf("Got a font!\n");
-#if 0
-        lstring font_filename = append(font_directory_name, args.filename, DIRECTORY_BUFFER_SIZE - 1);
-        zero_terminate(font_filename);
-        printf("Loading %s\n", font_filename.str);
-#endif
-        // TODO push unloaded font and font type
+
+        auto font_type = push(packer.font_types);
+        font_type->font_id = args.id;
+        font_type->size_count = 0;
+
+        push(packer.font_filenames, args.filename);
+
+        printf("Loading font : %.*s\n", args.filename.len, args.filename.str);
       } break;
 
       case COMMAND_SIZE : {
         auto args = parse_size_args(command.remainder);
         if (args.error) print_error(args.error, next_line);
 
+        auto font_type = peek(packer.font_types);
+        if (!font_type) print_error("SIZE command cannot be called before FONT command", next_line);
+        font_type->size_count++;
+
+        auto font = push(packer.fonts);
+        font->font_size = args.size;
+        font->start = attributes.character_range_start;
+        font->end = attributes.character_range_end;
+        packer.total_char_count += font->end - font->start;
+
         printf("Size : %u\n", args.size);
-        // TODO push font size
       } break;
 
       case COMMAND_INVALID : {
@@ -1266,14 +1351,6 @@ int main(int argc, char *argv[]) {
 
   init_string_table();
   *packer.spec_allocator = new_push_allocator(2048 * 4);
-  packer.header.magic = 'PACK';
-  packer.header.version = 0;
-
-  // TODO move this to write_font
-  char font_directory_buffer[DIRECTORY_BUFFER_SIZE] = "/Library/Fonts/";
-  lstring font_directory_name = length_string(font_directory_buffer);
-
-
   parse_spec_file(build_filename);
 
 

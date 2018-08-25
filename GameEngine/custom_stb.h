@@ -5,7 +5,7 @@
 // NOTE : This is the only shared header between translations units in this project.
 struct BakedChar {
   u16 x0, y0, x1, y1;
-  float xoff, yoff, xadvance;
+  float xoff, yoff, xadvance; //, pad__;
 };
 
 int bake_font_bitmap(void *file_buf, int offset, 

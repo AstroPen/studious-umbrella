@@ -354,7 +354,7 @@ static SpriteRenderInfo get_sprite_render_info(GameAssets *assets, Entity *e) {
 static void unpack_assets(GameAssets *assets) {
 
   // TODO pass in allocator probably
-  PushAllocator temporary_ = new_push_allocator(2048*128);
+  PushAllocator temporary_ = new_push_allocator(2048*128*4);
   auto temporary = &temporary_;
   assert(is_initialized(temporary));
   // TODO once files get large, this needs to be a stream
