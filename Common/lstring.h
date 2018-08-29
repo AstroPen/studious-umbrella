@@ -51,6 +51,13 @@ inline lstring length_string(char *cstr) {
   return {cstr, len};
 }
 
+inline lstring length_string(char *cstr, u32 len) {
+  if (!cstr) return {};
+  return {cstr, len};
+}
+
+#define CONST_LENGTH_STRING(str) length_string(str, sizeof(str) - 1)
+
 inline lstring append(lstring a, lstring b, u32 max_len) {
   assert(max_len >= a.len);
   lstring result = a;

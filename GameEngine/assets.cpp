@@ -370,7 +370,8 @@ static void unpack_assets(GameAssets *assets) {
   u32 layout_count = header->layout_count;
   u32 texture_group_count = header->texture_group_count;
   u32 font_type_count = header->font_type_count;
-  uint8_t *data = file_buffer + header->data_offset;
+  u8 *data = file_buffer + header->data_offset;
+  auto packed_chars = (BakedChar *)(file_buffer + header->baked_char_offset);
 
   assert(file_buffer == temporary->memory); // TODO delete these :
   assert(header->total_size == temporary->bytes_allocated);
@@ -457,10 +458,14 @@ static void unpack_assets(GameAssets *assets) {
     file_buffer += sizeof(PackedTextureGroup);
   }
 
+  assets->baked_chars = (BakedChar *) malloc(sizeof(BakedChar) * header->baked_char_count);
+  array_copy(packed_chars, assets->baked_chars, header->baked_char_count);
+
   u16 font_index = 0;
   for (u32 i = 0; i < font_type_count; i++) {
     auto packed_font_type = (PackedFontType *) file_buffer;
     FontID font_id = (FontID) packed_font_type->font_id;
+    printf("Font id : %d\n", font_id);
     ASSERT(font_id > FONT_INVALID && font_id < FONT_COUNT);
 
     FontTypeInfo *font_type = assets->font_types + i;
@@ -468,13 +473,45 @@ static void unpack_assets(GameAssets *assets) {
     font_type->min_size = UINT16_MAX;
     font_type->max_size = 0;
 
+    file_buffer += sizeof(PackedFontType);
+
     for (u32 j = 0; j < packed_font_type->size_count; j++) {
+#if 1
+      auto packed_font = (PackedFont *) file_buffer;
+
+      PixelBuffer bitmap;
+      bitmap.buffer = data + packed_font->bitmap_offset;
+      bitmap.width = packed_font->width;
+      bitmap.height = packed_font->height;
+
+      ASSERT(bitmap.width);
+      ASSERT(bitmap.height);
+      
+      SizedFontID sized_font_id = SizedFontID(font_index + j);
+      PRINT_UINT(sized_font_id);
+      u32 texture_id = init_font(assets, sized_font_id, bitmap);
+
+      FontInfo info;
+      info.width = bitmap.width;
+      info.height = bitmap.height;
+      info.baked_chars = assets->baked_chars + packed_font->char_index;
+      ASSERT(info.baked_chars);
+      info.first_glyph = packed_font->start;
+      info.last_glyph = packed_font->end;
+      ASSERT_EQUAL(info.first_glyph, ' ');
+      ASSERT(info.last_glyph == '~');
+      info.font_size = packed_font->font_size;
+      info.texture_id = texture_id;
+
+      assets->fonts[sized_font_id] = info;
+#endif
       file_buffer += sizeof(PackedFont);
     }
 
     font_index += packed_font_type->size_count;
-    file_buffer += sizeof(PackedFontType);
   }
+
+
 }
 
 
@@ -545,7 +582,8 @@ static inline void load_bitmap(GameAssets *assets, BitmapID id) {
   push_work(assets->work_queue, work, (work_queue_callback *) do_load_bitmap_work);
 }
 
-static inline FontInfo *get_font(GameAssets *assets, u32 font_id) {
+static inline FontInfo *get_font(GameAssets *assets, SizedFontID font_id) {
+  ASSERT(font_id < FONT_SIZE_COUNT);
   auto font = assets->fonts + font_id;
   if (font->baked_chars) return font;
   //assert(!"Font not loaded.");
@@ -558,13 +596,20 @@ static inline FontInfo *get_font_location(GameAssets *assets, u32 font_id) {
 }
 
 static inline BakedChar *get_baked_char(FontInfo *font, char c) {
-  char first_char = ' ';
-  int index = c - first_char;
-  assert(font->baked_chars);
+  ASSERT(font->first_glyph == ' '); // TODO deleteme
+  ASSERT(font->last_glyph == '~');
+  if (c < font->first_glyph || c > font->last_glyph) {
+    FAILURE("Font character not in range.", c);
+    return NULL;
+  }
+  int index = c - font->first_glyph;
+  ASSERT(font->baked_chars);
   auto result = font->baked_chars + index;
   return result;
 }
 
+
+#if 0
 // TODO Baking text should happen offline, or before the first frame during developement.
 // Additionally, the temporary storeage needed on the cpu should use a SwapAllocator 
 // to handle all asset loading concurrently.
@@ -616,16 +661,7 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
     }
   }
 
-  // TODO separate this out to a "init font" call
-  u32 font_id;
-  glGenTextures(1, &font_id);
-  assert(font_id);
-  glBindTexture(GL_TEXTURE_2D, font_id);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer);
-  GLint swizzle_mask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
-  glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  u32 font_id = init_font(bitmap);
 
   FontInfo info;
   //info.bitmap = bitmap;
@@ -640,50 +676,9 @@ static FontInfo load_font_file(const char* filename, u32 text_height,
  
   return info;
 }
+#endif
 
 #if 0
-struct LoadFontWork {
-  GameAssets *assets;
-  char const *filename;
-  FontInfo *font_info;
-};
-
-void do_load_font_work(LoadFontWork *work) {
-
-  *work->font_info = load_font_file(work->filename);
-  free_element(&work->assets->work_allocator, work);
-}
-
-static inline void load_font(GameAssets *assets, FontID id) {
-  LoadFontWork *work = alloc_element(&assets->work_allocator, LoadFontWork);
-  assert(work);
-  if (!work) return;
-  assert(id);
-  assert(id < FONT_COUNT);
-
-  switch (id) {
-    case FONT_INVALID : {
-      assert(!"Invalid FontID load.");
-      return;
-    } break;
-    case FONT_ARIAL : {
-      work->filename = "/Library/Fonts/Arial.ttf";
-    } break;
-    case FONT_COURIER_NEW_BOLD : {
-      work->filename = "/Library/Fonts/Courier New Bold.ttf";
-    } break;
-
-    default : {
-      assert(!"Invalid FontID load.");
-      return;
-    } break;
-  }
-
-  work->font_info = get_font_location(assets, id);
-  push_work(assets->work_queue, work, (work_queue_callback *) do_load_font_work);
-}
-
-#else
 // NOTE : single threaded version
 static inline void load_font(GameAssets *assets, PushAllocator *perm_allocator, PushAllocator *temp_allocator, FontID id, int pixel_height = 20) {
   assert(id);
@@ -775,13 +770,13 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   assert(assets->work_allocator.element_size == sizeof(LoadBitmapWork));
 
 
-  load_bitmap(assets, BITMAP_FACE);
-  load_bitmap(assets, BITMAP_TEST_SPRITE);
-  load_bitmap(assets, BITMAP_TEST_SPRITE_NORMAL_MAP);
-  load_bitmap(assets, BITMAP_LINK);
-  load_bitmap(assets, BITMAP_LINK_NORMAL_MAP);
-  load_bitmap(assets, BITMAP_WALL);
-  load_bitmap(assets, BITMAP_WALL_NORMAL_MAP);
+  //load_bitmap(assets, BITMAP_FACE);
+  //load_bitmap(assets, BITMAP_TEST_SPRITE);
+  //load_bitmap(assets, BITMAP_TEST_SPRITE_NORMAL_MAP);
+  //load_bitmap(assets, BITMAP_LINK);
+  //load_bitmap(assets, BITMAP_LINK_NORMAL_MAP);
+  //load_bitmap(assets, BITMAP_WALL);
+  //load_bitmap(assets, BITMAP_WALL_NORMAL_MAP);
   
 
   TextureParameters background_param = default_texture_parameters;
@@ -813,6 +808,7 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
 
   int pixel_height = 30;
 
+#if 0
   auto temp_allocator = push_temporary(&g->temp_allocator);
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_ARIAL, pixel_height);
   clear(&temp_allocator);
@@ -821,9 +817,11 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   load_font(assets, &g->perm_allocator, &temp_allocator, FONT_DEBUG, 19);
   clear(&temp_allocator);
   pop_temporary(&g->temp_allocator, &temp_allocator);
+#endif
 
   complete_all_work(assets->work_queue);
 
+#if 0
   TextureParameters param;
   param.pixel_format = RGBA;
   init_texture(assets, BITMAP_FACE, param);
@@ -838,6 +836,7 @@ static inline void init_assets(GameState *g, WorkQueue *queue, RenderBuffer *ren
   param.min_blend = LINEAR_BLEND;
   init_texture(assets, BITMAP_WALL, param);
   init_texture(assets, BITMAP_WALL_NORMAL_MAP, param);
+#endif
 
   unpack_assets(assets);
 }

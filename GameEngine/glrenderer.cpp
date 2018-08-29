@@ -731,7 +731,7 @@ inline void render_circle_screen_space(RenderBuffer *buffer, V2 p, float width, 
 // Text rendering ---
 //
 
-static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, FontID font_id) { 
+static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, SizedFontID font_id) { 
   // TODO figure out a way to time this that doesn't interfere with drawing debug text
   //TIMED_FUNCTION();
 
@@ -754,45 +754,40 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
   VertexQuad verts;
 
   while (*text) {
-    if (*text >= font_info->first_glyph && *text <= font_info->last_glyph) {
-      auto b = get_baked_char(font_info, *text);
-      auto p = round(pixel_p + V2{b->xoff, -b->yoff});
+    auto b = get_baked_char(font_info, *text);
+    auto p = round(pixel_p + V2{b->xoff, -b->yoff});
 
-      float char_width  = (b->x1 - b->x0);
-      float char_height = (b->y1 - b->y0);
+    float char_width  = (b->x1 - b->x0);
+    float char_height = (b->y1 - b->y0);
 
-      auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0);
+    auto quad = to_quad4(aligned_rect(p.x, p.y - char_height, p.x + char_width, p.y), 0);
 
-      V2 uv[4] = {
-        {b->x0 / font_width, b->y1 / font_height}, 
-        {b->x1 / font_width, b->y1 / font_height}, 
-        {b->x1 / font_width, b->y0 / font_height}, 
-        {b->x0 / font_width, b->y0 / font_height},
-      };
+    V2 uv[4] = {
+      {b->x0 / font_width, b->y1 / font_height}, 
+      {b->x1 / font_width, b->y1 / font_height}, 
+      {b->x1 / font_width, b->y0 / font_height}, 
+      {b->x0 / font_width, b->y0 / font_height},
+    };
 
-      if (is_shadowed) {
-        translate(&quad, shadow_offset);
-        int index = push_quad(buffer, verts);
-        ASSERT(index >= 0);
-        set_colors(verts, shadow_color, index);
-        set_uv(verts, uv, index);
-        set_positions(verts, &quad, index);
-        num_quads++;
-        translate(&quad, -shadow_offset);
-      }
-
+    if (is_shadowed) {
+      translate(&quad, shadow_offset);
       int index = push_quad(buffer, verts);
       ASSERT(index >= 0);
-      set_colors(verts, color, index);
+      set_colors(verts, shadow_color, index);
       set_uv(verts, uv, index);
       set_positions(verts, &quad, index);
-
       num_quads++;
-      pixel_p.x += b->xadvance;
-
-    } else {
-      FAILURE("Text character not in range.", *text);
+      translate(&quad, -shadow_offset);
     }
+
+    int index = push_quad(buffer, verts);
+    ASSERT(index >= 0);
+    set_colors(verts, color, index);
+    set_uv(verts, uv, index);
+    set_positions(verts, &quad, index);
+
+    num_quads++;
+    pixel_p.x += b->xadvance;
     text++;
   }
 
@@ -801,16 +796,16 @@ static void render_shadowed_text_pixel_space(RenderBuffer *buffer, V2 text_p, co
   finalize(buffer, verts);
 }
 
-inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, FontID font_id) {
+inline void render_text_pixel_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, SizedFontID font_id) {
   render_shadowed_text_pixel_space(buffer, text_p, text, color, vec4(0), 0, font_id);
 }
 
-inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, FontID font_id) { 
+inline void render_shadowed_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, V4 shadow_color, int shadow_depth, SizedFontID font_id) { 
   V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
   render_shadowed_text_pixel_space(buffer, text_p_pixel_space, text, color, shadow_color, shadow_depth, font_id);
 }
 
-inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, FontID font_id) { 
+inline void render_text_screen_space(RenderBuffer *buffer, V2 text_p, const char *text, V4 color, SizedFontID font_id) { 
   V2 text_p_pixel_space = text_p * vec2(buffer->screen_width, buffer->screen_height);
   render_text_pixel_space(buffer, text_p_pixel_space, text, color, font_id);
 }
@@ -826,7 +821,7 @@ static void render_debug_string(RenderBuffer *buffer, V2 cursor_p, char const *f
   vsnprintf(dest, sizeof(dest), format, args);
   va_end(args);
 
-  render_shadowed_text_screen_space(buffer, cursor_p, dest, vec4(1), vec4(0,0,0,1), 2, FONT_DEBUG);
+  render_shadowed_text_screen_space(buffer, cursor_p, dest, vec4(1), vec4(0,0,0,1), 2, FONT_COURIER_NEW_BOLD_SIZE_19);
 }
 
 // TODO This is a weird place to put this, but right now it is inconvenient to put it anywhere else.
@@ -1607,6 +1602,24 @@ static void init_texture(GameAssets *assets, TextureGroupID id, TextureParameter
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, to_gl_format_specifier(param.s_clamp));
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, to_gl_format_specifier(param.t_clamp));
   gl_check_error();
+}
+
+static u32 init_font(GameAssets *assets, SizedFontID font_id, PixelBuffer bitmap) {
+  u32 texture_id;
+  glGenTextures(1, &texture_id);
+  ASSERT(texture_id);
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.height, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer);
+  GLint swizzle_mask[] = {GL_RED, GL_RED, GL_RED, GL_RED};
+  glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle_mask);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  // NOTE : It is a bit weird to put this here, but it makes things simpler for now.
+  TextureIndex index = get_texture_index(font_id);
+  assets->texture_infos[index] = {texture_id, float(bitmap.width), float(bitmap.height)};
+
+  return font_id;
 }
 
 

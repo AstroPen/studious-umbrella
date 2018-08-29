@@ -9,7 +9,8 @@ struct PackedAssetHeader {
   u16 font_type_count;
   u32 texture_group_count;
   u32 data_offset;
-  u64 baked_char_offset;
+  u32 baked_char_offset;
+  u32 baked_char_count;
 };
 
 static_assert(sizeof(PackedAssetHeader) % 8 == 0,"");

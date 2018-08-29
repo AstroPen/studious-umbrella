@@ -273,7 +273,7 @@ static void render_frame_rate_text(GameState *g, float dt) {
   V2 text_p = vec2(1,15) / 16;
   char *frame_rate_text = ALLOC_ARRAY(&g->temp_allocator, char, 8);
   sprintf(frame_rate_text, "%.1f ms", (dt * 1000.0f));
-  render_shadowed_text_screen_space(g->render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD);
+  render_shadowed_text_screen_space(g->render_buffer, text_p, frame_rate_text, vec4(1), vec4(0,0,0.2,1), 2, FONT_COURIER_NEW_BOLD_SIZE_30);
 }
 
 static void update_entity_animations(GameState *g) {

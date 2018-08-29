@@ -243,7 +243,6 @@ static void init_string_table() {
     u32 i = 1;
     ADD_FONT_HASH(COURIER_NEW_BOLD);
     ADD_FONT_HASH(ARIAL);
-    ADD_FONT_HASH(DEBUG);
     ASSERT_EQUAL(i, FONT_COUNT);
 #undef ADD_ANIM_HASH
   }
@@ -911,6 +910,106 @@ static Token parse_comment_end(lstring line) {
 
 #define DIRECTORY_BUFFER_SIZE 512
 
+inline char *push_lstring(PushAllocator *buffer, lstring str) {
+  if (!str) return NULL;
+  auto dest = ALLOC_ARRAY(buffer, char, str.len);
+  if (!dest) return NULL;
+  array_copy(str.str, dest, str.len);
+  return dest;
+}
+
+static void push_enum(PushAllocator *buffer, lstring name, lstring *nums, u32 count, u32 stride = sizeof(lstring)) {
+  lstring head = CONST_LENGTH_STRING("enum ");
+  lstring open_brace = CONST_LENGTH_STRING(" {\n");
+  lstring close_brace = CONST_LENGTH_STRING("};\n\n");
+  lstring separator = CONST_LENGTH_STRING(",\n");
+  lstring indent = CONST_LENGTH_STRING("  ");
+
+  VERIFY(push_lstring(buffer, head));
+  VERIFY(push_lstring(buffer, name));
+  VERIFY(push_lstring(buffer, open_brace));
+
+  for (u32 i = 0; i < count; i++) {
+    lstring num = *((lstring *)(((char *)(nums)) + (stride * i)));
+    VERIFY(push_lstring(buffer, indent));
+    VERIFY(push_lstring(buffer, num));
+    VERIFY(push_lstring(buffer, separator));
+  }
+  VERIFY(push_lstring(buffer, close_brace));
+}
+
+static void begin_enum_string(PushAllocator *buffer, lstring name) {
+  lstring head = CONST_LENGTH_STRING("enum ");
+  lstring open_brace = CONST_LENGTH_STRING(" {\n");
+
+  VERIFY(push_lstring(buffer, head));
+  VERIFY(push_lstring(buffer, name));
+  VERIFY(push_lstring(buffer, open_brace));
+}
+
+static void push_enum(PushAllocator *buffer, lstring num) {
+  lstring separator = CONST_LENGTH_STRING(",\n");
+  lstring indent = CONST_LENGTH_STRING("  ");
+
+  VERIFY(push_lstring(buffer, indent));
+  VERIFY(push_lstring(buffer, num));
+  VERIFY(push_lstring(buffer, separator));
+}
+
+static void push_enum(PushAllocator *buffer, lstring *strs, u32 count) {
+  lstring separator = CONST_LENGTH_STRING(",\n");
+  lstring indent = CONST_LENGTH_STRING("  ");
+
+  VERIFY(push_lstring(buffer, indent));
+  for (u32 i = 0; i < count; i++) {
+    VERIFY(push_lstring(buffer, strs[i]));
+  }
+  VERIFY(push_lstring(buffer, separator));
+}
+
+static void end_enum_string(PushAllocator *buffer) {
+  lstring close_brace = CONST_LENGTH_STRING("};\n\n");
+  VERIFY(push_lstring(buffer, close_brace));
+}
+
+static void write_enum() {
+  PushAllocator buffer[1];
+  *buffer = new_push_allocator(9000);
+  lstring name = CONST_LENGTH_STRING("Hello");
+  lstring words[4];
+  words[0] = CONST_LENGTH_STRING("ABC");
+  words[1] = CONST_LENGTH_STRING("DDD");
+  words[2] = CONST_LENGTH_STRING("BAR");
+  words[3] = CONST_LENGTH_STRING("FOO");
+  push_enum(buffer, name, words, 4);
+
+  begin_enum_string(buffer, CONST_LENGTH_STRING("SizedFontID"));
+#if 0
+  lstring prefix = CONST_LENGTH_STRING("FONT_");
+  begin_enum_string(buffer, CONST_LENGTH_STRING("FontID"));
+  u32 font_count;
+  for (u32 i = 0; i < font_count; i++) {
+    lstring strs[2] = {prefix, string_table->font_id_hstrings[i].lstr};
+    push_enum(buffer, strs, 2);
+  }
+  end_enum_string(buffer);
+
+  begin_enum_string(buffer, CONST_LENGTH_STRING("SizedFontID"));
+  u32 font_count;
+  for (u32 i = 0; i < font_count; i++) {
+    lstring strs[3] = {prefix, string_table->font_id_hstrings[i].lstr, };
+    push_enum(buffer, strs, 3);
+  }
+  end_enum_string(buffer);
+#endif
+  push_enum(buffer, CONST_LENGTH_STRING("ABC"));
+  push_enum(buffer, CONST_LENGTH_STRING("DDD"));
+  push_enum(buffer, CONST_LENGTH_STRING("COUNT"));
+  end_enum_string(buffer);
+
+  push_lstring(buffer, CONST_LENGTH_STRING("\0"));
+  printf("%s", (char *) buffer->memory);
+}
 
 static void write_fonts(FILE *out) {
 
@@ -922,6 +1021,8 @@ static void write_fonts(FILE *out) {
 
   ASSERT_EQUAL(count(packer.font_types), count(packer.font_filenames));
 
+
+  u32 current_font_index = 0;
 
   for (u32 i = 0; i < count(packer.font_types); i++) {
     lstring filename = packer.font_filenames[i];
@@ -937,11 +1038,12 @@ static void write_fonts(FILE *out) {
     for (u32 j = 0; j < font_type->size_count; j++) {
 
       ASSERT(j < count(packer.fonts));
-      auto font = packer.fonts + j;
+      auto font = packer.fonts + current_font_index + j;
 
       int first_glyph = font->start;
       int num_glyphs = font->end - font->start;
       u32 font_height = font->font_size;
+      ASSERT(font_height);
       u32 bitmap_dim = next_power_2(sqrt(num_glyphs) * font_height);
 
       int pixel_bytes = 1;
@@ -965,11 +1067,14 @@ static void write_fonts(FILE *out) {
         u32 new_height = next_power_2(first_unused_row);
         ASSERT(new_height <= bitmap_dim);
         if (new_height < bitmap_dim) {
-          font_height = new_height;
+          font->height = new_height;
         }
       }
+      PRINT_UINT(font->width);
+      PRINT_UINT(font->height);
 
       u64 bitmap_size = u64(font->width) * font->height * pixel_bytes;
+      ASSERT(bitmap_size);
       packer.current_data_offset += bitmap_size;
 
       u64 written = fwrite(buffer, 1, bitmap_size, out);
@@ -977,6 +1082,8 @@ static void write_fonts(FILE *out) {
 
       clear(buffer);
     }
+
+    current_font_index += font_type->size_count;
     clear(file_allocator);
   }
   dfree(buffer);
@@ -1021,6 +1128,8 @@ static void write_header(FILE *out, u32 header_size) {
   packer.header.magic = 'PACK';
   packer.header.version = 0;
 
+  packer.header.baked_char_offset = header_size - sizeof(BakedChar) * packer.total_char_count;
+  packer.header.baked_char_count = packer.total_char_count;
   packer.header.data_offset = header_size;
   packer.header.layout_count = count(packer.layouts);
   packer.header.font_type_count = count(packer.font_types);
@@ -1115,6 +1224,186 @@ static void write_pack_file() {
 
   printf("Packed in %ld bytes\n", ftell(pack_file));
   fclose(pack_file);
+}
+
+#define INDENT "    "
+#define PRINT_ELEMENT(ptr, elem) printf(INDENT #elem " : %u\n", ptr->elem);
+#define PRINT_ELEMENTC(ptr, elem) printf(INDENT #elem " : %c\n", ptr->elem);
+#define PRINT_ELEMENTL(ptr, elem) printf(INDENT #elem " : %llu\n", ptr->elem);
+#define PRINT_ELEMENTF(ptr, elem) printf(INDENT #elem " : %f\n", ptr->elem);
+#define PRINT_ENUM(ptr, elem, VALUE) printf(INDENT #elem " : %u (" #VALUE ")\n", ptr->elem);
+
+static void packer_print(PackedAssetHeader *header) {
+  printf("PackedAssetHeader\n");
+  PRINT_ELEMENT(header, magic);
+  PRINT_ELEMENT(header, version);
+  PRINT_ELEMENT(header, total_size);
+  PRINT_ELEMENT(header, layout_count);
+  PRINT_ELEMENT(header, font_type_count);
+  PRINT_ELEMENT(header, texture_group_count);
+  PRINT_ELEMENT(header, data_offset);
+  PRINT_ELEMENT(header, baked_char_offset);
+  PRINT_ELEMENT(header, baked_char_count);
+}
+
+static void packer_print(PackedTextureLayout *layout) {
+  printf("PackedTextureLayout\n");
+  switch (layout->layout_type) {
+    case LAYOUT_CHARACTER : {
+      PRINT_ENUM(layout, layout_type, LAYOUT_CHARACTER);
+      PRINT_ELEMENT(layout, animation_count);
+    } break;
+
+    case LAYOUT_TERRAIN : {
+      PRINT_ENUM(layout, layout_type, LAYOUT_TERRAIN);
+      PRINT_ELEMENT(layout, face_count);
+    } break;
+
+    default : INVALID_SWITCH_CASE(layout->layout_type);
+  }
+}
+
+static void packer_print(PackedTextureGroup *group) {
+  printf("PackedTextureGroup\n");
+  PRINT_ELEMENTL(group, bitmap_offset);
+  PRINT_ELEMENT(group, width);
+  PRINT_ELEMENT(group, height);
+  PRINT_ELEMENT(group, texture_group_id);
+  PRINT_ELEMENT(group, sprite_count);
+  PRINT_ELEMENT(group, sprite_width);
+  PRINT_ELEMENT(group, sprite_height);
+  PRINT_ELEMENT(group, flags);
+  PRINT_ELEMENT(group, min_blend);
+  PRINT_ELEMENT(group, max_blend);
+  PRINT_ELEMENT(group, s_clamp);
+  PRINT_ELEMENT(group, t_clamp);
+  PRINT_ELEMENTF(group, offset_x);
+  PRINT_ELEMENTF(group, offset_y);
+  PRINT_ELEMENTF(group, offset_z);
+  PRINT_ELEMENTF(group, sprite_depth);
+}
+
+static void packer_print(PackedFontType *font_type) {
+  printf("PackedFontType\n");
+  PRINT_ELEMENT(font_type, font_id);
+  PRINT_ELEMENT(font_type, size_count);
+}
+
+#undef INDENT
+#define INDENT "        "
+static void packer_print(PackedAnimation *animation) {
+  printf("    PackedAnimation\n");
+  PRINT_ELEMENT(animation, animation_type);
+  PRINT_ELEMENT(animation, frame_count);
+  PRINT_ELEMENTF(animation, duration);
+  PRINT_ELEMENT(animation, start_index);
+  PRINT_ELEMENT(animation, direction);
+  PRINT_ELEMENT(animation, flags);
+}
+
+static void packer_print(PackedFaces *faces) {
+  printf("    PackedFaces\n");
+  PRINT_ELEMENT(faces, sprite_index[0]);
+  PRINT_ELEMENT(faces, sprite_index[1]);
+  PRINT_ELEMENT(faces, sprite_index[2]);
+  PRINT_ELEMENT(faces, sprite_index[3]);
+  PRINT_ELEMENT(faces, sprite_index[4]);
+  PRINT_ELEMENT(faces, sprite_index[5]);
+  PRINT_ELEMENT(faces, sprite_index[6]);
+  PRINT_ELEMENT(faces, sprite_index[7]);
+}
+
+static void packer_print(PackedFont *font) {
+  printf("    PackedFont\n");
+  PRINT_ELEMENTL(font, bitmap_offset);
+  PRINT_ELEMENT(font, font_size);
+  PRINT_ELEMENT(font, width);
+  PRINT_ELEMENT(font, height);
+  PRINT_ELEMENTC(font, start);
+  PRINT_ELEMENTC(font, end);
+  PRINT_ELEMENT(font, char_index);
+}
+
+static void print_pack_file(const char *filename) {
+  PackedAssetHeader header[1];
+
+  FILE *file = fopen(filename, "r");
+  fread(header, sizeof(PackedAssetHeader), 1, file);
+
+  packer_print(header);
+
+  u32 total_header_size = header->data_offset - sizeof(PackedAssetHeader);
+  u8 *header_buffer = (u8 *) malloc(total_header_size);
+  fread(header_buffer, total_header_size, 1, file);
+
+  u32 layout_count = header->layout_count;
+  u32 texture_group_count = header->texture_group_count;
+  u32 font_type_count = header->font_type_count;
+  auto packed_chars = (BakedChar *)(header_buffer + header->baked_char_offset - sizeof(PackedAssetHeader));
+
+  auto cursor = header_buffer;
+
+  // For each layout type :
+  for (u32 lt = 0; lt < layout_count; lt++) {
+    auto packed_layout = (PackedTextureLayout *) cursor;
+    cursor += sizeof(PackedTextureLayout);
+
+    packer_print(packed_layout);
+
+    u32 layout_type = packed_layout->layout_type;
+    ASSERT(layout_type >= 0 && layout_type < LAYOUT_COUNT);
+
+    if (layout_type == LAYOUT_CHARACTER) {
+      u32 animation_count = packed_layout->animation_count;
+
+      // For each animation :
+      for (u32 an = 0; an < animation_count; an++) {
+        auto packed_animation = packed_layout->animations + an;
+        cursor += sizeof(PackedAnimation);
+
+        packer_print(packed_animation);
+      }
+    } else {
+      ASSERT_EQUAL(layout_type, LAYOUT_TERRAIN);
+      auto packed_faces = packed_layout->faces;
+      cursor += sizeof(PackedFaces);
+
+      packer_print(packed_faces);
+    }
+  }
+
+  // For each texture group :
+  for (u32 tg = 0; tg < texture_group_count; tg++) {
+    auto packed_group = (PackedTextureGroup *) cursor;
+    cursor += sizeof(PackedTextureGroup);
+
+    packer_print(packed_group);
+  }
+
+
+  for (u32 i = 0; i < font_type_count; i++) {
+    auto packed_font_type = (PackedFontType *) cursor;
+    cursor += sizeof(PackedFontType);
+
+    ASSERT(packed_font_type->font_id > FONT_INVALID && packed_font_type->font_id < FONT_COUNT);
+    packer_print(packed_font_type);
+
+    for (u32 j = 0; j < packed_font_type->size_count; j++) {
+
+      auto packed_font = (PackedFont *) cursor;
+      cursor += sizeof(PackedFont);
+
+      packer_print(packed_font);
+    }
+  }
+
+#if 0
+  assets->baked_chars = (BakedChar *) malloc(sizeof(BakedChar) * header->baked_char_count);
+  array_copy(packed_chars, assets->baked_chars, header->baked_char_count);
+#endif
+  
+
+  fclose(file);
 }
 
 static void parse_spec_file(char *filename) {
@@ -1341,6 +1630,7 @@ static void parse_spec_file(char *filename) {
         font->font_size = args.size;
         font->start = attributes.character_range_start;
         font->end = attributes.character_range_end;
+        ASSERT_EQUAL(font->start, ' ');
         packer.total_char_count += font->end - font->start;
 
         printf("Size : %u\n", args.size);
@@ -1374,6 +1664,10 @@ int main(int argc, char *argv[]) {
   write_pack_file();
 
   printf("Packing successful.\n");
+
+  print_pack_file("assets/packed_assets.pack");
+  //write_enum();
+
   return 0;
 }
 

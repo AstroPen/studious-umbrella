@@ -104,7 +104,9 @@ struct GameAssets {
   TextureGroup texture_groups[TEXTURE_GROUP_COUNT];
   TextureLayout texture_layouts[LAYOUT_COUNT];
   TextureInfo texture_infos[TEXTURE_INDEX_MAX];
-  FontInfo fonts[FONT_COUNT];
+  FontInfo fonts[FONT_SIZE_COUNT];
+
+  BakedChar *baked_chars;
 };
 
 static inline PixelBuffer *get_bitmap(GameAssets *assets, BitmapID id);
@@ -112,7 +114,7 @@ static inline PixelBuffer *get_bitmap_location(GameAssets *assets, BitmapID id);
 static inline u32 get_texture_id(GameAssets *assets, BitmapID id);
 static inline TextureInfo get_texture_info(GameAssets *assets, BitmapID id);
 static inline TextureInfo get_texture_info(GameAssets *assets, TextureGroupID id);
-static inline FontInfo *get_font(GameAssets *assets, u32 font_id);
+static inline FontInfo *get_font(GameAssets *assets, SizedFontID font_id);
 static inline FontInfo *get_font_location(GameAssets *assets, u32 font_id);
 static inline BakedChar *get_baked_char(FontInfo *font, char c);
 

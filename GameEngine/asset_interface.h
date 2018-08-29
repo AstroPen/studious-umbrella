@@ -68,8 +68,16 @@ enum FontID {
   FONT_INVALID,
   FONT_ARIAL,
   FONT_COURIER_NEW_BOLD,
-  FONT_DEBUG,
   FONT_COUNT,
+};
+
+#define FONT_SIZE(font_id, size) (font_id##_SIZE_##size)
+
+enum SizedFontID {
+  FONT_ARIAL_SIZE_30,
+  FONT_COURIER_NEW_BOLD_SIZE_30,
+  FONT_COURIER_NEW_BOLD_SIZE_19,
+  FONT_SIZE_COUNT,
 };
 
 enum RenderStageNum {
@@ -81,7 +89,7 @@ enum RenderStageNum {
 
 enum TextureIndex : u32 {
   TEXTURE_INDEX_INVALID,
-  TEXTURE_INDEX_MAX = TEXTURE_GROUP_COUNT + BITMAP_COUNT + FONT_COUNT
+  TEXTURE_INDEX_MAX = TEXTURE_GROUP_COUNT + BITMAP_COUNT + FONT_SIZE_COUNT
 };
 
 // NOTE : Order is bitmaps, groups, fonts
@@ -93,7 +101,7 @@ inline TextureIndex get_texture_index(TextureGroupID id) {
   return TextureIndex(id + BITMAP_COUNT);
 }
 
-inline TextureIndex get_texture_index(FontID id) {
+inline TextureIndex get_texture_index(SizedFontID id) {
   return TextureIndex(id + TEXTURE_GROUP_COUNT + BITMAP_COUNT);
 }
 
