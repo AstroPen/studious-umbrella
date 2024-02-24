@@ -1,2 +1,8 @@
 
 *.swp
+computer_enhance/listings
+*.o
+*.data
+*.out
+*.exe
+

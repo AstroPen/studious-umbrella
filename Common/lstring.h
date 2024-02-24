@@ -202,6 +202,40 @@ static hstring pop_hline(Stream *stream) {
   return result;
 }
 
+static lstring pop_bytes(Stream *stream, u32 num_bytes) {
+  assert(stream); assert(stream->data);
+  assert(stream->cursor + num_bytes <= stream->data.len); // TODO Better error handling
+  lstring str = stream->data + stream->cursor;
+  stream->cursor += num_bytes;
+  return {str.str, num_bytes};
+}
+
+static u8 pop_byte(Stream *stream) {
+  assert(stream); assert(stream->data);
+  assert(stream->cursor + 1 <= stream->data.len); // TODO Better error handling
+  u8 next_byte = stream->data[stream->cursor];
+  stream->cursor++;
+  return next_byte;
+}
+
+static s8 pop_s8(Stream *stream) {
+  u8 v = pop_byte(stream);
+  return bit_cast(s8, v);
+}
+
+static u16 pop_u16(Stream *stream) {
+  assert(stream); assert(stream->data);
+  assert(stream->cursor + 2 <= stream->data.len); // TODO Better error handling
+  u16 *next = (u16 *)(stream->data + stream->cursor).str;
+  stream->cursor += 2;
+  return *next;
+}
+
+static s16 pop_s16(Stream *stream) {
+  u16 v = pop_u16(stream);
+  return bit_cast(s16, v);
+}
+
 inline lstring remove_whitespace(lstring line) {
   uint32_t i;
   for (i = 0; i < line.len; i++) {
