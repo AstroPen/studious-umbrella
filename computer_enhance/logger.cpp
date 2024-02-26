@@ -86,3 +86,97 @@ void print_aflags_str(u8 flags) {
   if (flags & AFLAG_SIGN) printf("%c", 'S');
 }
 
+u32 get_effective_address_clocks(RmUnion dest) {
+  switch (dest.kind) { 
+    case RM_DIRECT_ADDR: return 6;
+    case RM_ADDR_FROM_REG: return dest.addr.displacement ? 9 : 5;
+    case RM_ADDR_ADD:
+      if (dest.addr.displacement) {
+        if (dest.addr.r1 == REG_BP) {
+          if (dest.addr.r2 == REG_DI) return 11;
+          else return 12; // SI
+        } else { // BX
+          if (dest.addr.r2 == REG_SI) return 11;
+          else return 12; // DI
+        }
+      } else {
+        if (dest.addr.r1 == REG_BP) {
+          if (dest.addr.r2 == REG_DI) return 7;
+          else return 8; // SI
+        } else { // BX
+          if (dest.addr.r2 == REG_SI) return 7;
+          else return 8; // DI
+        }
+      }
+    default: INVALID_SWITCH_CASE(dest.kind);
+  }
+  return 1;
+}
+
+u32 get_instruction_clocks(Instruction inst) {
+  switch (inst.cmd) {
+    case OP_MOV:
+      switch (inst.src.kind) {
+        case RM_IMMEDIATE:
+          switch (inst.dest.kind) {
+            case RM_REG: return 4;
+            case RM_DIRECT_ADDR:
+            case RM_ADDR_FROM_REG:
+            case RM_ADDR_ADD:
+              return 10 + get_effective_address_clocks(inst.dest);
+            default: INVALID_SWITCH_CASE(inst.dest.kind);
+          }
+        case RM_REG:
+          switch (inst.dest.kind) {
+            case RM_REG: return 2;
+            case RM_DIRECT_ADDR:
+            case RM_ADDR_FROM_REG:
+            case RM_ADDR_ADD:
+              return 9 + get_effective_address_clocks(inst.dest);
+            default: INVALID_SWITCH_CASE(inst.dest.kind);
+          }
+        case RM_DIRECT_ADDR:
+        case RM_ADDR_FROM_REG:
+        case RM_ADDR_ADD:
+          return 8 + get_effective_address_clocks(inst.src);
+        default: INVALID_SWITCH_CASE(inst.src.kind);
+      }
+    case OP_ADD: 
+      switch (inst.src.kind) {
+        case RM_IMMEDIATE:
+          switch (inst.dest.kind) {
+            case RM_REG: return 4;
+            case RM_DIRECT_ADDR:
+            case RM_ADDR_FROM_REG:
+            case RM_ADDR_ADD:
+              return 17 + get_effective_address_clocks(inst.dest);
+            default: INVALID_SWITCH_CASE(inst.dest.kind);
+          }
+        case RM_REG:
+          switch (inst.dest.kind) {
+            case RM_REG: return 3;
+            case RM_DIRECT_ADDR:
+            case RM_ADDR_FROM_REG:
+            case RM_ADDR_ADD:
+              return 16 + get_effective_address_clocks(inst.dest);
+            default: INVALID_SWITCH_CASE(inst.dest.kind);
+          }
+        case RM_DIRECT_ADDR:
+        case RM_ADDR_FROM_REG:
+        case RM_ADDR_ADD:
+          return 9 + get_effective_address_clocks(inst.src);
+        default: INVALID_SWITCH_CASE(inst.src.kind);
+      }
+    default: INVALID_SWITCH_CASE(inst.src.kind);
+  }
+  return 1;
+}
+
+u32 print_instruction_clocks(Instruction inst, u32 total) {
+  u32 n = get_instruction_clocks(inst);
+  total += n;
+  printf("Clocks: +%d = %d", get_instruction_clocks(inst), total);
+  return total;
+}
+
+

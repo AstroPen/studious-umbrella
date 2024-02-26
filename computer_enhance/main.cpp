@@ -102,7 +102,6 @@ void exec_binary_instruction(ExecutionState *state, Instruction inst, u16 op_fla
     case OP_CMP: new_val = old_val - src_val; break;
     default: new_val = src_val;
   }
-  printf(" ; ");
   if (op_flags & INST_WRITE_TO_DEST) {
     *loc = new_val;
     if (state->print_value_updates) printf("%s:0x%x->0x%x ", dest_str, old_val, new_val);
@@ -176,11 +175,14 @@ int main(int argc, char *argv[]) {
   char *filename = argv[1];
   bool exec = false;
   bool dump = false;
+  bool clock = false;
   for (int i = 2; i < argc; i++) {
     if (!strcmp(argv[i], "-exec")) {
       exec = true;
     } else if (!strcmp(argv[i], "-dump")) {
       dump = true;
+    } else if (!strcmp(argv[i], "-clock")) {
+      clock = true;
     } else {
       usage(argv[0]);
     }
@@ -210,10 +212,16 @@ int main(int argc, char *argv[]) {
     .print_value_updates = true,
     .stream = get_stream(file.buffer, file.size),
   };
+  u32 total_clocks = 0;
+
   while (has_remaining(&state.stream)) {
     Instruction inst = parse_next_instruction(&state);
     print_instruction(inst);
-    if (exec) exec_instruction(&state, inst);
+    if (clock || exec) {
+      printf(" ; ");
+      if (clock) total_clocks = print_instruction_clocks(inst, total_clocks);
+      if (exec) exec_instruction(&state, inst);
+    }
     printf("\n");
   }
 
