@@ -1,6 +1,6 @@
 
 *.swp
-computer_enhance/listings
+computer_enhance/part1/listings
 *.o
 *.data
 *.out
