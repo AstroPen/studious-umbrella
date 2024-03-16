@@ -28,8 +28,8 @@ struct File {
   PushAllocator error_stream;
   u32 error_count;
   int descriptor;
-  u32 size;
-  u32 loaded_size;
+  u64 size;
+  u64 loaded_size;
   int last_error;
   bool assert_on_error;
 };

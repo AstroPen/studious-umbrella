@@ -9,9 +9,10 @@
 #include <cstring>
 #include <cmath>
 #include <climits>
-
 typedef int64_t int64;
 typedef double float64;
+typedef float f32;
+typedef double f64;
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -34,6 +35,16 @@ union bit32 {
   inline operator int() { return i; }
   inline operator u32() { return u; }
   inline operator float() { return f; }
+};
+
+union bit64 {
+  u64 u;
+  s64 i;
+  f64 f;
+  struct {
+    bit32 low;
+    bit32 high;
+  };
 };
 
 // NOTE : this does not work if val is a rvalue

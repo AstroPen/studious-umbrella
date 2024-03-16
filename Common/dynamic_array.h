@@ -147,6 +147,14 @@ inline T pop(darray<T> &arr) {
 }
 
 template <typename T>
+inline void pop_count(darray<T> &arr, u32 count) {
+  ASSERT(arr);
+  auto head = header(arr);
+  ASSERT(head->count >= count);
+  head->count -= count;
+}
+
+template <typename T>
 inline T *peek(darray<T> &arr) {
   auto c = count(arr);
   if (!c) return NULL;

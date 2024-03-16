@@ -18,6 +18,10 @@ inline float max(float a, float b) {
   return (a < b) ? b : a;
 }
 
+inline double max(double a, double b) {
+  return (a < b) ? b : a;
+}
+
 inline u32 min(u32 a, u32 b) {
   return (a > b) ? b : a;
 }
@@ -34,8 +38,32 @@ inline float min(float a, float b) {
   return (a > b) ? b : a;
 }
 
+inline double min(double a, double b) {
+  return (a > b) ? b : a;
+}
+
 inline float squared(float f) {
   return f * f;
+}
+
+inline double squared(double f) {
+  return f * f;
+}
+
+inline float degrees_to_radians(float f) {
+  return f * (M_PI/180.0f);
+}
+
+inline double degrees_to_radians(double f) {
+  return f * (M_PI/180.0);
+}
+
+inline float radians_to_degrees(float f) {
+  return f * (180.0f/M_PI);
+}
+
+inline double radians_to_degrees(double f) {
+  return f * (180.0/M_PI);
 }
 
 /*
@@ -85,8 +113,11 @@ static inline float clamp(float f, float mini, float maxi) {
 }
 
 static inline float lerp(float f1, float f2, float dt) {
-  float result = (1.0f - dt) * f1 + dt * f2;
-  return result;
+  return (1.0f - dt) * f1 + dt * f2;
+}
+
+static inline double lerp(double f1, double f2, double dt) {
+  return (1.0f - dt) * f1 + dt * f2;
 }
 
 // TODO I apparently copied this from somewhere... Maybe double-check it?
